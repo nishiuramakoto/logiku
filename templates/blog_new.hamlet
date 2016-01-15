@@ -1,0 +1,16 @@
+$doctype 5
+  <html>
+    <head>
+      <title>Simple blog: New
+    <body>
+      <H1 ALIGN=CENTER>Delimited continuations and nested transactions
+
+      You are logged in as #{username}.
+
+      <h3>Enter a new article
+
+      <form action=@{BlogContR klabel}  method="POST" enctype=#{enctype}>
+        ^{blog_new_form}
+        <INPUT name=cancel  value="Cancel"    TYPE=Submit>
+        <INPUT name=submit  value="Submit"    TYPE=Submit>
+        <INPUT name=preview value="Preview"   TYPE=Submit>

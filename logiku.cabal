@@ -23,6 +23,9 @@ library
                      Handler.Common
                      Handler.Home
                      Handler.Comment
+                     -- My addition
+                     Handler.Blog
+                     ContMap
 
     if flag(dev) || flag(library-only)
         cpp-options:   -DDEVELOPMENT
@@ -84,7 +87,9 @@ library
                  , time
                  , case-insensitive
                  , wai
-
+                 -- My additions
+                 , CC-delcont-cxe
+                 , blaze-markup
 executable         logiku
     if flag(library-only)
         Buildable: False
