@@ -36,7 +36,7 @@ import Handler.Common
 import Handler.Home
 import Handler.Comment
 import Handler.Blog
-
+import Handler.Portfolio
 import ContMap
 
 -- This line actually creates our YesodDispatch instance. It is the second half
