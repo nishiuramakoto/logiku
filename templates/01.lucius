@@ -1,88 +1,179 @@
-@import url(https://fonts.googleapis.com/css?family=Kreon);
+@import url(http://fonts.googleapis.com/css?family=Antic+Didone);
 
-body {
-    color: #333333;
-    /* font-family: sans-serif; see normalize.css */
+body { color: #333333; }
+
+/*ページ*/
+#page {
+	width: 980px;
+	margin: 0 auto;
 }
 
 /* ページヘッダー */
-#siteTitle {
-    font-size: 30px;
-    line-height: 1.2;
-    margin-bottom: 0;
-    font-family: 'Kreon', serif;
+#pageHead #siteTitle {
+	font-size: 30px;
+	line-height: 1.2;
+	margin-bottom: 0;
+	font-family: 'Antic Didone', serif;
+}
+#pageHead #catchcopy {
+	font-size: 12px;
+	line-height: 1.5;
+	margin-top: 5px;
 }
 
-#catchcopy {
-    font-size: 12px;
-    line-height: 1.5;
-    margin-top:5px
-}
+/*ページフッター*/
 #pageFoot {
-    border-top: solid 1px #CCCCCC;
-    margin-top: 15px;
+	border-top: solid 1px #CCCCCC;
+	margin-top: 15px;
 }
 
-#copyright small {
-    font-size: 12px;
-    line-height: 1.5;
+#pageFoot #copyright small {
+	font-size: 12px;
+	line-height: 1.5;
 }
 
-p {
-    font-size: 14px;
-    line-height:1.429;
+/* ページボディ */
+#pageBody {
+	margin-top: 30px;
+}
+#pageBody:after {
+	content: "";
+	clear: both;
+	display: block;
+}
+
+#pageBodyMain {
+	width: 720px;
+	float: left;
+}
+
+#pageBodySub {
+	width: 220px;
+	float: right;
+}
+
+
+/* ----- サブカラム内の装飾 ----- */
+
+/* 見出し */
+#pageBodySub h2 {
+	font-size: 16px;
+	line-height: 1.375;
+	padding: 5px;
+	margin-top: 0;
+	border-bottom: 1px solid #CCCCCC;
+}
+
+/* おしらせ */
+#pageBodySub .newsList ul {
+	list-style: none;
+	padding: 0;
+}
+#pageBodySub .newsList ul li {
+	font-size: 12px;
+	line-height: 1.5;
+	margin: 10px 5px;
+}
+#pageBodySub .newsList ul li time {
+	font-weight: bold;
+	display: block;
+}
+
+
+/* ----- メインカラム内の装飾 ----- */
+
+#pageBodyMain p {
+	font-size: 14px;
+	line-height: 1.429;
+}
+
+/* リスト */
+#pageBodyMain ul li {
+	font-size: 14px;
+	list-style-type: square;
+	line-height: 1.429;
+}
+
+/* 表 */
+#pageBodyMain table {
+	font-size: 14px;
+	line-height: 1.429;
+	border: 1px solid #CCCCCC;
+	width: 100%;
+}
+#pageBodyMain table th,
+#pageBodyMain table td {
+	border: 1px solid #CCCCCC;
+	padding: 5px 10px;
+}
+#pageBodyMain table th {
+	background-color: #EEEEEE;
+	text-align: left;
+}
+#pageBodyMain table caption {
+	text-align: left;
+	font-weight: bold;
+}
+
+/* 図版 */
+#pageBodyMain figure {
+	margin: 0;
+}
+/* 画像キャプション */
+#pageBodyMain figcaption {
+	font-size: 12px;
 }
 
 /* 見出し */
-h1 { font-size: 26px; }
-h2 { font-size: 18px; }
-h3 { font-size: 16px; }
-
-.pageTitle {
-    font-size: 26px;
-    background-color: #F2F2E5;
-    padding: 5px 15px;
-    line-height:1.231;
-}
-.heading-typeA {
-    font-size: 18px;
-    color: #349FA6;
-    border-bottom: solid 1px #349FA6;
-    padding: 5px;
-    line-height:1.333;
-}
-.heading-typeB {
-    font-size: 16px;
-    border-left: solid 5px #E3E4D9;
-    padding-left: 10px;
-    line-height:1.375;
-}
-.heading-typeC {
-    font-size: 14px;
-    line-height:1.429;
+#pageBodyMain .pageTitle {
+	font-size: 26px;
+	background-color: #F2F2E5;
+	padding: 5px 15px;
+	line-height: 1.231;
+	margin-top: 0;
 }
 
-.articleDetailHead {
-    border-bottom: solid 1px #CCCCCC;
-    margin-bottom: 30px;
-    padding-bottom: 15px;
-}
-.articleDetailFoot {
-    border-top: solid 1px #CCCCCC;
-    margin-top: 30px;
-    padding-top: 15px;
+#pageBodyMain .heading-typeA {
+	font-size: 18px;
+	color: #349FA6;
+	border-bottom: solid 1px #349FA6;
+	padding: 5px;
+	line-height: 1.333;
 }
 
-.articleDetailBody section {
-    margin: 30px 0;
+#pageBodyMain .heading-typeB {
+	font-size: 16px;
+	border-left: 5px solid #E3E4D9;
+	padding-left: 10px;
+	line-height: 1.375;
 }
 
-.creditUnit {
-    padding: 10px;
-    border: solid 1px #CCCCCC;
+#pageBodyMain .heading-typeC {
+	font-size: 14px;
+	line-height: 1.429;
 }
 
-.creditUnit p {
-    font-size: 12px;
-    line-height:1.5;
+/* 区切り線・余白 */
+#pageBodyMain .articleDetailHead {
+	border-bottom: solid 1px #CCCCCC;
+	margin-bottom: 30px;
+	padding-bottom: 15px;
+}
+#pageBodyMain .articleDetailFoot {
+	border-top: solid 1px #CCCCCC;
+	margin-top: 30px;
+	padding-top: 15px;
+}
+#pageBodyMain .articleDetailBody section {
+	margin: 30px 0;
+}
+
+/* 撮影情報 */
+#pageBodyMain .creditUnit {
+	padding: 10px;
+	border: solid 1px #CCCCCC;
+}
+#pageBodyMain .creditUnit p {
+	font-size: 12px;
+	line-height: 1.5;
 }
