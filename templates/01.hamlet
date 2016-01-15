@@ -1,0 +1,21 @@
+$doctype 5
+<header id="pageHead">
+    <h1 id="siteTitle"> logiku
+    <p id="catchcopy"> 全てを、ロジカルに
+
+<article class="articleDetail">
+    <header class="articleDetailHead">
+        <h1  class="pageTitle"> 水廻り
+        <p> 水廻りの漏れを診断します。
+
+    <section class="articleDetailBody">
+        <section>
+            <h2 class="heading-typeB"> お風呂場の漏れ？
+            <p> お風呂場からの漏れかどうか、診断します。
+        <section>
+            <h2 class="heading-typeB"> キッチンの漏れ?
+            <p> キッチンからの漏れかどうか、診断します。
+
+    <footer class="articleDetailFoot">
+        <aside class="creditUnit">
+            補足

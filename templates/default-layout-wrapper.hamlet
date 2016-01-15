@@ -4,7 +4,7 @@ $newline never
 \<!--[if IE 7]>    <html class="no-js ie7 oldie" lang="en"> <![endif]-->
 \<!--[if IE 8]>    <html class="no-js ie8 oldie" lang="en"> <![endif]-->
 \<!--[if gt IE 8]><!-->
-<html class="no-js" lang="en"> <!--<![endif]-->
+<html class="no-js" lang="ja"> <!--<![endif]-->
   <head>
     <meta charset="UTF-8">
 
@@ -47,8 +47,9 @@ $newline never
       <header>
       <div id="main" role="main">
         ^{pageBody pc}
-      <footer>
-        #{appCopyright $ appSettings master}
+      <footer id="pageFoot">
+        <p id="copyright">
+            <small> #{appCopyright $ appSettings master}
 
     $maybe analytics <- appAnalytics $ appSettings master
       <script>

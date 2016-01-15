@@ -24,6 +24,7 @@ library
                      Handler.Home
                      Handler.Comment
                      -- My addition
+                     Handler.Portfolio
                      Handler.Blog
                      ContMap
 
