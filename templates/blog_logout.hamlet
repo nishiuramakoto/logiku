@@ -1,0 +1,8 @@
+$doctype 5
+  <html>
+    <head>
+      <title>Simple blog: Logout
+    <body>
+      <H1 ALIGN=CENTER>Delimited continuations and nested transactions
+
+      Good bye, #{username}

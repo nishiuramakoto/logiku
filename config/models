@@ -15,3 +15,9 @@ Comment json -- Adding "json" causes ToJSON and FromJSON instances to be derived
     deriving Show
 
  -- By default this file is used in Model.hs (which is imported by Foundation.hs)
+
+Blog
+    ownerId UserId
+    blogTitle  Text
+    blogBody   Text
+    deriving Show
