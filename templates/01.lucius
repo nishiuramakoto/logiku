@@ -55,6 +55,11 @@ body { color: #333333; }
 
 /* ----- サブカラム内の装飾 ----- */
 
+#pageBodySub iframe {
+    width:220px;
+    height:400px;
+}
+
 /* 見出し */
 #pageBodySub h2 {
 	font-size: 16px;
@@ -78,6 +83,23 @@ body { color: #333333; }
 	font-weight: bold;
 	display: block;
 }
+
+#pageBodySub .localNavi ul {
+    margin: 0 0 30px;
+    padding-left: 0;
+}
+
+#pageBodySub .localNavi ul li {
+    font-size: 14px;
+    line-height: 1.429;
+    margin-bottom: 3px;
+    list-style-type: none;
+    background-image: url("@{StaticR images_ico_arrow_png}");
+    background-repeat: no-repeat;
+    background-position: 0 8px;
+    padding-left: 10px;
+}
+
 
 
 /* ----- メインカラム内の装飾 ----- */

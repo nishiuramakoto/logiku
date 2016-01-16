@@ -25,14 +25,6 @@ $doctype 5
             <aside class="creditUnit">
                 補足
     <div id="pageBodySub">
-        <section class="categoryList">
-            <h2> カテゴリー
-            <ul>
-                <li>生活
-                    <ul>
-                        <li> 水廻り
-                        <li> 掃除
-                <li>社会保険
-                    <ul>
-                        <li> 年金
-                        <li> 雇用保険
+        <nav class="localNavi">
+            <section class="categoryTree">
+            ^{categoryTree}
