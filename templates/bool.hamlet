@@ -1,0 +1,12 @@
+$doctype 5
+  <html>
+    <head>
+      <title>Simple blog: Login
+    <body>
+      <H1 ALIGN=CENTER>Delimited continuations and nested transactions
+
+      An example of delimited continuations to implement a simple expert system
+
+      <form action=@{LeakInBathroomContR klabel} method="POST" enctype=#{enctype}>
+        ^{bool_widget}
+        <button>Submit
