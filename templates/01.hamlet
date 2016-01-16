@@ -1,7 +1,6 @@
 $doctype 5
 <header id="pageHead">
-    <h1 id="siteTitle"> logiku
-    <p id="catchcopy"> everything logical
+    <h1 id="siteTitle"> logiku <small id="catchcopy"> make it logical </small>
 
 <div id="pageBody">
     <div id="pageBodyMain">
@@ -14,11 +13,11 @@ $doctype 5
             <section class="articleDetailBody">
                 <section>
                     <h2 class="heading-typeB">
-                        <a href="http://www.google.com"> お風呂場の漏れ？
+                        <a href="@{LeakInBathroomR}"> お風呂場の漏れ？
                     <p> お風呂場からの漏れかどうか、診断します。
                 <section>
                     <h2 class="heading-typeB">
-                         <a href="http://www.google.com"> キッチンの漏れ?
+                         <a href="@{LeakInKitchenR}"> キッチンの漏れ?
                     <p> キッチンからの漏れかどうか、診断します。
 
         <footer class="articleDetailFoot">

@@ -11,7 +11,7 @@ import             ContMap
 -------------------------------------------------------------------------------------------
 
 getBlogR :: Handler Html
-getBlogR = run cont_main
+getBlogR = run blog_main
 
 postBlogContR  :: Int -> Handler Html
 postBlogContR klabel = do
@@ -169,8 +169,8 @@ submitBlog (UserForm name pass) (BlogForm title (Textarea body)) = lift $  do
 
 ------------------------  Application logics  ------------------------
 
-cont_main :: CC (PS Html) Handler Html
-cont_main =  do
+blog_main :: CC (PS Html) Handler Html
+blog_main =  do
   lift $ $(logInfo) "inquireBlogLogin"
   (_klabel, user) <- inquireBlogLogin
   lift $ $(logInfo) "loop_browse"
