@@ -37,8 +37,10 @@ import Handler.Home
 import Handler.Comment
 import Handler.Blog
 import Handler.Portfolio
+import Handler.PrologTest
+import Handler.PrologProgram
 import ContMap
-
+import SideMenu
 -- This line actually creates our YesodDispatch instance. It is the second half
 -- of the call to mkYesodData which occurs in Foundation.hs. Please see the
 -- comments there for more details.
@@ -60,6 +62,7 @@ makeFoundation appSettings = do
         (appStaticDir appSettings)
 
     appContMap <- newCcPool -- WARNING: LEAKS! needs a better handling of CC resources
+    let appMenuTree = menuTree -- To be done later
 
     -- We need a log function to create a connection pool. We need a connection
     -- pool to create our foundation. And we need our foundation to get a

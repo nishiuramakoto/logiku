@@ -12,7 +12,7 @@ Flag library-only
     Default:       False
 
 library
-    hs-source-dirs: ., app
+    hs-source-dirs: ., app,prolog
     exposed-modules: Application
                      Foundation
                      Import
@@ -26,9 +26,21 @@ library
                      -- My addition
                      Handler.Portfolio
                      Handler.Blog
+                     Handler.Base
+                     Handler.PrologTest
                      ContMap
+                     SideMenu
                      LogicT.LogicT
                      LogicT.SRReifT
+                     Prolog
+                     Prolog.Database
+                     Prolog.Interpreter
+                     Prolog.IsString
+                     Prolog.Unifier
+                     Prolog.Parser
+                     Prolog.Syntax
+                     Prolog.Quote
+
 
     if flag(dev) || flag(library-only)
         cpp-options:   -DDEVELOPMENT
@@ -94,6 +106,12 @@ library
                  , CC-delcont-cxe
                  , blaze-markup
                  , mtl >=2.1.3.1
+                 , syb >= 0.3
+                 , parsec >= 3.1.1
+                 , template-haskell
+                 , th-lift >= 0.5.3
+                 , transformers >= 0.2.2.0
+                 , exceptions
 executable         logiku
     if flag(library-only)
         Buildable: False

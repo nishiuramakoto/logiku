@@ -1,15 +1,13 @@
-$doctype 5
-<html>
-  <head>
-    <title>Simple blog: View
-  <body>
-    <H1 ALIGN=CENTER>Delimited continuations and nested transactions
+<article class="articleDetail">
+  <header class="articleDetailHead">
+    <H1 class="pageTitle">Delimited continuations and nested transactions
 
-    You are logged in as #{username}.
+    <section class="articleDetailBody">
+        You are logged in as #{username}.
 
-    <pre>^{blog_data}
+        <pre>^{blog_data}
 
-  <form action=@{BlogContR klabel} method="POST">
-      ^{blog_view_widget}
-      <INPUT name=logout value="Logout"      TYPE=Submit>
-      <INPUT name=new    value="New Article" TYPE=Submit>
+        <form action=@{BlogContR klabel} method="POST">
+            ^{blog_view_widget}
+            <INPUT name=logout value="Logout"      TYPE=Submit>
+            <INPUT name=new    value="New Article" TYPE=Submit>

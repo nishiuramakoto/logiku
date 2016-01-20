@@ -1,18 +1,16 @@
-$doctype 5
-  <html>
-    <head>
-      <title>Simple blog: Preview
-    <body>
-      <H1 ALIGN=CENTER>Delimited continuations and nested transactions
+<article class="articleDetail">
+  <header class="articleDetailHead">
+      <H1 class="pageTitle">Delimited continuations and nested transactions
 
-      You are logged in as #{username}.
+    <section>
+        You are logged in as #{username}.
 
-      <h3>Preview your submission
+        <h3>Preview your submission
 
-    <form action=@{BlogContR klabel} method="POST">
-         ^{blog_preview_widget}
-         <textarea name=body rows=10 cols=50 readonly>
-           #{blog_new_post}
+        <form action=@{BlogContR klabel} method="POST">
+            ^{blog_preview_widget}
+            <textarea name=body rows=10 cols=50 readonly>
+            #{blog_new_post}
 
-         <INPUT name=cancel  value="Cancel"    TYPE=Submit>
-         <INPUT name=submit  value="Submit"    TYPE=Submit>
+            <INPUT name=cancel  value="Cancel"    TYPE=Submit>
+            <INPUT name=submit  value="Submit"    TYPE=Submit>

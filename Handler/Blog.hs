@@ -20,7 +20,7 @@ postBlogContR klabel = do
   resume klabel cont_html not_found_html
 
 
------------------------------- Types  ------------------------------
+------------------------------  Types --------------------------------
 type Username = Text
 data BlogAction = Cancel | Submit | Preview | Logout | New
                 deriving (Eq,Show)
@@ -33,7 +33,9 @@ data UserForm = UserForm
                 } deriving Show
 
 blogLoginWidget :: ContId -> Widget -> Enctype -> Widget
-blogLoginWidget klabel blog_login_widget enctype =  $(widgetFile "blog_login")
+blogLoginWidget klabel blog_login_widget enctype =  do
+  setTitle "Blog Login"
+  $(widgetFile "blog_login")
 
 blogLoginForm :: Html -> MForm Handler (FormResult UserForm, Widget)
 blogLoginForm = renderDivs $ UserForm
@@ -54,7 +56,9 @@ inquireBlogLogin = do
 
 ---------------------------------------------------------------------------------
 blogLogoutWidget :: Username -> Widget
-blogLogoutWidget username                =   $(widgetFile "blog_logout")
+blogLogoutWidget username                =   do
+  setTitle "Blog Logout"
+  $(widgetFile "blog_logout")
 
 blogLogoutHtml :: UserForm -> CC (PS Html) Handler Html
 blogLogoutHtml user = do
@@ -66,13 +70,16 @@ data BlogForm = BlogForm { blogformTitle :: Text
                          , blogformBody  :: Textarea
                          } deriving Show
 
-blogNewWidget :: ContId -> Widget -> Enctype -> Username -> Widget
-blogNewWidget klabel blog_new_form enctype username = $(widgetFile "blog_new")
-
 blogNewForm :: Html -> MForm Handler (FormResult BlogForm, Widget)
 blogNewForm = renderDivs $ BlogForm
               <$> areq textField "Subject:" Nothing
               <*> areq textareaField "" Nothing
+
+blogNewWidget :: ContId -> Widget -> Enctype -> Username -> Widget
+blogNewWidget klabel blog_new_form enctype username = do
+  setTitle "Blog New"
+  $(widgetFile "blog_new")
+
 
 blogNewHtml :: UserForm -> CC (PS Html) Handler (ContId, Html)
 blogNewHtml user = do
@@ -91,7 +98,9 @@ inquireBlogNew user = do
 ------------------------------------------------------------------------------------------
 
 blogPreviewWidget :: ContId -> Username -> Textarea -> Widget -> Widget
-blogPreviewWidget klabel username blog_new_post blog_preview_widget = $(widgetFile "blog_preview")
+blogPreviewWidget klabel username blog_new_post blog_preview_widget = do
+  setTitle "Blog Preview"
+  $(widgetFile "blog_preview")
 
 emptyForm :: Html -> MForm Handler (FormResult (), Widget)
 emptyForm = renderDivs $ pure ()
@@ -116,7 +125,9 @@ inquireBlogPreview user blog_new_post = do
 
 
 blogViewWidget :: ContId -> Username -> Widget -> Widget -> Widget
-blogViewWidget klabel username blog_data blog_view_widget = $(widgetFile "blog_view")
+blogViewWidget klabel username blog_data blog_view_widget = do
+  setTitle "Blog View"
+  $(widgetFile "blog_view")
 
 blogViewHtml :: UserForm -> Widget
                 -> CC (PS Html) Handler (ContId, Html)
@@ -151,7 +162,7 @@ readBlogs = lift $ do
       return [whamlet|
           <p> <b> #{userIdent user}'s blog </b>
           $forall Entity _blogid blog <- blogs
-            <p> #{blogBlogTitle blog}
+            <p> [#{blogBlogTitle blog}]
             <p> #{blogBlogBody  blog}
       |]
 
@@ -169,17 +180,28 @@ submitBlog (UserForm name pass) (BlogForm title (Textarea body)) = lift $  do
 
 ------------------------  Application logics  ------------------------
 
+validateUser :: UserForm -> Bool
+validateUser (UserForm user pass) = user == pass
+
 blog_main :: CC (PS Html) Handler Html
 blog_main =  do
   lift $ $(logInfo) "inquireBlogLogin"
   (_klabel, user) <- inquireBlogLogin
-  lift $ $(logInfo) "loop_browse"
-  loop_browse user
-  lift $ $(logInfo) "loop_browse"
-  logout_html <- blogLogoutHtml user
-  inquireFinish logout_html
+  if validateUser user
+    then authSuccess user
+    else authFail user
 
   where
+    authSuccess user = do
+        lift $ $(logInfo) "loop_browse"
+        loop_browse user
+        lift $ $(logInfo) "loop_browse"
+        logout_html <- blogLogoutHtml user
+        inquireFinish logout_html
+
+    authFail user = do
+      blog_main
+
     loop_browse :: UserForm -> CC (PS Html) Handler ()
     loop_browse user = do
       blogs <- readBlogs

@@ -5,8 +5,6 @@ import  Control.Monad.CC.CCCxe
 import  ContMap
 import  LogicT.SRReifT
 
-categoryTree :: Widget
-categoryTree =  toWidget $(widgetFile "css-tree")
 
 getPortfolio01R :: Handler Html
 getPortfolio01R = defaultLayout $ do

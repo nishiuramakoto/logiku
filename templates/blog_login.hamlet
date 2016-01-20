@@ -1,14 +1,13 @@
-$doctype 5
-  <html>
-    <head>
-      <title>Simple blog: Login
-    <body>
-      <H1 ALIGN=CENTER>Delimited continuations and nested transactions
+<article class="articleDetail">
+  <header class="articleDetailHead">
+      <H1 class="pageTitle">Delimited continuations and nested transactions
+      <p>  An example of delimited continuations to implement nested #
+         \ transactions: a simple blog.
 
-      An example of delimited continuations to implement nested
-      transactions: a simple blog.
-
-      <h2>Please log in
+  <section class="articleDetailBody">
+    <section>
+      <h2 class="heading-typeB">
+        Please log in
       <form action=@{BlogContR klabel} method="POST" enctype=#{enctype}>
         ^{blog_login_widget}
         <button>Submit

@@ -12,6 +12,7 @@ import qualified Yesod.Core.Unsafe as Unsafe
 import qualified Data.CaseInsensitive as CI
 import qualified Data.Text.Encoding as TE
 import ContMap
+import SideMenu
 
 -- | The foundation datatype for your application. This can be a good place to
 -- keep settings and values requiring initialization before your application
@@ -24,7 +25,10 @@ data App = App
     , appHttpManager :: Manager
     , appLogger      :: Logger
     , appContMap     :: IORef (ContMap App)
+    , appMenuTree    :: MenuTree
     }
+
+
 
 -- This is where we define all of the routes in our application. For a full
 -- explanation of the syntax, please see:
@@ -71,12 +75,13 @@ instance Yesod App where
         master <- getYesod
         mmsg <- getMessage
 
+        let categoryTree =  $(widgetFile "css-tree")
+
         -- We break up the default layout into two components:
         -- default-layout is the contents of the body tag, and
         -- default-layout-wrapper is the entire page. Since the final
         -- value passed to hamletToRepHtml cannot be a widget, this allows
         -- you to use normal widget features in default-layout.
-
         pc <- widgetToPageContent $ do
             addStylesheet $ StaticR css_bootstrap_css
             $(widgetFile "default-layout")
