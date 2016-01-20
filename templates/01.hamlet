@@ -1,29 +1,25 @@
-$doctype 5
-<header id="pageHead">
-    <h1 id="siteTitle"> logiku <small id="catchcopy"> make it logical </small>
-
-<div id="pageBody">
-    <div id="pageBodyMain">
-        <article class="articleDetail">
-            <header class="articleDetailHead">
-                <h1  class="pageTitle"> 水廻り
-                <p> 水廻りの漏れを診断します。
 
 
-            <section class="articleDetailBody">
-                <section>
-                    <h2 class="heading-typeB">
-                        <a href="@{LeakInBathroomR}"> お風呂場の漏れ？
-                    <p> お風呂場からの漏れかどうか、診断します。
-                <section>
-                    <h2 class="heading-typeB">
-                         <a href="@{LeakInKitchenR}"> キッチンの漏れ?
-                    <p> キッチンからの漏れかどうか、診断します。
 
-        <footer class="articleDetailFoot">
-            <aside class="creditUnit">
-                補足
-    <div id="pageBodySub">
-        <nav class="localNavi">
-            <section class="categoryTree">
-            ^{categoryTree}
+<article class="articleDetail">
+    <header class="articleDetailHead">
+        <h1  class="pageTitle"> 水廻り
+        <p> 水廻りの漏れを診断します。
+
+
+    <section class="articleDetailBody">
+        <section>
+            <h2 class="heading-typeB">
+                <a href="@{LeakInBathroomR}"> お風呂場の漏れ？
+            <p> お風呂場からの漏れかどうか、診断します。
+        <section>
+            <h2 class="heading-typeB">
+                <a href="@{LeakInKitchenR}"> キッチンの漏れ?
+            <p> キッチンからの漏れかどうか、診断します。
+        <section>
+            <h2 class="heading-typeB">
+                <a href="@{PrologProgramR}"> Prologのテスト
+            <p> Prologのテスト
+<footer class="articleDetailFoot">
+    <aside class="creditUnit">
+        補足

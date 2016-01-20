@@ -1,0 +1,13 @@
+
+
+<div id="pageBodyMain">
+    <article class="articleDetail">
+        <header class="articleDetailHead">
+            <h1  class="pageTitle"> Prolog Tester
+            <p> Execute prolog programs
+
+        <section class="articleDetailBody">
+            <div id="prologProgramForm">
+                <form action=@{PrologExecuteTestR} method="POST" enctype #{enctype}>
+                    ^{prolog_execute_test_widget}
+                    <button> Submit

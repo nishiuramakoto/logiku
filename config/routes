@@ -13,8 +13,14 @@
 
 /01.html     Portfolio01R GET
 
-/expert/leak_in_bathroom      LeakInBathroomR      GET
+/expert/leak_in_bathroom      LeakInBathroomR     GET
 /expert/leak_in_bathroom/#Int LeakInBathroomContR POST
 
 /expert/leak_in_kitchen       LeakInKitchenR      GET
 /expert/leak_in_kitchen/#Int  LeakInKitchenContR  POST
+
+/prolog                       PrologTestR         GET
+/prolog/execute               PrologExecuteTestR  POST
+
+/prolog/new_program           PrologProgramR          GET
+/prolog/new_program/#Int      PrologProgramContR      POST

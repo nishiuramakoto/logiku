@@ -1,3 +1,13 @@
+<header id="pageHead">
+    <h1 id="siteTitle"> logiku <small id="catchcopy"> make it logical </small>
+
 $maybe msg <- mmsg
-  <div #message>#{msg}
-^{widget}
+    <div #message>#{msg}
+
+<div id="pageBody">
+    <div id="pageBodyMain">
+        ^{widget}
+    <div id="pageBodySub">
+        <nav class="localNavi">
+            <section class="categoryTree">
+                ^{categoryTree}
