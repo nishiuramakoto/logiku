@@ -1,9 +1,6 @@
 -- A temporary version, NOT THREAD SAFE
 
-module Handler.PrologProgram (
-  getPrologProgramR,
-  postPrologProgramContR
-  )  where
+module Handler.PrologProgram where
 
 import             Import
 import             Control.Monad.CC.CCCxe
@@ -30,16 +27,16 @@ type ProgramBody = Textarea
 
 -------------------------- inquire program  --------------------------
 
-data PrologProgramForm = PrologProgramForm { prologProgramName     :: Text
-                                           , prologProgramProgram  :: Textarea
+data PrologProgramForm = PrologProgramForm { prologProgramName     :: Maybe Text
+                                           , prologProgramProgram  :: Maybe Textarea
                                            } deriving Show
 
 
 prologProgramForm :: Maybe ProgramName -> Maybe ProgramBody
                   -> Html -> MForm Handler (FormResult PrologProgramForm, Widget)
 prologProgramForm name program = renderDivs $ PrologProgramForm
-              <$> areq textField     "Program Name:"  name
-              <*> areq textareaField "Prolog Program" program
+              <$> aopt textField      "Program Name:"  (Just name)
+              <*> aopt textareaField  "Prolog Program" (Just program)
 
 prologProgramWidget :: ContId ->  Widget -> Enctype -> Widget
 prologProgramWidget klabel formWidget enctype = do
@@ -68,34 +65,42 @@ prologProgramFinishHtml = lift $ redirect Portfolio01R
 ------------------------  Database functions  ------------------------
 selectFirstProgram :: CC (PS Html) Handler (Maybe PrologProgramForm)
 selectFirstProgram = lift $ do
+  $(logInfo) "selectFirst"
   entity <- runDB $ selectList [] [Asc PrologProgramName , LimitTo 1 ]
   case entity of
-    [ Entity id (PrologProgram name program) ] ->  return (Just (PrologProgramForm name (Textarea program)))
-    _                       ->  return Nothing
+    [ Entity id (PrologProgram name program) ]
+        ->  return (Just (PrologProgramForm (Just name) (Just $ Textarea program)))
+    _   ->  return Nothing
 
 
 selectNextProgram :: PrologProgramForm -> CC (PS Html) Handler (Maybe PrologProgramForm)
-selectNextProgram (PrologProgramForm name body) = lift $ do
+selectNextProgram (PrologProgramForm Nothing     body) = selectFirstProgram
+selectNextProgram (PrologProgramForm (Just name) body) = lift $ do
+  $(logInfo) "selectNext"
   nextProgram <- runDB $ selectList [PrologProgramName >. name] [LimitTo 1]
   case nextProgram of
-    [Entity id (PrologProgram name program)] -> return $ Just $ PrologProgramForm name (Textarea program)
-    _ ->                     return Nothing
+    [Entity id (PrologProgram name program)]
+      -> return $ Just $ PrologProgramForm (Just name) (Just (Textarea program))
+    _ -> return Nothing
 
 selectPrevProgram :: PrologProgramForm -> CC (PS Html) Handler (Maybe PrologProgramForm)
-selectPrevProgram (PrologProgramForm name body) = lift $ do
+selectPrevProgram (PrologProgramForm Nothing     body) = selectFirstProgram
+selectPrevProgram (PrologProgramForm (Just name) body) = lift $ do
+  $(logInfo) "selectPrev"
   nextProgram <- runDB $ selectList [PrologProgramName <. name] [LimitTo 1]
   case nextProgram of
-    [Entity id  (PrologProgram name program)] -> return $ Just $ PrologProgramForm name (Textarea program)
-    _ ->                     return Nothing
+    [Entity id  (PrologProgram name program)]
+      -> return $ Just $ PrologProgramForm (Just name) (Just $ Textarea program)
+    _ -> return Nothing
 
 submit :: PrologProgramForm -> CC (PS Html) Handler Bool
-submit (PrologProgramForm name (Textarea body)) = lift $ do
+submit (PrologProgramForm (Just name) (Just (Textarea body))) = lift $ do
   progId <- runDB $ insert $ PrologProgram name body
   prog   <- runDB $ get progId
   case prog of
     Just _  -> return True
     Nothing -> return False
-
+submit (PrologProgramForm _ _)            = return False
 ------------------------  Application logics  ------------------------
 
 
@@ -116,10 +121,15 @@ loopBrowse Nothing = do
       if success
         then loopBrowse (Just newProgram)
         else loopBrowse Nothing
-    _ -> loopBrowse Nothing
+    Just Next ->  do nextProgram <- selectFirstProgram
+                     loopBrowse nextProgram
+
+    Just Prev ->  do prevProgram <- selectFirstProgram
+                     loopBrowse prevProgram
+
 
 loopBrowse (Just currentProgram@(PrologProgramForm name program)) = do
-  (_klabel, maybeAction, newProgram ) <- inquirePrologProgram  (Just name) (Just program)
+  (_klabel, maybeAction, newProgram ) <- inquirePrologProgram  name  program
   case maybeAction of
     Just Submit -> do
       success <- submit newProgram

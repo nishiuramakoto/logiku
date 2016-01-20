@@ -28,6 +28,7 @@ library
                      Handler.Blog
                      Handler.Base
                      Handler.PrologTest
+                     Handler.PrologProgram
                      ContMap
                      SideMenu
                      LogicT.LogicT
