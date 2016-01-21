@@ -136,12 +136,12 @@ runFormPostButtons :: (YesodCC site, Show b)
                       => [(Text,b)] -> (HandlerT site IO) (Maybe b)
 runFormPostButtons [] = return Nothing
 runFormPostButtons ((name,value):xs) = do
-  $(logInfo) ("inquireFormPostButtons" `T.append` T.pack (show name) )
+--  $(logInfo) ("inquireFormPostButtons" `T.append` T.pack (show name) )
   p <- lookupPostParam name
-  $(logInfo) "inquireFormPostButtons"
+--  $(logInfo) "inquireFormPostButtons"
   case p of
     Just _  -> do
-      $(logInfo) $ "inquireFormPostButtons" `T.append` T.pack (show value)
+--      $(logInfo) $ "inquireFormPostButtons" `T.append` T.pack (show value)
       return (Just value)
     _      -> runFormPostButtons xs
 

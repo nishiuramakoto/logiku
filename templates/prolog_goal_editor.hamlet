@@ -16,9 +16,10 @@
             <section>
                 <header>
                     <h3 class="programGoalsHeader"> Add a Goal
-            <form action=@{PrologProgramContR klabel} method="POST" enctype=#{enctype}>
-                    ^{formWidget}
-                    <input name=submit  value="Submit Goal" TYPE=Submit>
+            <form action=@{PrologProgramContPostR} method="POST" enctype=#{enctype}>
+                <input type="hidden" name="_klabel" value="#{klabel}">
+                ^{formWidget}
+                <input name=submit  value="Submit Goal" TYPE=Submit>
 
             <section>
                 <table>

@@ -4,12 +4,14 @@
 
     <section class="articleDetailBody">
 
-        <form action=@{PrologProgramContR klabel} method="POST">
+        <form action=@{PrologProgramContPostR} method="POST">
+            <input type="hidden" name="_klabel" value="#{klabel}">
             ^{formWidget}
-            <INPUT name=submit   value="Submit Program" TYPE=Submit>
-            <INPUT name=prev     value="<"    TYPE=Submit>
-            <INPUT name=next     value=">"    TYPE=Submit>
-            <INPUT name=add_goal value="add goal" type=Submit>
+            <INPUT name=submit   value="Submit"   TYPE=Submit>
+            <INPUT name=delete   value="Delete"   TYPE=Submit>
+            <INPUT name=prev     value="<"        TYPE=Submit>
+            <INPUT name=next     value=">"        TYPE=Submit>
+            <INPUT name=add_goal value="Browse goals" type=Submit>
 
 <footer class="articleDetailFoot">
     <aside class="creditUnit">
