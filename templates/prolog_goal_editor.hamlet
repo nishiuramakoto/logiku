@@ -1,0 +1,32 @@
+<article class="articleDetail">
+  <header class="articleDetailHead">
+    <H1 class="pageTitle">Delimited continuations and nested transactions
+
+    <section class="articleDetailBody">
+        <div class="goalEditor">
+            <section>
+                <header>
+                    <h3 class="programNameHeader"> Program name
+                #{programName}
+            <section>
+                <header>
+                    <h3 class="programCodeHeader"> Program code
+                <code>
+                    #{programCode}
+            <section>
+                <header>
+                    <h3 class="programGoalsHeader"> Add a Goal
+            <form action=@{PrologProgramContR klabel} method="POST" enctype=#{enctype}>
+                    ^{formWidget}
+                    <input name=submit  value="Submit Goal" TYPE=Submit>
+
+            <section>
+                <table>
+                    $forall Goal name code <- goals
+                        <tr>
+                            <th> #{name}
+                            <th> <code> #{code}
+
+<footer class="articleDetailFoot">
+    <aside class="creditUnit">
+        <a href="@{Portfolio01R}"> トップ

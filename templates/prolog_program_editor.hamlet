@@ -1,0 +1,16 @@
+<article class="articleDetail">
+  <header class="articleDetailHead">
+    <H1 class="pageTitle">Delimited continuations and nested transactions
+
+    <section class="articleDetailBody">
+
+        <form action=@{PrologProgramContR klabel} method="POST">
+            ^{formWidget}
+            <INPUT name=submit   value="Submit Program" TYPE=Submit>
+            <INPUT name=prev     value="<"    TYPE=Submit>
+            <INPUT name=next     value=">"    TYPE=Submit>
+            <INPUT name=add_goal value="add goal" type=Submit>
+
+<footer class="articleDetailFoot">
+    <aside class="creditUnit">
+        <a href="@{Portfolio01R}"> トップ
