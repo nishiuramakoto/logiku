@@ -5,6 +5,9 @@ module Handler.PrologProgram where
 import             Import
 import             Control.Monad.CC.CCCxe
 import             ContMap
+import             Data.Text(Text)
+import qualified   Data.Text as T
+import             Text.Read(reads)
 
 ------------------------------ Handlers ------------------------------
 
@@ -17,9 +20,23 @@ postPrologProgramContR klabel = do
   not_found_html <- defaultLayout [whamlet|Not Found|]
   resume klabel cont_html not_found_html
 
+postPrologProgramContPostR :: Handler Html
+postPrologProgramContPostR = do
+  cont_html <- defaultLayout [whamlet|Continue|]
+  not_found_html <- defaultLayout [whamlet|Not Found|]
+
+  mklabel <- lookupPostParam "_klabel"
+  case mklabel of
+    Just  klabel'  ->
+      case reads (T.unpack klabel') of
+      [(klabel'' , _)] -> do
+        resume klabel'' cont_html not_found_html
+    _ -> do
+      return not_found_html
+
 ------------------------------  Types --------------------------------
 
-data PrologProgramAction = Cancel | Submit | New | Prev | Next | AddGoal
+data PrologProgramAction = Cancel | Submit | New | Prev | Next | Delete | AddGoal | DeleteGoal
                 deriving (Eq,Show)
 
 type ProgramName = Text
@@ -56,6 +73,7 @@ inquirePrologProgram name program  = do
   (klabel, html)         <- prologProgramHtml name program
   (answer, maybeAction)  <- inquirePostUntilButton klabel html (prologProgramForm name program)
                             [ ("submit", Submit) , ("next", Next) , ("prev" , Prev) , ("add_goal", AddGoal)
+                            , ("delete", Delete)
                             ]
   return (klabel, maybeAction, answer)
 
@@ -98,7 +116,7 @@ prologProgramFinishHtml = lift $ redirect Portfolio01R
 ------------------------  Database functions  ------------------------
 selectFirstProgram :: CC (PS Html) Handler (Maybe (PrologProgramId, PrologProgramForm))
 selectFirstProgram = lift $ do
-  $(logInfo) "selectFirst"
+--  $(logInfo) "selectFirst"
   entity <- runDB $ selectList [] [Asc PrologProgramName , LimitTo 1 ]
   case entity of
     [ Entity id (PrologProgram name program) ]
@@ -107,7 +125,7 @@ selectFirstProgram = lift $ do
 
 selectLastProgram :: CC (PS Html) Handler (Maybe (PrologProgramId, PrologProgramForm))
 selectLastProgram = lift $ do
-  $(logInfo) "selectLast"
+--  $(logInfo) "selectLast"
   entity <- runDB $ selectList [] [Desc PrologProgramName , LimitTo 1 ]
   case entity of
     [ Entity id (PrologProgram name program) ]
@@ -118,21 +136,21 @@ selectLastProgram = lift $ do
 selectNextProgram :: PrologProgramForm -> CC (PS Html) Handler (Maybe (PrologProgramId, PrologProgramForm))
 selectNextProgram (PrologProgramForm Nothing     body ) = selectFirstProgram
 selectNextProgram (PrologProgramForm (Just name) body ) =  do
-  lift $ $(logInfo) "selectNext"
+--  lift $ $(logInfo) "selectNext"
   nextProgram <- lift $ runDB $ selectList [PrologProgramName >. name] [LimitTo 1]
   case nextProgram of
-    [Entity id (PrologProgram name' program)]
-      -> return $ Just $ (id, PrologProgramForm (Just name') (Just (Textarea program)))
+    [Entity progId (PrologProgram name' program)]
+      -> return $ Just $ (progId, PrologProgramForm (Just name') (Just (Textarea program)))
     _ -> selectFirstProgram
 
 selectPrevProgram :: PrologProgramForm -> CC (PS Html) Handler (Maybe (PrologProgramId, PrologProgramForm))
 selectPrevProgram (PrologProgramForm Nothing     body  ) = selectLastProgram
 selectPrevProgram (PrologProgramForm (Just name) body  ) = do
-  lift $ $(logInfo) "selectPrev"
+--  lift $ $(logInfo) "selectPrev"
   nextProgram <- lift $ runDB $ selectList [PrologProgramName <. name] [LimitTo 1]
   case nextProgram of
-    [Entity id  (PrologProgram name' program)]
-      -> return $ Just (id, PrologProgramForm (Just name') (Just $ Textarea program))
+    [Entity progId  (PrologProgram name' program)]
+      -> return $ Just (progId, PrologProgramForm (Just name') (Just $ Textarea program))
     _ -> selectLastProgram
 
 submit :: PrologProgramForm -> CC (PS Html) Handler (Maybe PrologProgramId)
@@ -145,17 +163,35 @@ submit (PrologProgramForm (Just name) (Just (Textarea body)) ) = lift $ do
 submit (PrologProgramForm _ _ )            = return Nothing
 
 submitGoal :: PrologProgramId -> PrologGoalForm -> CC (PS Html) Handler (Key PrologGoal)
-submitGoal id (PrologGoalForm name (Textarea code)) = do
-  goalId <- lift $ runDB $ insert $ PrologGoal name id code
+submitGoal progId (PrologGoalForm name (Textarea code)) = do
+  goalId <- lift $ runDB $ insert $ PrologGoal name progId code
   return goalId
 
+selectGoalEntities :: PrologProgramId -> CC (PS Html) Handler [Entity PrologGoal]
+selectGoalEntities progId = do
+  goals  <- lift $ runDB $ selectList [ PrologGoalProgramId ==. progId ] []
+  return goals
+
 selectGoals :: PrologProgramId -> CC (PS Html) Handler [PrologGoal]
-selectGoals id = do
-  goals <- lift $ runDB $ selectList [ PrologGoalProgramId ==. id ] []
+selectGoals progId = do
+  goals <- selectGoalEntities progId
   return $ map toPrologGoalForm goals
     where
       toPrologGoalForm :: Entity PrologGoal -> PrologGoal
       toPrologGoalForm (Entity goalId prologGoal) = prologGoal
+
+deleteProgram :: PrologProgramId -> CC (PS Html) Handler ()
+deleteProgram progId = do
+  goals <- selectGoalEntities progId
+  mapM_ deleteGoalEntity goals
+  lift $ runDB $ delete progId
+
+deleteGoal :: PrologGoalId -> CC (PS Html) Handler ()
+deleteGoal goalId = do
+  lift $ runDB $ delete goalId
+
+deleteGoalEntity :: Entity PrologGoal -> CC (PS Html) Handler ()
+deleteGoalEntity (Entity goalId _goal) = deleteGoal goalId
 
 ------------------------  Application logics  ------------------------
 
@@ -202,17 +238,20 @@ loopBrowse (Just (progId, currentProgram@(PrologProgramForm name program ))) = d
 
     Just AddGoal -> do loopGoals progId currentProgram
 
+    Just Delete  -> do deleteProgram progId
+                       loopBrowse Nothing
+
     _ -> loopBrowse (Just (progId,currentProgram))
 
 
 loopGoals :: PrologProgramId -> PrologProgramForm -> CC (PS Html) Handler ()
-loopGoals  id currentProgram@(PrologProgramForm (Just name) (Just code)) = do
-  goals <- selectGoals id
+loopGoals  progId currentProgram@(PrologProgramForm (Just name) (Just code)) = do
+  goals <- selectGoals progId
   (_klabel, maybeAction, newGoal) <- inquirePrologGoalEditor name code goals
   case maybeAction of
-    Just Submit -> do submitGoal id newGoal
-                      loopGoals id currentProgram
+    Just Submit -> do _ <- submitGoal progId newGoal
+                      loopGoals progId currentProgram
 
-    Nothing     -> loopGoals id currentProgram
+    _           -> loopGoals progId currentProgram
 
-loopGoals id _ = loopBrowse Nothing
+loopGoals progId _ = loopBrowse Nothing

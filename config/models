@@ -35,7 +35,7 @@ PrologProgram
 PrologGoal
         name            Text
         programId       PrologProgramId
-        goal           Text
+        goals           Text
 
         UniquePrologGoal name
         deriving Show
