@@ -22,7 +22,7 @@
 
             <section>
                 <table>
-                    $forall Goal name code <- goals
+                    $forall PrologGoal name id code <- goals
                         <tr>
                             <th> #{name}
                             <th> <code> #{code}
