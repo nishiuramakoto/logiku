@@ -44,7 +44,7 @@ blogLoginForm = renderDivs $ UserForm
 
 blogLoginHtml :: CC (PS Html) Handler (ContId, Html)
 blogLoginHtml = do
-  (klabel, widget, enctype) <- lift $ generateKFormPost $ blogLoginForm
+  (klabel, widget, enctype) <- lift $ generateCcFormPost $ blogLoginForm
   html <- lift $ defaultLayout $ blogLoginWidget klabel widget enctype
   return (klabel, html)
 
@@ -83,7 +83,7 @@ blogNewWidget klabel blog_new_form enctype username = do
 
 blogNewHtml :: UserForm -> CC (PS Html) Handler (ContId, Html)
 blogNewHtml user = do
-  (klabel, widget, enctype) <- lift $ generateKFormPost $ blogNewForm
+  (klabel, widget, enctype) <- lift $ generateCcFormPost $ blogNewForm
   html <- lift $ defaultLayout $ blogNewWidget klabel widget enctype (userformName user)
   return (klabel, html)
 
@@ -108,7 +108,7 @@ emptyForm = renderDivs $ pure ()
 blogPreviewHtml :: UserForm -> BlogForm
                    -> CC (PS Html) Handler (ContId, Html)
 blogPreviewHtml user blog_new_post = do
-  (klabel, widget, _enctype) <- lift $ generateKFormPost $ emptyForm
+  (klabel, widget, _enctype) <- lift $ generateCcFormPost $ emptyForm
   html <- lift $ defaultLayout $
           blogPreviewWidget klabel (userformName user) (blogformBody blog_new_post) widget
   return (klabel, html)
@@ -132,7 +132,7 @@ blogViewWidget klabel username blog_data blog_view_widget = do
 blogViewHtml :: UserForm -> Widget
                 -> CC (PS Html) Handler (ContId, Html)
 blogViewHtml user blog_data = do
-  (klabel, widget, _enctype) <- lift $ generateKFormPost emptyForm
+  (klabel, widget, _enctype) <- lift $ generateCcFormPost emptyForm
   html   <- lift $ defaultLayout $ blogViewWidget klabel (userformName user) blog_data widget
   return (klabel, html)
 

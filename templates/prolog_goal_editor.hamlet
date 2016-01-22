@@ -16,11 +16,13 @@
             <section>
                 <header>
                     <h3 class="programGoalsHeader"> Add a Goal
-            <form action=@{PrologProgramContPostR} method="POST" enctype=#{enctype}>
+            <form action=@{PrologProgramContSilentR} method="POST" enctype=#{enctype}>
                 <input type="hidden" name="_klabel" value="#{klabel}">
                 ^{formWidget}
                 <input name=submit  value="Submit Goal" TYPE=Submit>
 
+            <a href="@{PrologProgramContR klabel}?action=back">
+                Back to Program Editor
             <section>
                 <table>
                     $forall PrologGoal name id code <- goals
