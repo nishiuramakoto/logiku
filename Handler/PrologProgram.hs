@@ -10,6 +10,10 @@ import qualified   Data.Text as T
 import             Text.Read(reads)
 
 ------------------------------ Handlers ------------------------------
+readInt :: Text -> Maybe Int
+readInt s = case reads (T.unpack s) of
+  [(i, s')] -> if s' == "" then Just i else Nothing
+  _         -> Nothing
 
 getPrologProgramR :: Handler Html
 getPrologProgramR = run ccMain
@@ -20,23 +24,26 @@ postPrologProgramContR klabel = do
   not_found_html <- defaultLayout [whamlet|Not Found|]
   resume klabel cont_html not_found_html
 
-postPrologProgramContPostR :: Handler Html
-postPrologProgramContPostR = do
+postPrologProgramContSilentR :: Handler Html
+postPrologProgramContSilentR = do
   cont_html <- defaultLayout [whamlet|Continue|]
   not_found_html <- defaultLayout [whamlet|Not Found|]
 
   mklabel <- lookupPostParam "_klabel"
-  case mklabel of
-    Just  klabel'  ->
-      case reads (T.unpack klabel') of
-      [(klabel'' , _)] -> do
-        resume klabel'' cont_html not_found_html
-    _ -> do
-      return not_found_html
+  case join $ fmap readInt mklabel of
+    Just klabel ->  resume klabel cont_html not_found_html
+    _ ->  return not_found_html
+
+
+getPrologProgramContR :: Int -> Handler Html
+getPrologProgramContR klabel = do
+  cont_html <- defaultLayout [whamlet|Continue|]
+  not_found_html <- defaultLayout [whamlet|Not Found|]
+  resume klabel cont_html not_found_html
 
 ------------------------------  Types --------------------------------
 
-data PrologProgramAction = Cancel | Submit | New | Prev | Next | Delete | AddGoal | DeleteGoal
+data PrologProgramAction = Cancel | Submit | New | Prev | Next | Delete | AddGoal | DeleteGoal | EditProgram
                 deriving (Eq,Show)
 
 type ProgramName = Text
@@ -58,12 +65,15 @@ prologProgramForm name program = renderDivs $ PrologProgramForm
 prologProgramWidget :: ContId ->  Widget -> Enctype -> Widget
 prologProgramWidget klabel formWidget enctype = do
   setTitle "View Prolog Program"
+  addScript $ StaticR css_ace_builds_src_noconflict_ace_js
+    -- addStylesheet $ StaticR css_bootstrap_css
+
   $(widgetFile "prolog_program_editor")
 
 prologProgramHtml :: Maybe ProgramName -> Maybe ProgramCode
                   ->  CC (PS Html) Handler (ContId, Html)
 prologProgramHtml name program = do
-  (klabel, formWidget, enctype) <- lift $ generateKFormPost $ prologProgramForm name program
+  (klabel, formWidget, enctype) <- lift $ generateCcFormPost $ prologProgramForm name program
   html   <- lift $ defaultLayout $ prologProgramWidget klabel  formWidget enctype
   return (klabel, html)
 
@@ -97,16 +107,16 @@ prologGoalEditorWidget programName programCode goals  klabel  formWidget enctype
 prologGoalEditorHtml ::  ProgramName -> ProgramCode -> [PrologGoal]
                          -> CC (PS Html) Handler (ContId, Html)
 prologGoalEditorHtml  name code goals = do
-  (klabel, formWidget, enctype) <- lift $ generateKFormPost $ prologGoalEditorForm
+  (klabel, formWidget, enctype) <- lift $ generateCcFormPost $ prologGoalEditorForm
   html  <- lift $ defaultLayout $ prologGoalEditorWidget name code goals klabel formWidget enctype
   return (klabel, html)
 
 inquirePrologGoalEditor :: ProgramName -> ProgramCode -> [PrologGoal]
-                        -> CC (PS Html) Handler (ContId, Maybe PrologProgramAction, PrologGoalForm)
+                        -> CC (PS Html) Handler (ContId, Maybe PrologProgramAction, FormResult PrologGoalForm)
 inquirePrologGoalEditor name code goals  = do
   (klabel, html)         <- prologGoalEditorHtml name code goals
-  (answer, maybeAction)  <- inquirePostUntilButton klabel html (prologGoalEditorForm)
-                            [ ("submit", Submit) ]
+  (answer, maybeAction)  <- inquirePostButton klabel html (prologGoalEditorForm)
+                            [ ("submit", Submit), ("back", EditProgram) ]
   return (klabel, maybeAction, answer)
 
 ------------------------------  finish  ------------------------------
@@ -155,17 +165,31 @@ selectPrevProgram (PrologProgramForm (Just name) body  ) = do
 
 submit :: PrologProgramForm -> CC (PS Html) Handler (Maybe PrologProgramId)
 submit (PrologProgramForm (Just name) (Just (Textarea body)) ) = lift $ do
-  progId <- runDB $ insert $ PrologProgram name body
-  prog   <- runDB $ get progId
-  case prog of
-    Just _  -> return (Just progId)
-    Nothing -> return Nothing
+  maybeGoal <- runDB $ getBy $ UniquePrologProgram name
+  case maybeGoal of
+    Just (Entity progId _) -> do
+      runDB $ update progId [PrologProgramProgram =. body]
+      return (Just progId)
+    _  -> do
+      progId' <- runDB $ insert $ PrologProgram name body
+      return (Just progId')
+
 submit (PrologProgramForm _ _ )            = return Nothing
 
-submitGoal :: PrologProgramId -> PrologGoalForm -> CC (PS Html) Handler (Key PrologGoal)
+submitGoal :: PrologProgramId -> PrologGoalForm -> CC (PS Html) Handler (Maybe (Key PrologGoal))
 submitGoal progId (PrologGoalForm name (Textarea code)) = do
-  goalId <- lift $ runDB $ insert $ PrologGoal name progId code
-  return goalId
+  lift $ $(logInfo) $ "submitting goal:" ++ name
+  maybeGoal <- lift $ runDB $ getBy $ PrologGoalUniqueName progId name
+  case maybeGoal of
+    Just _  -> do
+      klabel <- lift $ generateCcLabel
+      html   <- lift $ defaultLayout $(widgetFile "prolog_goal_editor_error_duplicate_goal")
+      inquire klabel html
+      return Nothing
+    Nothing -> do
+      goalId <- lift $ runDB $ insert $ PrologGoal name progId  code
+      lift $ $(logInfo) $ "submitted goal:" ++ name
+      return $ Just goalId
 
 selectGoalEntities :: PrologProgramId -> CC (PS Html) Handler [Entity PrologGoal]
 selectGoalEntities progId = do
@@ -237,6 +261,7 @@ loopBrowse (Just (progId, currentProgram@(PrologProgramForm name program ))) = d
                      loopBrowse $ prevProgram
 
     Just AddGoal -> do loopGoals progId currentProgram
+                       loopBrowse (Just (progId, currentProgram))
 
     Just Delete  -> do deleteProgram progId
                        loopBrowse Nothing
@@ -247,11 +272,17 @@ loopBrowse (Just (progId, currentProgram@(PrologProgramForm name program ))) = d
 loopGoals :: PrologProgramId -> PrologProgramForm -> CC (PS Html) Handler ()
 loopGoals  progId currentProgram@(PrologProgramForm (Just name) (Just code)) = do
   goals <- selectGoals progId
-  (_klabel, maybeAction, newGoal) <- inquirePrologGoalEditor name code goals
-  case maybeAction of
-    Just Submit -> do _ <- submitGoal progId newGoal
-                      loopGoals progId currentProgram
+  (_klabel, maybeAction, resultForm) <- inquirePrologGoalEditor name code goals
+  case resultForm of
+    FormSuccess newGoal -> do
+      _ <- submitGoal progId newGoal
+      loopGoals progId currentProgram
 
-    _           -> loopGoals progId currentProgram
+    _ -> do
+      v <- lift $ lookupGetParam "action"
+      case v of
+        Just "back" -> loopBrowse (Just (progId,currentProgram))
+        _ ->    loopGoals progId currentProgram
 
-loopGoals progId _ = loopBrowse Nothing
+
+loopGoals progId _ = return ()

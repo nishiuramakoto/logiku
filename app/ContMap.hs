@@ -14,12 +14,15 @@ module ContMap (
   lookupContMap,
   inquire,
   inquireFinish,
+  inquireGet,
   inquireGetUntil,
+  inquirePost,
   inquirePostUntil,
+  inquirePostButton,
   inquirePostUntilButton,
-  generateKFormGet,
-  generateKFormPost,
-  generateKlabel,
+  generateCcFormGet,
+  generateCcFormPost,
+  generateCcLabel,
   ) where
 
 -- import             Import
@@ -101,7 +104,19 @@ inquireFinish :: YesodCC site => Html -> CC (PS Html) (HandlerT site IO) Html
 inquireFinish html = abortP ps $ return html
 
 
-inquireGetUntil :: YesodCC site => ContId -> Html -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
+
+inquireGet :: YesodCC site
+                   => ContId -> Html
+                   -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
+                   -> CC (PS Html) (HandlerT site IO) (FormResult a)
+inquireGet klabel html form = do
+  _ <- inquire klabel html
+  ((result, _widget), _enctype) <- lift $ runFormGet form
+  return result
+
+inquireGetUntil :: YesodCC site
+                   => ContId -> Html
+                   -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
                    -> CC (PS Html) (HandlerT site IO) a
 inquireGetUntil klabel html form = do
   _ <- inquire klabel html
@@ -111,7 +126,8 @@ inquireGetUntil klabel html form = do
     _             -> inquireGetUntil klabel html form
 
 inquirePostUntil :: (YesodCC site, RenderMessage site FormMessage)
-                    => ContId -> Html -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
+                    => ContId -> Html
+                    -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
                     -> CC (PS Html) (HandlerT site IO) a
 inquirePostUntil klabel html form = do
   _ <- inquire klabel html
@@ -120,8 +136,18 @@ inquirePostUntil klabel html form = do
     FormSuccess r -> return r
     _             -> inquirePostUntil klabel html form
 
+inquirePost :: (YesodCC site, RenderMessage site FormMessage)
+                    => ContId -> Html
+                    -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
+                    -> CC (PS Html) (HandlerT site IO) (FormResult a)
+inquirePost klabel html form = do
+  _ <- inquire klabel html
+  ((result, _widget), _enctype) <- lift $ runFormPost form
+  return result
+
 inquirePostUntilButton :: (YesodCC site, RenderMessage site FormMessage, Show a, Show b)
-                          => ContId -> Html ->  (Html -> MForm (HandlerT site IO) (FormResult a, t))
+                          => ContId -> Html
+                          -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
                           -> [(Text,b)]
                           -> CC (PS Html) (HandlerT site IO) (a, Maybe b)
 inquirePostUntilButton klabel html form buttons = do
@@ -130,6 +156,22 @@ inquirePostUntilButton klabel html form buttons = do
   case r of
     Just _button -> return (x, r)
     Nothing     -> inquirePostUntilButton klabel html form buttons
+
+inquirePostButton :: (YesodCC site, RenderMessage site FormMessage, Show a, Show b)
+                     => ContId -> Html
+                     -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
+                     -> [(Text,b)]
+                     -> CC (PS Html) (HandlerT site IO) (FormResult a, Maybe b)
+inquirePostButton klabel html form buttons = do
+  result <- inquirePost klabel html form
+  case result of
+    FormMissing     -> return (FormMissing     , Nothing)
+    FormFailure err -> return (FormFailure err , Nothing)
+    FormSuccess a   -> do
+      r <- lift $ runFormPostButtons buttons
+      case r of
+        Just _button -> return (FormSuccess a, r)
+        Nothing      -> return (FormFailure ["no such buttons"] , r)
 
 
 runFormPostButtons :: (YesodCC site, Show b)
@@ -173,23 +215,23 @@ resume klabel cont_html not_found = do
 
 
 ----------------------------  Yesod defs  ----------------------------
-generateKFormGet ::  (RenderMessage (HandlerSite m) FormMessage, MonadHandler m)
+generateCcFormGet ::  (RenderMessage (HandlerSite m) FormMessage, MonadHandler m)
                      => (Markup -> MForm m (FormResult a, xml)) -> m (Int, xml, Enctype)
-generateKFormGet form = do
+generateCcFormGet form = do
   (widget, enctype) <- generateFormGet' form
-  klabel <- generateKlabel
+  klabel <- generateCcLabel
   return (klabel, widget, enctype)
 
-generateKFormPost ::  (RenderMessage (HandlerSite m) FormMessage, MonadHandler m)
+generateCcFormPost ::  (RenderMessage (HandlerSite m) FormMessage, MonadHandler m)
                      => (Markup -> MForm m (FormResult a, xml)) -> m (Int, xml, Enctype)
-generateKFormPost form = do
+generateCcFormPost form = do
   (widget, enctype) <- generateFormPost form
-  klabel <- generateKlabel
+  klabel <- generateCcLabel
   return (klabel, widget, enctype)
 
-generateKlabel ::  (RenderMessage (HandlerSite m) FormMessage, MonadHandler m)
+generateCcLabel ::  (RenderMessage (HandlerSite m) FormMessage, MonadHandler m)
                      => m Int
-generateKlabel = do
+generateCcLabel = do
   unique <- liftIO $ newUnique
   let klabel = hashUnique unique
   return klabel

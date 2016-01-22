@@ -82,7 +82,7 @@ boolForm = renderDivs $ BoolForm
 
 boolHtml :: Text -> Logic (ContId, Html)
 boolHtml query_string = do
-  (klabel, widget, enctype) <- lift $ lift $ generateKFormPost $ boolForm
+  (klabel, widget, enctype) <- lift $ lift $ generateCcFormPost $ boolForm
   html <- lift $ lift $ defaultLayout $ [whamlet|#{query_string}|] >> boolWidget klabel widget enctype
   return (klabel, html)
 
