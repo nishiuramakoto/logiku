@@ -45,5 +45,5 @@ p {
 #prologProgramEditor {
     position: relative;
     width: 80em;
-    height: 30em;
+    height: 10em;
  }

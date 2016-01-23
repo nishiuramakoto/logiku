@@ -6,15 +6,22 @@
         <div class="codeModification hidden">
             Program modified and not saved
         <div class="syntaxError">
-            Syntax error
+        <div class="saveFailed">
+            $if forceSave
+                Syntax error. Press "Force save" to save the code
+            $else
+
     <section class="articleDetailBody">
         <div class="prologProgramForm">
             <form action=@{PrologProgramContSilentR} method="POST">
                 <input type="hidden" name="_klabel" value="#{klabel}">
                 ^{formWidget}
                 <div id="prologProgramEditor">
-                <INPUT name=save      value="Save"     TYPE=Submit class="changeCode">
-                <INPUT name=checkSyntax value="Check syntax" TYPE=button class="changeCode">
+                $if forceSave
+                    <INPUT name=save        value="Force Save"  TYPE=Submit class=" changeCode">
+                $else
+                    <INPUT name=save        value="Save"         TYPE=Submit class=" changeCode">
+                <INPUT name=checkSyntax value="Check syntax" TYPE=button class="checkSyntax changeCode">
                 <INPUT name=delete      value="Remove"   TYPE=Submit>
                 <INPUT name=prev        value="<"        TYPE=Submit>
                 <INPUT name=next        value=">"        TYPE=Submit>
