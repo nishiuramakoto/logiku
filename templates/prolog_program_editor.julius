@@ -64,7 +64,7 @@ $(document).ready(function () {
     var textarea = $('.prologProgramForm textarea');
     var div      = $('#prologProgramEditor');
 
-    // textarea.addClass('hidden');
+    textarea.addClass('hidden');
     div.append(textarea.val());
 
     // Set up the Ace editor
