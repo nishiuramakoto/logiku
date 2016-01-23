@@ -315,16 +315,16 @@ loopBrowse (Just (progId, currentProgram@(PrologProgramForm name program ))) for
         loopBrowse (Just (progId   , newProgram)) True
 
     Just Next ->  do nextProgram <- selectNextProgram currentProgram -- sort by name
-                     loopBrowse nextProgram forceSave
+                     loopBrowse nextProgram False
 
     Just Prev ->  do prevProgram <- selectPrevProgram currentProgram
-                     loopBrowse prevProgram forceSave
+                     loopBrowse prevProgram False
 
     Just AddGoal -> do loopGoals progId currentProgram
-                       loopBrowse (Just (progId, currentProgram)) forceSave
+                       loopBrowse (Just (progId, currentProgram)) False
 
     Just Delete  -> do deleteProgram progId
-                       loopBrowse Nothing forceSave
+                       loopBrowse Nothing False
     -- Just CheckSyntax -> do
     --   case (newName, newCode) of
     --     (Just name, Just (Textarea code)) -> case consultString $ T.unpack code of
