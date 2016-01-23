@@ -21,15 +21,15 @@
 // });
 
 function setupSyntaxErrorMessage(data) {
-    if (data == null) {
-        window.alert("Nothing");
-        $('.syntaxError').removeClass().text("OK");
+    if (!data) {
+        //window.alert("Nothing");
+        $('.syntaxError').text("Syntax OK");
     } else {
-        window.alert(data);
-        var newNode = $("<li></li>");
-        newNode.text(data);
-        $(".editorNotification").append(newNode);
-        $('.syntaxError').text("Error");
+        // window.alert(data);
+        // var newNode = $("<li></li>");
+        // newNode.text(data);
+        // $(".editorNotification").append(newNode);
+        $('.syntaxError').text("Error:" + data);
     }
 };
 
@@ -37,7 +37,7 @@ function setupSyntaxErrorMessage(data) {
 function setupAjax() {
 
     // AJAX Request
-    $('input[name="checkSyntax"]').click(function (event) {
+    $('.checkSyntax').click(function (event) {
         event.preventDefault();
         var requestData = { name    : $('.prologProgramForm input:text').val() ,
                             program : $('.prologProgramForm textarea').val()
