@@ -1,0 +1,49 @@
+body {
+     margin: 20px;
+}
+
+p {
+    margin-bottom: 14px;
+}
+
+.prologProgramEditor textarea {
+    color: #444;
+    padding: 5px;
+    height: 200px;
+}
+
+.prologProgramEditor .txtstuff {
+    resize: none; /* remove this if you want the user to be able to resize it in modern browsers */
+    overflow: hidden;
+}
+
+.hiddendiv {
+    display: none;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word; /* future version of deprecated 'word-wrap' */
+}
+
+/* the styles for 'commmon' are applied to both the textarea and the hidden clone */
+/* these must be the same for both */
+.autoResizeCommon {
+    width: 500px;
+    min-height: 50px;
+    font-family: Arial, sans-serif;
+    font-size: 13px;
+    overflow: hidden;
+}
+
+.lbr {
+    line-height: 3px;
+}
+
+.hidden {
+    display: none;
+}
+
+#prologProgramEditor {
+    position: relative;
+    width: 80em;
+    height: 30em;
+ }

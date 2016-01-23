@@ -26,3 +26,5 @@
 -- /prolog/new_program/#Int      PrologProgramContR       POST
 /prolog/edit/browse           PrologProgramContSilentR  POST
 /prolog/edit/action/#Int      PrologProgramContR        GET
+
+/prolog/syntax-check SyntaxCheckR POST

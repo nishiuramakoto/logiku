@@ -8,7 +8,8 @@ import             ContMap
 import             Data.Text(Text)
 import qualified   Data.Text as T
 import             Text.Read(reads)
-
+import             Prolog(consultString, parseQuery)
+import             Text.Parsec
 ------------------------------ Handlers ------------------------------
 readInt :: Text -> Maybe Int
 readInt s = case reads (T.unpack s) of
@@ -41,9 +42,21 @@ getPrologProgramContR klabel = do
   not_found_html <- defaultLayout [whamlet|Not Found|]
   resume klabel cont_html not_found_html
 
+postSyntaxCheckR :: Handler Value
+postSyntaxCheckR = do
+  PrologProgram name program <- (requireJsonBody :: Handler PrologProgram)
+  let result = case consultString (T.unpack program) of
+        Left error -> Just (show error)
+        Right _    -> Nothing
+  $(logInfo) $ T.pack $ show result
+  returnJson result
+
 ------------------------------  Types --------------------------------
 
-data PrologProgramAction = Cancel | Submit | New | Prev | Next | Delete | AddGoal | DeleteGoal | EditProgram
+data PrologProgramAction = Cancel | Save | New | Prev | Next | Delete
+                         | CheckSyntax
+                         | AddGoal | DeleteGoal | EditProgram
+
                 deriving (Eq,Show)
 
 type ProgramName = Text
@@ -82,8 +95,8 @@ inquirePrologProgram :: Maybe ProgramName -> Maybe ProgramCode
 inquirePrologProgram name program  = do
   (klabel, html)         <- prologProgramHtml name program
   (answer, maybeAction)  <- inquirePostUntilButton klabel html (prologProgramForm name program)
-                            [ ("submit", Submit) , ("next", Next) , ("prev" , Prev) , ("add_goal", AddGoal)
-                            , ("delete", Delete)
+                            [ ("save", Save) , ("next", Next) , ("prev" , Prev) , ("add_goal", AddGoal)
+                            , ("delete", Delete) , ("checkSyntax" , CheckSyntax)
                             ]
   return (klabel, maybeAction, answer)
 
@@ -116,8 +129,25 @@ inquirePrologGoalEditor :: ProgramName -> ProgramCode -> [PrologGoal]
 inquirePrologGoalEditor name code goals  = do
   (klabel, html)         <- prologGoalEditorHtml name code goals
   (answer, maybeAction)  <- inquirePostButton klabel html (prologGoalEditorForm)
-                            [ ("submit", Submit), ("back", EditProgram) ]
+                            [ ("save", Save), ("back", EditProgram) ]
   return (klabel, maybeAction, answer)
+
+---------------- inquire response to the parse error  ----------------
+-- inquireParseError ::  ParseError -> ProgramName -> ProgramCode
+--                   -> CC (PS Html) Handler ()
+-- inquireParseError error name code = do
+--   lift $ $(logInfo)  $ "parse error:" ++ (T.pack (show error))
+--   klabel <- generateCcLabel
+--   html   <- widgetToHtml $(widgetFile "parse_error")
+--   (answer, maybeAction) <- inquirePostButton klabel html
+--   return ()
+
+-- ---------------- inquire response to the parse error  ----------------
+-- inquireParseSuccess :: ProgramName -> ProgramCode
+--                   -> CC (PS Html) Handler ()
+-- inquireParseSuccess name code = do
+--   lift $ $(logInfo)  "parse success"
+--   return ()
 
 ------------------------------  finish  ------------------------------
 prologProgramFinishHtml :: CC (PS Html) Handler Html
@@ -217,6 +247,10 @@ deleteGoal goalId = do
 deleteGoalEntity :: Entity PrologGoal -> CC (PS Html) Handler ()
 deleteGoalEntity (Entity goalId _goal) = deleteGoal goalId
 
+
+------------------------ Prolog code handling ------------------------
+
+
 ------------------------  Application logics  ------------------------
 
 
@@ -232,7 +266,7 @@ loopBrowse :: Maybe (PrologProgramId, PrologProgramForm) -> CC (PS Html) Handler
 loopBrowse Nothing = do
   (_klabel, maybeAction, newProgram ) <- inquirePrologProgram  Nothing Nothing
   case maybeAction of
-    Just Submit -> do
+    Just Save -> do
       success <- submit newProgram
       case success of
         Just newProgId ->  loopBrowse (Just (newProgId,newProgram))
@@ -246,9 +280,11 @@ loopBrowse Nothing = do
     _ -> loopBrowse Nothing
 
 loopBrowse (Just (progId, currentProgram@(PrologProgramForm name program ))) = do
-  (_klabel, maybeAction, newProgram ) <- inquirePrologProgram  name  program
+  (_klabel, maybeAction, newProgram@(PrologProgramForm newName newCode))
+        <-  inquirePrologProgram  name  program
   case maybeAction of
-    Just Submit -> do
+    Just Save -> do
+      lift $ $(logInfo)  $ "saving code:" ++ T.pack (show newProgram)
       success <- submit newProgram
       case success of
         Just newProgId ->  loopBrowse (Just (newProgId, newProgram))
@@ -265,6 +301,15 @@ loopBrowse (Just (progId, currentProgram@(PrologProgramForm name program ))) = d
 
     Just Delete  -> do deleteProgram progId
                        loopBrowse Nothing
+    -- Just CheckSyntax -> do
+    --   case (newName, newCode) of
+    --     (Just name, Just (Textarea code)) -> case consultString $ T.unpack code of
+    --       Left error -> do inquireParseError error name (Textarea code)
+    --                        loopBrowse $ Just (progId, newProgram)
+
+    --       Right _    -> do inquireParseSuccess name (Textarea code)
+    --                        loopBrowse $ Just (progId, newProgram)
+    --     _   -> loopBrowse (Just (progId, newProgram))
 
     _ -> loopBrowse (Just (progId,currentProgram))
 
