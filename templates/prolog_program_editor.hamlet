@@ -2,22 +2,24 @@
 <article class="articleDetail">
   <header class="articleDetailHead">
     <H1 class="pageTitle">Delimited continuations and nested transactions
-
+    <div class="editorNotification">
+        <div class="codeModification hidden">
+            Program modified and not saved
+        <div class="syntaxError">
+            Syntax error
     <section class="articleDetailBody">
-        <div class="prologProgramEditor">
+        <div class="prologProgramForm">
             <form action=@{PrologProgramContSilentR} method="POST">
                 <input type="hidden" name="_klabel" value="#{klabel}">
                 ^{formWidget}
-                <INPUT name=submit   value="Submit"   TYPE=Submit>
-                <INPUT name=delete   value="Delete"   TYPE=Submit>
-                <INPUT name=prev     value="<"        TYPE=Submit>
-                <INPUT name=next     value=">"        TYPE=Submit>
-                <INPUT name=add_goal value="Browse goals" type=Submit>
+                <div id="prologProgramEditor">
+                <INPUT name=save      value="Save"     TYPE=Submit class="changeCode">
+                <INPUT name=checkSyntax value="Check syntax" TYPE=button class="changeCode">
+                <INPUT name=delete      value="Remove"   TYPE=Submit>
+                <INPUT name=prev        value="<"        TYPE=Submit>
+                <INPUT name=next        value=">"        TYPE=Submit>
+                <INPUT name=add_goal    value="Browse goals" type=Submit>
 
 <footer class="articleDetailFoot">
     <aside class="creditUnit">
         <a href="@{Portfolio01R}"> トップ
-
-<div id="prologProgramEditor">
-    fact(a).
-    fact(b).

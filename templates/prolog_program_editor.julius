@@ -1,0 +1,102 @@
+/*global document:false, $:false */
+// var txt = $('.prologProgramEditor textarea'),
+//     hiddenDiv = $(document.createElement('div')),
+//     content = null;
+
+// txt.addClass('txtstuff');
+// hiddenDiv.addClass('hiddendiv autoResizeCommon');
+
+// $('body').append(hiddenDiv);
+
+// txt.css('height', 200);
+
+// txt.keyup( function () {
+//     content = $(this).val();
+
+//     content = content.replace(/\n/g, '<br>');
+//     hiddenDiv.html(content + '<br class="lbr">');
+
+//     $(this).css('height', Math.max(200,hiddenDiv.height() + 30));
+
+// });
+
+function setupSyntaxErrorMessage(data) {
+    if (data == null) {
+        window.alert("Nothing");
+        $('.syntaxError').removeClass().text("OK");
+    } else {
+        window.alert(data);
+        var newNode = $("<li></li>");
+        newNode.text(data);
+        $(".editorNotification").append(newNode);
+        $('.syntaxError').text("Error");
+    }
+};
+
+
+function setupAjax() {
+
+    // AJAX Request
+    $('input[name="checkSyntax"]').click(function (event) {
+        event.preventDefault();
+        var requestData = { name    : $('.prologProgramForm input:text').val() ,
+                            program : $('.prologProgramForm textarea').val()
+                          };
+
+        $.ajax({
+            url: '@{SyntaxCheckR}',
+            type: 'POST',
+            contentType: "application/json",
+            data: JSON.stringify(requestData) ,
+            success: setupSyntaxErrorMessage ,
+            error: function (data) {
+                console.log("Error creating comment: " + data);
+            },
+        });
+
+    });
+    // window.alert("ajax set up");
+}
+
+
+$(document).ready(function () {
+
+    var textarea = $('.prologProgramForm textarea');
+    var div      = $('#prologProgramEditor');
+
+    // textarea.addClass('hidden');
+    div.append(textarea.val());
+
+    // Set up the Ace editor
+    var editor = ace.edit("prologProgramEditor");
+    editor.setTheme("ace/theme/textmate");
+    editor.getSession().setMode("ace/mode/prolog");
+
+    // reflect editor status to the textarea
+    $('.prologProgramForm .changeCode').click(function() {
+        textarea.val(editor.getValue());
+    });
+
+
+    // Check code modification
+    div.keyup( function () {
+        if (textarea.val() != editor.getValue()) {
+            $('.codeModification').removeClass('hidden');
+        } else {
+            $('.codeModification').addClass('hidden');
+        }
+    });
+
+    setupAjax();
+});
+
+
+
+//     content = $(this).val();
+
+//     content = content.replace(/\n/g, '<br>');
+//     hiddenDiv.html(content + '<br class="lbr">');
+
+//     $(this).css('height', Math.max(200,hiddenDiv.height() + 30));
+
+// });
