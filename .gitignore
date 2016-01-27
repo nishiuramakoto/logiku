@@ -18,3 +18,5 @@ cabal.sandbox.config
 *.keter
 tmp/
 static/css/ace-builds/
+\#*
+.\#*

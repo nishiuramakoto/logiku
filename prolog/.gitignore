@@ -1,0 +1,11 @@
+pl
+dist
+bench/runbench
+*.hi
+*.o
+*~
+*.swp
+*.dyn_o
+*.dyn_hi
+*.hp
+*.prof
