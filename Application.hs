@@ -2,6 +2,7 @@
 module Application
     ( getApplicationDev
     , appMain
+    , appMainTls
     , develMain
     , makeFoundation
     , makeLogWare
@@ -29,6 +30,10 @@ import Network.Wai.Middleware.RequestLogger (Destination (Logger),
                                              mkRequestLogger, outputFormat)
 import System.Log.FastLogger                (defaultBufSize, newStdoutLoggerSet,
                                              toLogStr)
+
+import Network.Wai.Handler.WarpTLS          (TLSSettings, defaultTlsSettings,
+                                             tlsSettings, runTLS)
+
 
 -- Import all relevant handler modules here.
 -- Don't forget to add new modules to your cabal file!
@@ -162,6 +167,29 @@ appMain = do
 
     -- Run the application with Warp
     runSettings (warpSettings foundation) app
+
+
+-- | The @main@ function for an executable running over TLS
+appMainTls :: IO ()
+appMainTls = do
+    -- Get the settings from all relevant sources
+    settings <- loadAppSettingsArgs
+        -- fall back to compile-time values, set to [] to require values at runtime
+        [configSettingsYmlValue]
+
+        -- allow environment variables to override
+        useEnv
+
+    -- Generate the foundation from the settings
+    foundation <- makeFoundation settings
+
+    -- Generate a WAI Application from the foundation
+    app <- makeApplication foundation
+
+    let tlsConfig  = tlsSettings "config/certificate.csr" "config/client_session_key.aes"
+
+    -- Run the application with Warp
+    runTLS tlsConfig  (warpSettings foundation) app
 
 
 --------------------------------------------------------------
