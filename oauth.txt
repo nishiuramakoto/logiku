@@ -1,0 +1,2 @@
+ClientID: 197748900362-khrqvvngii2r0fpngorn4rv9t2sisija.apps.googleusercontent.com
+Client Secret : 8o3VMrUO9As4y-7aiUf1LA22

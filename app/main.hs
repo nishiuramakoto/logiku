@@ -4,5 +4,5 @@ import Application (appMain ,
                    )
 
 main :: IO ()
-main = -- appMain
-       appMainTls
+main = appMain
+       -- appMainTls
