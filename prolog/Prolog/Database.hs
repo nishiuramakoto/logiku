@@ -1,3 +1,6 @@
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE GADTs #-}
+
 module Prolog.Database
    ( createDB
    , hasPredicate
