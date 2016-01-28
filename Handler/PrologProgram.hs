@@ -30,7 +30,6 @@ syntaxOK' Nothing                = True
 
 ------------------------------ Handlers ------------------------------
 
-
 getPrologProgramR :: Handler Html
 getPrologProgramR = run ccMain
 

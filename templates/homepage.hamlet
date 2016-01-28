@@ -5,6 +5,10 @@
 
 <section.list-group>
   <span .list-group-item>
+    <a href="@{Portfolio01R}">
+        Go to the home page
+
+  <span .list-group-item>
     Now that you have a working project you should use the
     <a href=http://www.yesodweb.com/book/>
       Yesod book <span class="glyphicon glyphicon-book"></span>
