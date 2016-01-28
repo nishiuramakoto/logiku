@@ -1,1 +1,1 @@
-web: ./dist/build/logiku/logiku
+web: sh -c 'PORT=3000 ./dist/build/logiku/logiku'
