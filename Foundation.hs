@@ -27,10 +27,41 @@ data App = App
     , appConnPool    :: ConnectionPool -- ^ Database connection pool.
     , appHttpManager :: Manager
     , appLogger      :: Logger
-    , appContMap     :: IORef (ContMap App)
+    , appContMap     :: IORef (ContMap App) -- ^ Pool of continuations
     , appMenuTree    :: MenuTree
     }
 
+-- | Check database availability. In heroku, A database may be unavailable for maximum of 4hr/month.
+databaseAvailable ::  HandlerT App IO Bool
+databaseAvailable = do
+  mEntity <- runDB $ selectFirst [PrologProgramName !=. ""] []
+  case mEntity of
+    Just _  ->  return True
+    Nothing ->  return False
+
+myErrorHandler ::  ErrorResponse -> HandlerT App IO TypedContent
+myErrorHandler (InternalError e) = do
+  $logErrorS "Foundations.hs" e
+  -- mb <- databaseAvailable -- Turning this causes error handling not to work
+  let mb = True
+  selectRep $ do
+      provideRep $ defaultLayout $ do
+        setTitle "Internal Server Error"
+        if mb
+          then
+          toWidget [hamlet|
+                <h1> Internal Server Error (Database is under maintainance)
+                <pre>#{e}
+          |]
+          else
+          toWidget [hamlet|
+                <h1>データベースエラー
+                <pre>#{e}
+          |]
+
+      provideRep $ return $ object ["message" .= ("Internal Server Error" :: Text), "error" .= e]
+
+myErrorHandler e = defaultErrorHandler e
 
 
 -- This is where we define all of the routes in our application. For a full
@@ -76,10 +107,12 @@ instance Yesod App where
     yesodMiddleware = sslOnlyMiddleware 120 . defaultCsrfMiddleware . defaultYesodMiddleware
     -- yesodMiddleware = defaultCsrfMiddleware . defaultYesodMiddleware
 
+    errorHandler = myErrorHandler
     defaultLayout widget = do
         master <- getYesod
         mmsg <- getMessage
 
+        -- mDatabaseAvailable <- databaseAvailable
         let categoryTree =  $(widgetFile "css-tree")
 
         -- We break up the default layout into two components:
