@@ -188,8 +188,8 @@ appMainTls = do
 
     -- let tlsConfig  = tlsSettings "config/certificate.csr" "config/client_session_key.aes"
     let tlsConfig  = tlsSettings
-                     "/home/makoto/work/webapp-heroku/logiku/config/certificate.pem"
-                     "/home/makoto/work/webapp-heroku/logiku/config/key.pem"
+                     "config/certificate.pem"
+                     "config/key.pem"
     -- Run the application with Warp
     runTLS tlsConfig  (warpSettings foundation) app
 
