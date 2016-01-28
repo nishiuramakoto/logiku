@@ -186,8 +186,10 @@ appMainTls = do
     -- Generate a WAI Application from the foundation
     app <- makeApplication foundation
 
-    let tlsConfig  = tlsSettings "config/certificate.csr" "config/client_session_key.aes"
-
+    -- let tlsConfig  = tlsSettings "config/certificate.csr" "config/client_session_key.aes"
+    let tlsConfig  = tlsSettings
+                     "/home/makoto/work/webapp-heroku/logiku/config/certificate.pem"
+                     "/home/makoto/work/webapp-heroku/logiku/config/key.pem"
     -- Run the application with Warp
     runTLS tlsConfig  (warpSettings foundation) app
 

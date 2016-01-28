@@ -1,1 +1,1 @@
-web: ./dist/bin/logiku
+web: ./dist/build/logiku/logiku

@@ -1,0 +1,11 @@
+#!/bin/sh
+
+srcdir=/home/makoto/work/webapp-heroku/logiku
+dstdir=/tmp/logiku-compile-test
+
+rm -rf $dstdir
+mkdir -p $dstdir
+cd $dstdir
+git clone $srcdir
+cd logiku
+cabal configure && cabal build
