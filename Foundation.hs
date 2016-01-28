@@ -1,3 +1,6 @@
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE GADTs #-}
+
 module Foundation where
 
 import Import.NoFoundation

@@ -64,7 +64,9 @@ module Control.Monad.CC.CCCxe (
               PD, newPrompt,
               as_prompt_type
 	      ) where
-
+import Prelude
+import Control.Applicative
+import Control.Monad
 import Control.Monad.Trans
 import Data.Typeable			-- for prompts of the flavor PP, PD
 
@@ -92,7 +94,7 @@ type Prompt p m w =
 -- --------------------------------------------------------------------
 -- | CC monad: general monadic operations
 
-------------  Fixes as per Functor-Applicative-Monad Proposal --------------
+------------  Fixes for Functor-Applicative-Monad Proposal --------------
 instance Monad m => Functor (CC p m) where
   fmap f x = do { v <- x ; return (f v) }
 

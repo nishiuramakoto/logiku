@@ -93,7 +93,7 @@ prologProgramForm name program = renderDivs $ PrologProgramForm
 prologProgramWidget :: ContId ->  Widget -> Enctype -> Bool -> Widget
 prologProgramWidget klabel formWidget enctype forceSave = do
   setTitle "View Prolog Program"
-  addScript $ StaticR css_ace_builds_src_noconflict_ace_js
+  addScript $ StaticR css_ace_src_noconflict_ace_js
     -- addStylesheet $ StaticR css_bootstrap_css
 
   $(widgetFile "prolog_program_editor")

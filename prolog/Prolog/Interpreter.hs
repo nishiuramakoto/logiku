@@ -1,4 +1,7 @@
 {-# LANGUAGE ViewPatterns, GeneralizedNewtypeDeriving, FlexibleInstances, FlexibleContexts, UndecidableInstances, IncoherentInstances #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE GADTs #-}
+
 module Prolog.Interpreter
    ( resolve, resolve_
    , MonadTrace(..), withTrace
