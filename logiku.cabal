@@ -25,13 +25,14 @@ library
                      Handler.Comment
                      -- My additions
                      Control.Monad.CC.CCCxe
+                     ContMap
+                     SideMenu
+                     -- Auth
                      Handler.Portfolio
                      Handler.Blog
                      Handler.Base
                      Handler.PrologTest
                      Handler.PrologProgram
-                     ContMap
-                     SideMenu
                      LogicT.LogicT
                      LogicT.SRReifT
                      Prolog

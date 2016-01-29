@@ -9,6 +9,7 @@ import Text.Hamlet          (hamletFile)
 import Text.Jasmine         (minifym)
 import Yesod.Auth.BrowserId (authBrowserId)
 import Yesod.Auth.Message   (AuthMessage (InvalidLogin))
+import Yesod.Auth.GoogleEmail2
 import Yesod.Default.Util   (addStaticContentExternal)
 import Yesod.Core.Types     (Logger)
 import qualified Yesod.Core.Unsafe as Unsafe
@@ -16,6 +17,15 @@ import qualified Data.CaseInsensitive as CI
 import qualified Data.Text.Encoding as TE
 import ContMap
 import SideMenu
+
+-- Replace with Google client ID.
+clientId :: Text
+clientId = "197748900362-pj584nskcninquf5mmgse28fg2tv2c4a.apps.googleusercontent.com"
+
+-- Replace with Google secret ID.
+clientSecret :: Text
+clientSecret = "SMbJxghU_ci-Fg2OzO1cwDkY"
+
 
 -- | The foundation datatype for your application. This can be a good place to
 -- keep settings and values requiring initialization before your application
@@ -93,8 +103,8 @@ instance Yesod App where
 
     -- Store session data on the client in encrypted cookies,
     -- default session idle timeout is 120 minutes
-    -- makeSessionBackend _ = sslOnlySessions $ Just <$> defaultClientSessionBackend
-    makeSessionBackend _ =  Just <$> defaultClientSessionBackend
+    makeSessionBackend _ = sslOnlySessions $ Just <$> defaultClientSessionBackend
+    -- makeSessionBackend _ =  Just <$> defaultClientSessionBackend
         (60*24)    -- timeout in minutes
         "config/client_session_key.aes"
 
@@ -104,15 +114,15 @@ instance Yesod App where
     --   a) Sets a cookie with a CSRF token in it.
     --   b) Validates that incoming write requests include that token in either a header or POST parameter.
     -- For details, see the CSRF documentation in the Yesod.Core.Handler module of the yesod-core package.
-    -- yesodMiddleware = sslOnlyMiddleware (60*24) . defaultCsrfMiddleware . defaultYesodMiddleware
-    yesodMiddleware = defaultCsrfMiddleware . defaultYesodMiddleware
+    yesodMiddleware = sslOnlyMiddleware (60*24) . defaultCsrfMiddleware . defaultYesodMiddleware
+    -- yesodMiddleware = defaultCsrfMiddleware . defaultYesodMiddleware
 
     errorHandler = myErrorHandler
     defaultLayout widget = do
         master <- getYesod
         mmsg <- getMessage
 
-        -- mDatabaseAvailable <- databaseAvailable
+        maid <- maybeAuthId
         let categoryTree =  $(widgetFile "css-tree")
 
         -- We break up the default layout into two components:
@@ -133,7 +143,8 @@ instance Yesod App where
     isAuthorized FaviconR _ = return Authorized
     isAuthorized RobotsR _ = return Authorized
     -- Default to Authorized for now.
-    isAuthorized _ _ = return Authorized
+    isAuthorized route isWrite = myIsAuthorized route isWrite
+    -- isAuthorized _ _ = return Authorized
 
     -- This function creates static content files in the static folder
     -- and names them based on a hash of their content. This allows
@@ -192,7 +203,9 @@ instance YesodAuth App where
                 }
 
     -- You can add other plugins like BrowserID, email or OAuth here
-    authPlugins _ = [authBrowserId def]
+    authPlugins _ = [ authBrowserId def
+                    , authGoogleEmail clientId clientSecret
+                    ]
 
     authHttpManager = getHttpManager
 
@@ -222,3 +235,8 @@ unsafeHandler = Unsafe.fakeHandlerGetLogger appLogger
 
 instance YesodCC App where
   getCcPool = appContMap
+
+
+--------------------------  Authorization ----------------------------
+myIsAuthorized :: Route App -> Bool -> HandlerT App IO  AuthResult
+myIsAuthorized route isWrite = return Authorized
