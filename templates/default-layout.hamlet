@@ -1,8 +1,15 @@
 <header id="pageHead">
-    <h1 id="siteTitle"> logiku <small id="catchcopy"> make it logical </small>
-
+    <small>
+        $maybe _ <- maid
+            <p>
+                <a href=@{AuthR LogoutR}>Logout
+        $nothing
+            <p>
+                <a href=@{AuthR LoginR}>Go to login page
 $maybe msg <- mmsg
     <div #message>#{msg}
+
+    <h1 id="siteTitle"> logiku <small id="catchcopy"> make it logical </small>
 
 <div id="pageBody">
     <div id="pageBodyMain">
