@@ -1,12 +1,8 @@
 
-
-
 <article class="articleDetail">
     <header class="articleDetailHead">
         <h1  class="pageTitle"> 水廻り
         <p> 水廻りの漏れを診断します。
-
-
     <section class="articleDetailBody">
         <section>
             <h2 class="heading-typeB">
@@ -18,7 +14,7 @@
             <p> キッチンからの漏れかどうか、診断します。
         <section>
             <h2 class="heading-typeB">
-                <a href="@{PrologProgramR}"> Prologのテスト
+                <a href=@{PrologProgramR 0 "abc"}> Prologのテスト
             <p> Prologのテスト
 <footer class="articleDetailFoot">
     <aside class="creditUnit">

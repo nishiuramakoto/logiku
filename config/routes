@@ -22,9 +22,9 @@
 /prolog                       PrologTestR         GET
 /prolog/execute               PrologExecuteTestR  POST
 
-/prolog/edit           PrologProgramR          GET
--- /prolog/new_program/#Int      PrologProgramContR       POST
-/prolog/edit/browse           PrologProgramContSilentR  POST
-/prolog/edit/action/#Int      PrologProgramContR        GET
+/prolog/#Int/#Text/edit       PrologProgramR            GET
+-- /prolog/new_program/#Int   PrologProgramContR        POST
+/prolog/k/edit/browse           PrologProgramContSilentR  POST
+/prolog/k/edit/action/#Int      PrologProgramContR        GET
 
 /prolog/syntax-check SyntaxCheckR POST

@@ -7,10 +7,12 @@ import  LogicT.SRReifT
 
 
 getPortfolio01R :: Handler Html
-getPortfolio01R = defaultLayout $ do
-  addStylesheet $ StaticR  css_normalize_css
-  setTitle "水廻りの疑問"
-  toWidget $(widgetFile "01")
+getPortfolio01R = do
+
+  defaultLayout $ do
+    addStylesheet $ StaticR  css_normalize_css
+    setTitle "水廻りの疑問"
+    toWidget $(widgetFile "01")
 
 getLeakInBathroomR :: Handler Html
 getLeakInBathroomR = run leak_in_bathroom'
