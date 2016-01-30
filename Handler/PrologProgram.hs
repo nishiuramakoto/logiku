@@ -1,6 +1,6 @@
 -- A temporary version, NOT THREAD SAFE
 
-module Handler.PrologProgram where
+module Handler.PrologProgram  where
 
 import             Import
 import             Control.Monad.CC.CCCxe
@@ -10,6 +10,8 @@ import qualified   Data.Text as T
 import             Text.Read(reads)
 import             Prolog(consultString, parseQuery)
 import             Text.Parsec
+
+type Username = Text
 
 -------------------------- Helper functions --------------------------
 readInt :: Text -> Maybe Int
@@ -30,8 +32,8 @@ syntaxOK' Nothing                = True
 
 ------------------------------ Handlers ------------------------------
 
-getPrologProgramR :: Handler Html
-getPrologProgramR = run ccMain
+getPrologProgramR :: Int -> Username -> Handler Html
+getPrologProgramR userId userName = run $ ccMain userId userName
 
 postPrologProgramContR  :: Int -> Handler Html
 postPrologProgramContR klabel = do
@@ -271,8 +273,8 @@ deleteGoalEntity (Entity goalId _goal) = deleteGoal goalId
 ------------------------  Application logics  ------------------------
 
 
-ccMain :: CC (PS Html) Handler Html
-ccMain =  do
+ccMain :: Int -> Username -> CC (PS Html) Handler Html
+ccMain userId userName =  do
   program <- selectFirstProgram
   loopBrowse program False
 

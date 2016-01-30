@@ -15,16 +15,10 @@ import Yesod.Core.Types     (Logger)
 import qualified Yesod.Core.Unsafe as Unsafe
 import qualified Data.CaseInsensitive as CI
 import qualified Data.Text.Encoding as TE
+import Authentication
 import ContMap
 import SideMenu
 
--- Replace with Google client ID.
-clientId :: Text
-clientId = "197748900362-pj584nskcninquf5mmgse28fg2tv2c4a.apps.googleusercontent.com"
-
--- Replace with Google secret ID.
-clientSecret :: Text
-clientSecret = "SMbJxghU_ci-Fg2OzO1cwDkY"
 
 
 -- | The foundation datatype for your application. This can be a good place to
@@ -122,7 +116,7 @@ instance Yesod App where
         master <- getYesod
         mmsg <- getMessage
 
-        maid <- maybeAuthId
+        mName <- maybeDisplayName
         let categoryTree =  $(widgetFile "css-tree")
 
         -- We break up the default layout into two components:
@@ -131,8 +125,9 @@ instance Yesod App where
         -- value passed to hamletToRepHtml cannot be a widget, this allows
         -- you to use normal widget features in default-layout.
         pc <- widgetToPageContent $ do
-            addStylesheet $ StaticR css_bootstrap_css
-            $(widgetFile "default-layout")
+          addStylesheet $ StaticR css_bootstrap_css
+          addStylesheet $ StaticR css_searchbox_css
+          $(widgetFile "default-layout")
         withUrlRenderer $(hamletFile "templates/default-layout-wrapper.hamlet")
 
     -- The page to be redirected to when authentication is required.
@@ -204,7 +199,8 @@ instance YesodAuth App where
 
     -- You can add other plugins like BrowserID, email or OAuth here
     authPlugins _ = [ authBrowserId def
-                    , authGoogleEmail clientId clientSecret
+                    -- , authGoogleEmail clientId clientSecret
+                    , authGoogleEmailSaveToken clientId clientSecret
                     ]
 
     authHttpManager = getHttpManager

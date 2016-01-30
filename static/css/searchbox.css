@@ -1,0 +1,129 @@
+
+/* Light */
+
+
+.light{
+	width:328px;
+
+}
+
+.light input[type="text"] {
+    border: medium none;
+    height: 45px;
+    padding: 5px;
+    width: 75%;
+	float:left;
+}
+.light input[type="submit"] {
+    background: none repeat scroll 0 0 #0CACE8;
+    border: medium none;
+    color: #FFFFFF;
+    cursor: pointer;
+    height: 45px;
+	line-height:45px;
+    padding: 5px;
+	text-transform:uppercase;
+}
+
+
+/* Dark */
+
+.dark{
+	background:rgba(16, 13, 13, 0.6);
+	width:318px;
+	padding:15px;
+	border-radius:5px;
+}
+.dark input[type="text"] {
+    border: medium none;
+    height: 45px;
+    padding: 5px;
+    width: 75%;
+	float:left;
+	border-radius: 5px 0 0 5px;
+}
+.dark input[type="submit"] {
+    background: none repeat scroll 0 0 #0CACE8;
+    border: medium none;
+    color: #FFFFFF;
+    cursor: pointer;
+    height: 45px;
+	line-height:45px;
+    padding: 5px;
+	text-transform:uppercase;
+	border-radius: 0 5px 5px 0;
+}
+
+/* Icon Style */
+.icon{
+	width:328px;
+
+}
+
+.icon input[type="text"] {
+    border: medium none;
+    height: 45px;
+    padding: 5px;
+    width: 75%;
+	float:left;
+	border-right:solid 1px #bfbfbf;
+}
+.icon input[type="submit"] {
+    background: url(../images/find.png) center no-repeat;
+	background-color:#FFF;
+	text-indent: -9999px;
+	width:72px;
+    border: medium none;
+    color: #FFFFFF;
+    cursor: pointer;
+    height: 45px;
+	line-height:45px;
+    padding: 5px;
+	text-transform:uppercase;
+}
+
+/* Icon Rounded Style */
+.iconr{
+	width:200px;
+
+}
+.iconr input[type="text"] {
+    background: url(../images/find.png) right no-repeat;
+    background-color:#cccccc;
+    color:#000;
+    border-radius: 25px;
+    border: medium none;
+    height: 30px;
+    padding: 5px 10px;
+/*    width: 100%; */
+    float:right;
+    border-right:solid 1px #bfbfbf;
+
+}
+.iconr input[type="submit"] {
+    background: url(../images/find.png) center no-repeat;
+	background-color:#0f0e0e;
+	text-indent: -9999px;
+	width:72px;
+    border: medium none;
+    color: #FFFFFF;
+    cursor: pointer;
+    height: 45px;
+	line-height:45px;
+    padding: 5px;
+	text-transform:uppercase;
+}
+
+
+.iconr2 input[type="text"] {
+    background: url(../images/find.png) right no-repeat;
+    background-color:#eeeeee;
+    color:#000;
+    border-radius: 25px;
+    border: medium none;
+    height: 30px;
+    padding: 5px 10px;
+/*    width: 100%; */
+    float:right;
+    border-right:solid 1px #bfbfbf;
+}

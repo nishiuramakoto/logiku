@@ -1,15 +1,23 @@
 <header id="pageHead">
-    <small>
-        $maybe _ <- maid
-            <p>
-                <a href=@{AuthR LogoutR}>Logout
-        $nothing
-            <p>
-                <a href=@{AuthR LoginR}>Go to login page
+    <small id="statusBar">
+        <div id="siteInfo">
+            Logiku
+        <div id="userInfo">
+            <form id="userInfoForm" class="iconr2" method=get action="@{HomeR}">
+                <ul>
+                    <li>
+                        $maybe name <- mName
+                            <a id="userName" href="{UserProfile userId userDisplayName}"> #{name}
+                        $nothing
+                            <a id="login" href="@{AuthR LoginR}"> ログイン
+                    <li>
+                        <a id="signup"> 新規
+                    <li>
+                        <input id="searchBox" placeholder="プログラムを検索" type=text>
+
+
 $maybe msg <- mmsg
     <div #message>#{msg}
-
-    <h1 id="siteTitle"> logiku <small id="catchcopy"> make it logical </small>
 
 <div id="pageBody">
     <div id="pageBodyMain">
