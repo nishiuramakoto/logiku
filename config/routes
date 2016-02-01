@@ -22,8 +22,8 @@
 /prolog                       PrologTestR         GET
 /prolog/execute               PrologExecuteTestR  POST
 
-/prolog/#Int/#Text/edit       PrologProgramR            GET
--- /prolog/new_program/#Int   PrologProgramContR        POST
+/prolog/edit       PrologProgramR            GET
+-- /prolog/edit/#Int   PrologProgramContR        POST
 /prolog/k/edit/browse           PrologProgramContSilentR  POST
 /prolog/k/edit/action/#Int      PrologProgramContR        GET
 

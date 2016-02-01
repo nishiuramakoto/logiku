@@ -1,3 +1,4 @@
+
 <header id="pageHead">
     <small id="statusBar">
         <div id="siteInfo">
@@ -13,7 +14,7 @@
                     <li>
                         <a id="signup"> 新規
                     <li>
-                        <input id="searchBox" placeholder="プログラムを検索" type=text>
+                        <input id="searchBox" placeholder="検索" type=text>
 
 
 $maybe msg <- mmsg

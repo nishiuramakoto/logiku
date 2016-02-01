@@ -1,4 +1,9 @@
-@import url(https://fonts.googleapis.com/css?family=IM+Fell+Double+Pica:400italic);
+@font-face {
+  font-family: 'Lora';
+  font-style: normal;
+  font-weight: 400;
+  src: local('Lora'), local('Lora-Regular'), url(https://fonts.gstatic.com/s/lora/v9/4A-myfZX6oDr9CtSTkTGig.ttf) format('truetype');
+}
 
 body { color: #333333; }
 
@@ -21,9 +26,9 @@ body { color: #333333; }
 }
 
 #pageHead #statusBar #siteInfo {
-	width: 400px;
+	width: 550px;
 	float: left;
-	font-family: 'IM Fell Double Pica', serif;
+	font-family: 'Lora', serif ;
 	font-size: 1.24em;
 /*	font-family: 'Antic Didone', serif;
 	color: #CCCCCC;
@@ -32,8 +37,8 @@ body { color: #333333; }
 }
 
 #pageHead #statusBar #userInfo #userInfoForm {
-    margin : 100;
-    padding: 100;
+    margin : 0;
+    padding: 0;
 }
 
 #pageHead #statusBar #userInfo #userInfoForm ul{
@@ -54,6 +59,12 @@ body { color: #333333; }
 //    background-color: #dddddd;
 }
 
+
+/* Message */
+#message {
+    clear:both;
+    color: red;
+}
 
 
 /* ページヘッダー */

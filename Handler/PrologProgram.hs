@@ -10,8 +10,8 @@ import qualified   Data.Text as T
 import             Text.Read(reads)
 import             Prolog(consultString, parseQuery)
 import             Text.Parsec
-
-type Username = Text
+import             Database
+import             Authentication
 
 -------------------------- Helper functions --------------------------
 readInt :: Text -> Maybe Int
@@ -26,14 +26,26 @@ syntaxOK text =
   Left  _    -> False
   Right _    -> True
 
-syntaxOK' :: Maybe Textarea -> Bool
-syntaxOK' (Just (Textarea code)) = syntaxOK code
-syntaxOK' Nothing                = True
+
+maybeUserId :: Handler (Maybe UserId)
+maybeUserId = do
+  muident <- maybeUserIdent
+  $(logInfo) $ T.pack $ "muident" ++ show muident
+  case muident of
+    Just ident -> do Entity uid _ <- runDB $ upsert (User ident Nothing) ([] :: [Update User])
+                     return $ Just uid
+    Nothing    -> return Nothing
 
 ------------------------------ Handlers ------------------------------
 
-getPrologProgramR :: Int -> Username -> Handler Html
-getPrologProgramR userId userName = run $ ccMain userId userName
+getPrologProgramR ::  Handler Html
+getPrologProgramR  = do
+  muid <- maybeUserId
+  case muid of
+    Just uid ->  run $ ccMain uid
+    Nothing  ->  do
+      setMessage $ toHtml ("Login first" :: Text)
+      redirect Portfolio01R
 
 postPrologProgramContR  :: Int -> Handler Html
 postPrologProgramContR klabel = do
@@ -60,8 +72,8 @@ getPrologProgramContR klabel = do
 
 postSyntaxCheckR :: Handler Value
 postSyntaxCheckR = do
-  PrologProgram name program <- (requireJsonBody :: Handler PrologProgram)
-  let result = case consultString (T.unpack program) of
+  PrologProgram _uid _name _expl code <- (requireJsonBody :: Handler PrologProgram)
+  let result = case consultString (T.unpack code) of
         Left error -> Just (show error)
         Right _    -> Nothing
   -- $(logInfo) $ T.pack $ show result
@@ -77,40 +89,42 @@ data PrologProgramAction = Cancel | Save | New | Prev | Next | Delete
 
 type ProgramName = Text
 type ProgramCode = Textarea
+type ProgramExplanation = Textarea
 
 -------------------------- Program editor  --------------------------
 
-data PrologProgramForm = PrologProgramForm { prologProgramName     :: Maybe Text
-                                           , prologProgramProgram  :: Maybe Textarea
+data PrologProgramForm = PrologProgramForm { prologProgramName        :: Text
+                                           , prologProgramExplanation :: Textarea
+                                           , prologProgramProgram     :: Textarea
                                            } deriving Show
 
 
-prologProgramForm :: Maybe ProgramName -> Maybe ProgramCode
+prologProgramForm ::  ProgramName ->  ProgramExplanation -> ProgramCode
                   -> Html -> MForm Handler (FormResult PrologProgramForm, Widget)
-prologProgramForm name program = renderDivs $ PrologProgramForm
-              <$> aopt textField      "Program Name:"  (Just name)
-              <*> aopt textareaField  "Prolog Program:" (Just program)
+prologProgramForm name expl program = renderDivs $ PrologProgramForm
+              <$> areq textField      "プログラム名: "  (Just name)
+              <*> areq textareaField  "説明: "          (Just expl)
+              <*> areq textareaField  "コード: "        (Just program)
 
 prologProgramWidget :: ContId ->  Widget -> Enctype -> Bool -> Widget
 prologProgramWidget klabel formWidget enctype forceSave = do
   setTitle "View Prolog Program"
   addScript $ StaticR css_ace_src_noconflict_ace_js
     -- addStylesheet $ StaticR css_bootstrap_css
-
   $(widgetFile "prolog_program_editor")
 
-prologProgramHtml :: Maybe ProgramName -> Maybe ProgramCode -> Bool
+prologProgramHtml ::  ProgramName ->  ProgramExplanation -> ProgramCode -> Bool
                   ->  CC (PS Html) Handler (ContId, Html)
-prologProgramHtml name program forceSave = do
-  (klabel, formWidget, enctype) <- lift $ generateCcFormPost $ prologProgramForm name program
+prologProgramHtml name expl program forceSave = do
+  (klabel, formWidget, enctype) <- lift $ generateCcFormPost $ prologProgramForm name expl program
   html   <- lift $ defaultLayout $ prologProgramWidget klabel  formWidget enctype forceSave
   return (klabel, html)
 
-inquirePrologProgram :: Maybe ProgramName -> Maybe ProgramCode -> Bool
+inquirePrologProgram ::  ProgramName -> ProgramExplanation ->  ProgramCode -> Bool
                         -> CC (PS Html) Handler (ContId, Maybe PrologProgramAction, PrologProgramForm)
-inquirePrologProgram name program  forceSave = do
-  (klabel, html)         <- prologProgramHtml name program forceSave
-  (answer, maybeAction)  <- inquirePostUntilButton klabel html (prologProgramForm name program)
+inquirePrologProgram name expl program  forceSave = do
+  (klabel, html)         <- prologProgramHtml name expl program forceSave
+  (answer, maybeAction)  <- inquirePostUntilButton klabel html (prologProgramForm name expl program)
                             [ ("save", Save) , ("next", Next) , ("prev" , Prev) , ("add_goal", AddGoal)
                             , ("delete", Delete) , ("checkSyntax" , CheckSyntax)
                             ]
@@ -119,31 +133,34 @@ inquirePrologProgram name program  forceSave = do
 -------------------------- Goal editor  --------------------------
 
 data PrologGoalForm = PrologGoalForm { goalName   ::  Text
+                                     , goalExpl   ::  Textarea
                                      , goalCode   ::  Textarea
                                      } deriving Show
 
 prologGoalEditorForm ::  Html -> MForm Handler (FormResult PrologGoalForm, Widget)
 prologGoalEditorForm = renderDivs $ PrologGoalForm
-              <$> areq textField      "Goal Name:" Nothing
-              <*> areq textareaField  "Goal Code:" Nothing
+              <$> areq textField      "ゴール名:" Nothing
+              <*> areq textareaField  "説明: "  Nothing
+              <*> areq textareaField  "コード:" Nothing
 
-prologGoalEditorWidget :: ProgramName -> ProgramCode -> [PrologGoal] -> ContId ->  Widget -> Enctype
+prologGoalEditorWidget :: ProgramName -> ProgramExplanation -> ProgramCode
+                       -> [PrologGoal] -> ContId ->  Widget -> Enctype
                        -> Widget
-prologGoalEditorWidget programName programCode goals  klabel  formWidget enctype = do
+prologGoalEditorWidget programName programExplanation programCode goals  klabel  formWidget enctype = do
   setTitle "Edit Prolog Goals"
   $(widgetFile "prolog_goal_editor")
 
-prologGoalEditorHtml ::  ProgramName -> ProgramCode -> [PrologGoal]
+prologGoalEditorHtml ::  ProgramName -> ProgramExplanation -> ProgramCode -> [PrologGoal]
                          -> CC (PS Html) Handler (ContId, Html)
-prologGoalEditorHtml  name code goals = do
+prologGoalEditorHtml  name explanation code goals = do
   (klabel, formWidget, enctype) <- lift $ generateCcFormPost $ prologGoalEditorForm
-  html  <- lift $ defaultLayout $ prologGoalEditorWidget name code goals klabel formWidget enctype
+  html  <- lift $ defaultLayout $ prologGoalEditorWidget name explanation code goals klabel formWidget enctype
   return (klabel, html)
 
-inquirePrologGoalEditor :: ProgramName -> ProgramCode -> [PrologGoal]
+inquirePrologGoalEditor :: ProgramName -> ProgramExplanation -> ProgramCode -> [PrologGoal]
                         -> CC (PS Html) Handler (ContId, Maybe PrologProgramAction, FormResult PrologGoalForm)
-inquirePrologGoalEditor name code goals  = do
-  (klabel, html)         <- prologGoalEditorHtml name code goals
+inquirePrologGoalEditor name explanation code goals  = do
+  (klabel, html)         <- prologGoalEditorHtml name explanation code goals
   (answer, maybeAction)  <- inquirePostButton klabel html (prologGoalEditorForm)
                             [ ("save", Save), ("back", EditProgram) ]
   return (klabel, maybeAction, answer)
@@ -169,163 +186,73 @@ inquirePrologGoalEditor name code goals  = do
 prologProgramFinishHtml :: CC (PS Html) Handler Html
 prologProgramFinishHtml = lift $ redirect Portfolio01R
 
-------------------------  Database functions  ------------------------
-selectFirstProgram :: CC (PS Html) Handler (Maybe (PrologProgramId, PrologProgramForm))
-selectFirstProgram = lift $ do
---  $(logInfo) "selectFirst"
-  entity <- runDB $ selectList [] [Asc PrologProgramName , LimitTo 1 ]
-  case entity of
-    [ Entity id (PrologProgram name program) ]
-        ->  return (Just (id, PrologProgramForm (Just name) (Just $ Textarea program) ))
-    _   ->  return Nothing
 
-selectLastProgram :: CC (PS Html) Handler (Maybe (PrologProgramId, PrologProgramForm))
-selectLastProgram = lift $ do
---  $(logInfo) "selectLast"
-  entity <- runDB $ selectList [] [Desc PrologProgramName , LimitTo 1 ]
-  case entity of
-    [ Entity id (PrologProgram name program) ]
-        ->  return (Just (id,PrologProgramForm (Just name) (Just $ Textarea program)  ))
-    _   ->  return Nothing
+------------------------  Application logic  ------------------------
 
-
-selectNextProgram :: PrologProgramForm -> CC (PS Html) Handler (Maybe (PrologProgramId, PrologProgramForm))
-selectNextProgram (PrologProgramForm Nothing     body ) = selectFirstProgram
-selectNextProgram (PrologProgramForm (Just name) body ) =  do
---  lift $ $(logInfo) "selectNext"
-  nextProgram <- lift $ runDB $ selectList [PrologProgramName >. name] [LimitTo 1]
-  case nextProgram of
-    [Entity progId (PrologProgram name' program)]
-      -> return $ Just $ (progId, PrologProgramForm (Just name') (Just (Textarea program)))
-    _ -> selectFirstProgram
-
-selectPrevProgram :: PrologProgramForm -> CC (PS Html) Handler (Maybe (PrologProgramId, PrologProgramForm))
-selectPrevProgram (PrologProgramForm Nothing     body  ) = selectLastProgram
-selectPrevProgram (PrologProgramForm (Just name) body  ) = do
---  lift $ $(logInfo) "selectPrev"
-  nextProgram <- lift $ runDB $ selectList [PrologProgramName <. name] [LimitTo 1]
-  case nextProgram of
-    [Entity progId  (PrologProgram name' program)]
-      -> return $ Just (progId, PrologProgramForm (Just name') (Just $ Textarea program))
-    _ -> selectLastProgram
-
-submit :: PrologProgramForm -> CC (PS Html) Handler (Maybe PrologProgramId)
-submit (PrologProgramForm (Just name) (Just (Textarea body)) ) = lift $ do
-  -- if syntaxOK body
-  if True -- We would like the user to be able to force saving of syntactically incorrect code
-    then do  maybeGoal <- runDB $ getBy $ UniquePrologProgram name
-             case maybeGoal of
-               Just (Entity progId _) -> do
-                 runDB $ update progId [PrologProgramProgram =. body]
-                 return (Just progId)
-               _  -> do
-                 progId' <- runDB $ insert $ PrologProgram name body
-                 return (Just progId')
-    else return Nothing
-
-submit (PrologProgramForm _ _ )            = return Nothing
-
-submitGoal :: PrologProgramId -> PrologGoalForm -> CC (PS Html) Handler (Maybe (Key PrologGoal))
-submitGoal progId (PrologGoalForm name (Textarea code)) = do
-  -- lift $ $(logInfo) $ "submitting goal:" ++ name
-  maybeGoal <- lift $ runDB $ getBy $ PrologGoalUniqueName progId name
-  case maybeGoal of
-    Just _  -> do
-      klabel <- lift $ generateCcLabel
-      html   <- lift $ defaultLayout $(widgetFile "prolog_goal_editor_error_duplicate_goal")
-      inquire klabel html
-      return Nothing
-    Nothing -> do
-      goalId <- lift $ runDB $ insert $ PrologGoal name progId  code
-      -- lift $ $(logInfo) $ "submitted goal:" ++ name
-      return $ Just goalId
-
-selectGoalEntities :: PrologProgramId -> CC (PS Html) Handler [Entity PrologGoal]
-selectGoalEntities progId = do
-  goals  <- lift $ runDB $ selectList [ PrologGoalProgramId ==. progId ] []
-  return goals
-
-selectGoals :: PrologProgramId -> CC (PS Html) Handler [PrologGoal]
-selectGoals progId = do
-  goals <- selectGoalEntities progId
-  return $ map toPrologGoalForm goals
-    where
-      toPrologGoalForm :: Entity PrologGoal -> PrologGoal
-      toPrologGoalForm (Entity goalId prologGoal) = prologGoal
-
-deleteProgram :: PrologProgramId -> CC (PS Html) Handler ()
-deleteProgram progId = do
-  goals <- selectGoalEntities progId
-  mapM_ deleteGoalEntity goals
-  lift $ runDB $ delete progId
-
-deleteGoal :: PrologGoalId -> CC (PS Html) Handler ()
-deleteGoal goalId = do
-  lift $ runDB $ delete goalId
-
-deleteGoalEntity :: Entity PrologGoal -> CC (PS Html) Handler ()
-deleteGoalEntity (Entity goalId _goal) = deleteGoal goalId
-
-
------------------------- Prolog code handling ------------------------
-
-
-------------------------  Application logics  ------------------------
-
-
-ccMain :: Int -> Username -> CC (PS Html) Handler Html
-ccMain userId userName =  do
-  program <- selectFirstProgram
-  loopBrowse program False
-
+ccMain :: UserId -> CC (PS Html) Handler Html
+ccMain uid =  do
+  program <- lift $ selectFirstUserProgram uid
+  loopBrowse uid program False
   prologProgramFinishHtml >>=  inquireFinish
 
-loopBrowse :: Maybe (PrologProgramId, PrologProgramForm) -> Bool -> CC (PS Html) Handler ()
+loopBrowse :: UserId -> Maybe (Entity PrologProgram) -> Bool -> CC (PS Html) Handler ()
+loopBrowse uid Nothing forceSave = do
+  (   _klabel
+    , maybeAction
+    , newProgram@(PrologProgramForm name (Textarea expl) (Textarea code)))
+               <- inquirePrologProgram  "" (Textarea "") (Textarea "") forceSave
 
-loopBrowse Nothing forceSave = do
-  (_klabel, maybeAction, newProgram ) <- inquirePrologProgram  Nothing Nothing forceSave
   case maybeAction of
     Just Save -> do
-      success <- submit newProgram
-      case success of
-        Just newProgId ->  loopBrowse (Just (newProgId,newProgram)) forceSave
-        Nothing        ->  loopBrowse Nothing forceSave
+      mkey <- lift $ insertPrologProgram (PrologProgram uid name expl code)
+      case mkey of
+        Just pid ->  do mprog <- lift $ runDB $ get pid
+                        case mprog of
+                          Just prog -> loopBrowse uid (Just (Entity pid prog)) forceSave
+                          Nothing   -> loopBrowse uid Nothing forceSave
+        Nothing  ->  loopBrowse uid Nothing forceSave
 
-    Just Next ->  do nextProgram <- selectFirstProgram
-                     loopBrowse nextProgram forceSave
+    Just Next ->  do nextProgram <- lift $ selectFirstUserProgram uid
+                     loopBrowse uid nextProgram forceSave
 
-    Just Prev ->  do prevProgram <- selectLastProgram
-                     loopBrowse prevProgram forceSave
-    _ -> loopBrowse Nothing forceSave
+    Just Prev ->  do prevProgram <- lift $ selectLastUserProgram uid
+                     loopBrowse uid  prevProgram forceSave
+    _ -> loopBrowse uid Nothing forceSave
 
-loopBrowse (Just (progId, currentProgram@(PrologProgramForm name program ))) forceSave = do
-  lift $ $(logInfo) $ T.pack $ show name ++ show program ++ show forceSave
-  (_klabel, maybeAction, newProgram@(PrologProgramForm newName newCode))
-        <-  inquirePrologProgram  name  program forceSave
-  case maybeAction of
-    Just Save -> do
-      if forceSave || syntaxOK' newCode
-         then do
-        lift $ $(logInfo)  $ "saving code:" ++ T.pack (show newProgram)
-        success <- submit newProgram
-        case success of
-          Just newProgId ->  loopBrowse (Just (newProgId, newProgram)) False
-          Nothing        ->  loopBrowse (Just (progId   , newProgram)) False
-        else do
-        lift $ $(logInfo) $ "force save mode:" ++ T.pack (show newProgram)
-        loopBrowse (Just (progId   , newProgram)) True
+loopBrowse uid (Just entity@(Entity pid currentProgram@(PrologProgram uid' name expl code ))) forceSave = do
+  lift $ $(logInfo) $ T.pack $ show uid ++ show uid' ++ show name ++ show code ++ show forceSave
 
-    Just Next ->  do nextProgram <- selectNextProgram currentProgram -- sort by name
-                     loopBrowse nextProgram False
+  (   _klabel
+    , maybeAction
+    , (PrologProgramForm newName (Textarea newExplanation) (Textarea newCode)))
+                <-  inquirePrologProgram name (Textarea expl) (Textarea code) forceSave
 
-    Just Prev ->  do prevProgram <- selectPrevProgram currentProgram
-                     loopBrowse prevProgram False
+  let newProgram = PrologProgram uid newName newExplanation newCode
 
-    Just AddGoal -> do loopGoals progId currentProgram
-                       loopBrowse (Just (progId, currentProgram)) False
+  if (not (elem maybeAction [Just Next, Just Prev, Just AddGoal]) &&  uid /= uid')
+    then do -- lift $ setMessage $ toHtml $ [whamlet|他のユーザのプログラムは変更できません|]
+            loopBrowse uid (Just (Entity pid currentProgram)) forceSave
+    else case maybeAction of
+    Just Save -> do  if forceSave || syntaxOK newCode
+                       then do lift $ $(logInfo)  $ "saving code:" ++ T.pack (show newProgram)
+                               newProg <- lift $ upsertPrologProgram newProgram
+                               loopBrowse uid (Just newProg) False
 
-    Just Delete  -> do deleteProgram progId
-                       loopBrowse Nothing False
+                       else do lift $ $(logInfo) $ "Enter force save mode:" ++ T.pack (show newProgram)
+                               loopBrowse uid (Just (Entity pid newProgram))  True
+
+    Just Next ->  do nextProgram <- lift $ selectNextUserProgram uid (Just pid)
+                     loopBrowse uid nextProgram False
+
+    Just Prev ->  do prevProgram <- lift $ selectPrevUserProgram uid  (Just pid)
+                     loopBrowse uid prevProgram False
+
+    Just AddGoal -> do loopGoals  uid  entity
+                       loopBrowse uid (Just entity) False
+
+    Just Delete  -> do nextProgram <- lift $ selectNextUserProgram uid (Just pid)
+                       lift $ deleteProgram pid
+                       loopBrowse uid nextProgram False
     -- Just CheckSyntax -> do
     --   case (newName, newCode) of
     --     (Just name, Just (Textarea code)) -> case consultString $ T.unpack code of
@@ -336,23 +263,25 @@ loopBrowse (Just (progId, currentProgram@(PrologProgramForm name program ))) for
     --                        loopBrowse $ Just (progId, newProgram)
     --     _   -> loopBrowse (Just (progId, newProgram))
 
-    _ -> loopBrowse (Just (progId,currentProgram)) forceSave
+    _ -> loopBrowse uid (Just entity) forceSave
 
 
-loopGoals :: PrologProgramId -> PrologProgramForm -> CC (PS Html) Handler ()
-loopGoals  progId currentProgram@(PrologProgramForm (Just name) (Just code)) = do
-  goals <- selectGoals progId
-  (_klabel, maybeAction, resultForm) <- inquirePrologGoalEditor name code goals
+loopGoals :: UserId -> Entity PrologProgram ->  CC (PS Html) Handler ()
+loopGoals  uid currentEntity@(Entity pid (PrologProgram uid'  name expl code)) = do
+  goals <- lift $ selectUserProgramGoals uid 0 0 pid
+  ( _klabel   , maybeAction   , resultForm )
+              <- inquirePrologGoalEditor name (Textarea expl) (Textarea code) (map entityToVal goals)
+
   case resultForm of
-    FormSuccess newGoal -> do
-      _ <- submitGoal progId newGoal
-      loopGoals progId currentProgram
+    FormSuccess (PrologGoalForm newName (Textarea newExpl) (Textarea newCode))  -> do
+      let newGoal = PrologGoal uid pid newName newExpl newCode
+      entity <-  lift $ upsertPrologGoal newGoal
+      loopGoals uid currentEntity
 
     _ -> do
       v <- lift $ lookupGetParam "action"
       case v of
-        Just "back" -> loopBrowse (Just (progId,currentProgram)) False
-        _ ->    loopGoals progId currentProgram
-
-
-loopGoals progId _ = return ()
+        Just "back" -> loopBrowse uid (Just currentEntity) False
+        _ ->           loopGoals uid currentEntity
+  where
+    entityToVal (Entity _ val) = val
