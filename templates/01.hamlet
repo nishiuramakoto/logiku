@@ -14,7 +14,7 @@
             <p> キッチンからの漏れかどうか、診断します。
         <section>
             <h2 class="heading-typeB">
-                <a href=@{PrologProgramR 0 "abc"}> Prologのテスト
+                <a href=@{PrologProgramR}> Prologのテスト
             <p> Prologのテスト
 <footer class="articleDetailFoot">
     <aside class="creditUnit">

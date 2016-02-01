@@ -1,9 +1,4 @@
-User
-    ident Text
-    password Text Maybe
 
-    UniqueUser ident
-    deriving Show Typeable
 Email
     email Text
     userId UserId Maybe
@@ -25,17 +20,48 @@ Blog
     blogBody   Text
     deriving Show
 
+
+------------------ Prolog Program Database Schema -------------------------------
+
+User
+    ident    Text
+    password Text Maybe
+
+    UniqueUser ident
+    deriving Show Typeable
+
 PrologProgram json
-        name          Text
-        program       Text
+      userId        UserId
+      name          Text
+      explanation   Text
+      code          Text
 
-        UniquePrologProgram name
-        deriving     Show
+      UniquePrologProgram userId name
+      deriving     Show
 
-PrologGoal
-        name            Text
-        programId       PrologProgramId
-        goals           Text
+PrologGoal json
+      userId          UserId
+      prologProgramId PrologProgramId
+      name            Text
+      explanation     Text
+      code            Text
+      UniquePrologGoal userId prologProgramId name
+      deriving Show
 
-        PrologGoalUniqueName programId name
-        deriving Show
+Tag json
+	name		Text
+	UniqueTag	name
+	deriving Show
+
+--------------------- Relations --------------------------------
+
+PrologProgramsTags
+	prologProgramId	PrologProgramId
+	tagId		TagId
+	UniquePrologProgramsTags prologProgramId tagId
+	deriving Show
+
+PrologGoalsTags
+	prologGoalId	PrologGoalId
+	tagId		TagId
+	UniquePrologGoalsTags prologGoalId tagId

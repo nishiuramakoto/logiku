@@ -27,6 +27,7 @@ library
                      Control.Monad.CC.CCCxe
                      ContMap
                      SideMenu
+                     Database
                      Authentication
                      Handler.Portfolio
                      Handler.Blog

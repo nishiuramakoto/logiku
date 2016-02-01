@@ -25,9 +25,10 @@
                 Back to Program Editor
             <section>
                 <table>
-                    $forall PrologGoal name id code <- goals
+                    $forall PrologGoal uid pid name expl code <- goals
                         <tr>
                             <th> #{name}
+                            <th> #{expl}
                             <th> <code> #{code}
 
 <footer class="articleDetailFoot">
