@@ -1,11 +1,21 @@
 module Database  where
 
 import             Import
-
+import             Data.Time.LocalTime
+import qualified   Data.Text as T
 type Name         = Text
 type Explanation  = Text
 type Code         = Text
 type TagText      = Text
+
+runDBtime :: YesodDB App a -> Handler a
+runDBtime action = do
+  ZonedTime localTime zone  <- liftIO getZonedTime
+  $(logInfo) $ T.pack $ "sql begin:" ++ show localTime
+  x <- runDB action
+  ZonedTime localTime zone  <- liftIO getZonedTime
+  $(logInfo) $ T.pack $ "sql end:" ++ show localTime
+  return x
 
 entityToId :: Entity t -> Key t
 entityToId (Entity id' _) = id'
@@ -19,76 +29,76 @@ deleteEntity (Entity id' _) = delete id'
 
 insertUser :: User -> Handler (Maybe UserId)
 insertUser (User ident mpassword)  = do
-  muser <- runDB $ getBy $ UniqueUser ident
+  muser <- runDBtime $ getBy $ UniqueUser ident
   case muser of
     Just _user -> return Nothing
-    Nothing   -> Just <$> (runDB $ insert $ User ident mpassword)
+    Nothing   -> Just <$> (runDBtime $ insert $ User ident mpassword)
 
 insertPrologProgram :: PrologProgram -> Handler (Maybe PrologProgramId)
 insertPrologProgram (PrologProgram userId name explanation code) = do
-  mProgram <- runDB $ getBy $ UniquePrologProgram userId name
+  mProgram <- runDBtime $ getBy $ UniquePrologProgram userId name
   case mProgram of
     Just _program -> return Nothing
-    Nothing      -> Just <$> (runDB $ insert $ PrologProgram userId name explanation code)
+    Nothing      -> Just <$> (runDBtime $ insert $ PrologProgram userId name explanation code)
 
 insertPrologGoal :: PrologGoal -> Handler (Maybe PrologGoalId)
 insertPrologGoal (PrologGoal userId progId name explanation code) = do
-  mProgram <- runDB $ getBy $ UniquePrologGoal userId progId name
+  mProgram <- runDBtime $ getBy $ UniquePrologGoal userId progId name
   case mProgram of
     Just _program -> return Nothing
-    Nothing      -> Just <$> (runDB $ insert $ PrologGoal userId progId name explanation code)
+    Nothing      -> Just <$> (runDBtime $ insert $ PrologGoal userId progId name explanation code)
 
 insertTag :: Tag -> Handler (Maybe TagId)
 insertTag (Tag tag) = do
-  mTag <- runDB $ getBy $ UniqueTag tag
+  mTag <- runDBtime $ getBy $ UniqueTag tag
   case mTag of
     Just _  -> return Nothing
-    Nothing -> Just <$> (runDB $ insert $ Tag tag)
+    Nothing -> Just <$> (runDBtime $ insert $ Tag tag)
 
 insertPrologProgramTag :: PrologProgramsTags -> Handler (Maybe PrologProgramsTagsId)
 insertPrologProgramTag (PrologProgramsTags progId tagId) = do
-  mTag <- runDB $ getBy $ UniquePrologProgramsTags progId tagId
+  mTag <- runDBtime $ getBy $ UniquePrologProgramsTags progId tagId
   case mTag of
     Just _  -> return Nothing
-    Nothing -> Just <$> (runDB $ insert $ PrologProgramsTags progId tagId)
+    Nothing -> Just <$> (runDBtime $ insert $ PrologProgramsTags progId tagId)
 
 insertPrologGoalTag :: PrologGoalsTags -> Handler (Maybe PrologGoalsTagsId)
 insertPrologGoalTag (PrologGoalsTags goalId tagId) = do
-  mTag <- runDB $ getBy $ UniquePrologGoalsTags goalId tagId
+  mTag <- runDBtime $ getBy $ UniquePrologGoalsTags goalId tagId
   case mTag of
     Just _  -> return Nothing
-    Nothing -> Just <$> (runDB $ insert $ PrologGoalsTags goalId tagId)
+    Nothing -> Just <$> (runDBtime $ insert $ PrologGoalsTags goalId tagId)
 
 ------------------------  Insert or Replace --------------------------
 
 upsertPrologProgram :: PrologProgram -> Handler (Entity PrologProgram)
-upsertPrologProgram pp = runDB $ upsert pp []
+upsertPrologProgram pp = runDBtime $ upsert pp []
 
 upsertPrologGoal :: PrologGoal -> Handler (Entity PrologGoal)
-upsertPrologGoal pg =  runDB $ upsert pg []
+upsertPrologGoal pg =  runDBtime $ upsert pg []
 
 ----------------------------  Selecting for All Users ------------------------------
 
 countPrograms :: Handler Int
-countPrograms =  runDB $ count ([] :: [Filter PrologProgram])
+countPrograms =  runDBtime $ count ([] :: [Filter PrologProgram])
 
 
 countUserPrograms :: UserId -> Handler Int
-countUserPrograms uid = runDB $ count [PrologProgramUserId ==. uid]
+countUserPrograms uid = runDBtime $ count [PrologProgramUserId ==. uid]
 
 selectPrograms :: Int -> Int -> Handler [Entity PrologProgram]
 selectPrograms n m
-  | n < m     = runDB $ selectList [] [OffsetBy n, LimitTo (m-n) ]
-  | otherwise = runDB $ selectList [] []
+  | n < m     = runDBtime $ selectList [] [OffsetBy n, LimitTo (m-n) ]
+  | otherwise = runDBtime $ selectList [] []
 
 selectUserPrograms :: UserId -> Int -> Int -> Handler [Entity PrologProgram]
 selectUserPrograms uid n m
-  | n < m     = runDB $ selectList [PrologProgramUserId ==. uid ] [OffsetBy n, LimitTo (m-n) ]
-  | otherwise = runDB $ selectList [] []
+  | n < m     = runDBtime $ selectList [PrologProgramUserId ==. uid ] [OffsetBy n, LimitTo (m-n) ]
+  | otherwise = runDBtime $ selectList [] []
 
 selectFirstProgram :: Handler (Maybe (Entity PrologProgram))
 selectFirstProgram =  do
-  entity <- runDB $ selectList [] [Asc PrologProgramId , LimitTo 1 ]
+  entity <- runDBtime $ selectList [] [Asc PrologProgramId , LimitTo 1 ]
   case entity of
     [ e ]
         ->  return $ Just e
@@ -96,7 +106,7 @@ selectFirstProgram =  do
 
 selectFirstUserProgram :: UserId -> Handler (Maybe (Entity PrologProgram))
 selectFirstUserProgram uid =  do
-  entity <- runDB $ selectList [PrologProgramUserId ==. uid ] [Asc PrologProgramId , LimitTo 1 ]
+  entity <- runDBtime $ selectList [PrologProgramUserId ==. uid ] [Asc PrologProgramId , LimitTo 1 ]
   case entity of
     [ e ]
         ->  return $ Just e
@@ -104,7 +114,7 @@ selectFirstUserProgram uid =  do
 
 selectLastProgram :: Handler (Maybe (Entity PrologProgram))
 selectLastProgram =  do
-  entity <- runDB $ selectList [] [Desc PrologProgramId , LimitTo 1 ]
+  entity <- runDBtime $ selectList [] [Desc PrologProgramId , LimitTo 1 ]
   case entity of
     [ e ]
         ->  return $ Just e
@@ -112,7 +122,7 @@ selectLastProgram =  do
 
 selectLastUserProgram :: UserId -> Handler (Maybe (Entity PrologProgram))
 selectLastUserProgram uid =  do
-  entity <- runDB $ selectList [PrologProgramUserId ==. uid] [Desc PrologProgramId , LimitTo 1 ]
+  entity <- runDBtime $ selectList [PrologProgramUserId ==. uid] [Desc PrologProgramId , LimitTo 1 ]
   case entity of
     [ e ]
         ->  return $ Just e
@@ -121,7 +131,7 @@ selectLastUserProgram uid =  do
 selectNextProgram :: Maybe PrologProgramId -> Handler (Maybe (Entity PrologProgram))
 selectNextProgram  Nothing  = selectFirstProgram
 selectNextProgram (Just progId) =  do
-  nextProgram <- runDB $ selectList [PrologProgramId >. progId] [LimitTo 1]
+  nextProgram <- runDBtime $ selectList [PrologProgramId >. progId] [LimitTo 1]
   case nextProgram of
     [e]
       -> return  $ Just e
@@ -130,7 +140,7 @@ selectNextProgram (Just progId) =  do
 selectNextUserProgram :: UserId -> Maybe PrologProgramId -> Handler (Maybe (Entity PrologProgram))
 selectNextUserProgram  uid Nothing  = selectFirstUserProgram uid
 selectNextUserProgram  uid (Just progId) =  do
-  nextProgram <- runDB $ selectList [PrologProgramUserId ==. uid, PrologProgramId >. progId ] [LimitTo 1]
+  nextProgram <- runDBtime $ selectList [PrologProgramUserId ==. uid, PrologProgramId >. progId ] [LimitTo 1]
   case nextProgram of
     [e]
       -> return  $ Just e
@@ -141,7 +151,7 @@ selectNextUserProgram  uid (Just progId) =  do
 selectPrevProgram :: Maybe PrologProgramId -> Handler (Maybe (Entity PrologProgram))
 selectPrevProgram  Nothing  = selectLastProgram
 selectPrevProgram (Just progId ) = do
-  prevProgram <- runDB $ selectList [PrologProgramId <. progId] [LimitTo 1]
+  prevProgram <- runDBtime $ selectList [PrologProgramId <. progId] [LimitTo 1]
   case prevProgram of
     [e]
       -> return $ Just e
@@ -150,35 +160,35 @@ selectPrevProgram (Just progId ) = do
 selectPrevUserProgram :: UserId -> Maybe PrologProgramId -> Handler (Maybe (Entity PrologProgram))
 selectPrevUserProgram  uid Nothing  = selectLastUserProgram uid
 selectPrevUserProgram  uid (Just progId ) = do
-  prevProgram <- runDB $ selectList [PrologProgramUserId ==. uid, PrologProgramId <. progId ] [LimitTo 1]
+  prevProgram <- runDBtime $ selectList [PrologProgramUserId ==. uid, PrologProgramId <. progId ] [LimitTo 1]
   case prevProgram of
     [e]
       -> return $ Just e
     _ -> selectLastProgram
 
 countProgramGoals :: PrologProgramId -> Handler Int
-countProgramGoals pid =  runDB $ count [ PrologGoalPrologProgramId ==. pid ]
+countProgramGoals pid =  runDBtime $ count [ PrologGoalPrologProgramId ==. pid ]
 
 countUserProgramGoals :: UserId -> PrologProgramId -> Handler Int
-countUserProgramGoals uid pid =  runDB $ count [ PrologGoalUserId ==. uid, PrologGoalPrologProgramId ==. pid ]
+countUserProgramGoals uid pid =  runDBtime $ count [ PrologGoalUserId ==. uid, PrologGoalPrologProgramId ==. pid ]
 
 selectProgramGoals :: Int -> Int -> PrologProgramId  -> Handler [Entity PrologGoal]
 selectProgramGoals n m pid
-  | m > n     = runDB $ selectList [PrologGoalPrologProgramId ==. pid ] [OffsetBy n , LimitTo (m-n)]
-  | otherwise = runDB $ selectList [PrologGoalPrologProgramId ==. pid ] []
+  | m > n     = runDBtime $ selectList [PrologGoalPrologProgramId ==. pid ] [OffsetBy n , LimitTo (m-n)]
+  | otherwise = runDBtime $ selectList [PrologGoalPrologProgramId ==. pid ] []
 
 selectUserProgramGoals :: UserId -> Int -> Int -> PrologProgramId  -> Handler [Entity PrologGoal]
 selectUserProgramGoals uid n m pid
-  | m > n     = runDB $ selectList [PrologGoalUserId ==. uid ,  PrologGoalPrologProgramId ==. pid ]
+  | m > n     = runDBtime $ selectList [PrologGoalUserId ==. uid ,  PrologGoalPrologProgramId ==. pid ]
                                    [OffsetBy n , LimitTo (m-n)]
-  | otherwise = runDB $ selectList [PrologGoalUserId ==. uid ,  PrologGoalPrologProgramId ==. pid ] []
+  | otherwise = runDBtime $ selectList [PrologGoalUserId ==. uid ,  PrologGoalPrologProgramId ==. pid ] []
 
 
 
 -- submitGoal :: PrologProgramId -> PrologGoalForm -> CC (PS Html) Handler (Maybe (Key PrologGoal))
 -- submitGoal progId (PrologGoalForm name (Textarea code)) = do
 --   -- lift $ $(logInfo) $ "submitting goal:" ++ name
---   maybeGoal <- lift $ runDB $ getBy $ PrologGoalUniqueName progId name
+--   maybeGoal <- lift $ runDBtime $ getBy $ PrologGoalUniqueName progId name
 --   case maybeGoal of
 --     Just _  -> do
 --       klabel <- lift $ generateCcLabel
@@ -186,7 +196,7 @@ selectUserProgramGoals uid n m pid
 --       inquire klabel html
 --       return Nothing
 --     Nothing -> do
---       goalId <- lift $ runDB $ insert $ PrologGoal name progId  code
+--       goalId <- lift $ runDBtime $ insert $ PrologGoal name progId  code
 --       -- lift $ $(logInfo) $ "submitted goal:" ++ name
 --       return $ Just goalId
 
@@ -194,12 +204,12 @@ deleteProgram :: PrologProgramId -> Handler ()
 deleteProgram pid = do
   goals <- selectProgramGoals 0 0 pid -- select all goals
   mapM_ ( deleteGoal . entityToId )  goals
-  ts <- runDB $ selectList [ PrologProgramsTagsPrologProgramId ==. pid ] []
-  runDB $ mapM_ deleteEntity ts
-  runDB $ delete pid
+  ts <- runDBtime $ selectList [ PrologProgramsTagsPrologProgramId ==. pid ] []
+  runDBtime $ mapM_ deleteEntity ts
+  runDBtime $ delete pid
 
 
 deleteGoal :: PrologGoalId -> Handler ()
 deleteGoal gid = do
-  runDB $ selectList [ PrologGoalsTagsPrologGoalId ==. gid ] [] >>=  mapM_ deleteEntity
-  runDB $ delete gid
+  runDBtime $ selectList [ PrologGoalsTagsPrologGoalId ==. gid ] [] >>=  mapM_ deleteEntity
+  runDBtime $ delete gid

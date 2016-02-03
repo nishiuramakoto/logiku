@@ -15,6 +15,8 @@ import Yesod.Core.Types     (Logger)
 import qualified Yesod.Core.Unsafe as Unsafe
 import qualified Data.CaseInsensitive as CI
 import qualified Data.Text.Encoding as TE
+import qualified Data.Text as T
+import Data.Time.LocalTime
 import Authentication
 import ContMap
 import SideMenu
@@ -113,22 +115,38 @@ instance Yesod App where
 
     errorHandler = myErrorHandler
     defaultLayout widget = do
-        master <- getYesod
-        mmsg <- getMessage
+      ZonedTime localTime zone  <- liftIO getZonedTime
+      -- $(logInfo) $ T.concat [ "1:" , T.pack $ show localTime ]
 
-        mName <- maybeDisplayName
-        let categoryTree =  $(widgetFile "css-tree")
+      master <- getYesod
+      mmsg <- getMessage
+
+      ZonedTime localTime zone  <- liftIO getZonedTime
+      -- $(logInfo) $ T.concat [ "2:" , T.pack $ show localTime ]
+
+      mName <- maybeUserIdent
+      sess  <- getSession
+      let categoryTree =  $(widgetFile "css-tree")
+        -- let categoryTree = [whamlet|tree|]
+
+      ZonedTime localTime zone  <- liftIO getZonedTime
+      -- $(logInfo) $ T.concat [ "3:" , T.pack $ show localTime ]
 
         -- We break up the default layout into two components:
         -- default-layout is the contents of the body tag, and
         -- default-layout-wrapper is the entire page. Since the final
         -- value passed to hamletToRepHtml cannot be a widget, this allows
         -- you to use normal widget features in default-layout.
-        pc <- widgetToPageContent $ do
-          addStylesheet $ StaticR css_bootstrap_css
-          addStylesheet $ StaticR css_searchbox_css
-          $(widgetFile "default-layout")
-        withUrlRenderer $(hamletFile "templates/default-layout-wrapper.hamlet")
+
+      pc <- widgetToPageContent $ do
+        addStylesheet $ StaticR css_bootstrap_css
+        addStylesheet $ StaticR css_searchbox_css
+        $(widgetFile "default-layout")
+
+      ZonedTime localTime zone  <- liftIO getZonedTime
+      -- $(logInfo) $ T.concat [ "4:" , T.pack $ show localTime ]
+
+      withUrlRenderer $(hamletFile "templates/default-layout-wrapper.hamlet")
 
     -- The page to be redirected to when authentication is required.
     authRoute _ = Just $ AuthR LoginR
@@ -190,6 +208,8 @@ instance YesodAuth App where
 
     authenticate creds = runDB $ do
         x <- getBy $ UniqueUser $ credsIdent creds
+        $(logInfo) $  T.concat [ "credsIdent" , (T.pack (show (credsIdent creds)))]
+        setSession "credsIdent" (credsIdent creds)
         case x of
             Just (Entity uid _) -> return $ Authenticated uid
             Nothing -> Authenticated <$> insert User
@@ -204,6 +224,15 @@ instance YesodAuth App where
                     ]
 
     authHttpManager = getHttpManager
+
+    onLogin = do
+      maybeUserIdent
+      maybeDisplayName
+      setMessage $ toHtml ("Logged In " :: Text )
+
+    onLogout = do
+      clearAuthSession
+      setMessage $ toHtml ("Logged out" :: Text)
 
 instance YesodAuthPersist App
 

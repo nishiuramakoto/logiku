@@ -6,10 +6,13 @@
         <div id="userInfo">
             <form id="userInfoForm" class="iconr2" method=get action="@{HomeR}">
                 <ul>
-                    <li>
-                        $maybe name <- mName
+                    $maybe name <- mName
+                        <li>
                             <a id="userName" href="{UserProfile userId userDisplayName}"> #{name}
-                        $nothing
+                        <li>
+                            <a id="logout" href="@{AuthR LogoutR}"> ログアウト
+                    $nothing
+                        <li>
                             <a id="login" href="@{AuthR LoginR}"> ログイン
                     <li>
                         <a id="signup"> 新規
@@ -19,6 +22,8 @@
 
 $maybe msg <- mmsg
     <div #message>#{msg}
+
+<div class="debug">#{show sess}
 
 <div id="pageBody">
     <div id="pageBodyMain">

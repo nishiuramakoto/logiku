@@ -8,6 +8,7 @@ import             ContMap
 import             Data.Text(Text)
 import qualified   Data.Text as T
 import             Text.Read(reads)
+import             Data.Time.LocalTime
 import             Prolog(consultString, parseQuery)
 import             Text.Parsec
 import             Database
@@ -36,11 +37,40 @@ maybeUserId = do
                      return $ Just uid
     Nothing    -> return Nothing
 
+runCCtime :: CC (PS Html) Handler a ->  CC (PS Html) Handler a
+runCCtime action = do
+  ZonedTime localTime zone  <- liftIO getZonedTime
+  lift $ $(logInfo) $ T.pack $ "CC begin:" ++ show localTime
+  x <- action
+  ZonedTime localTime zone  <- liftIO getZonedTime
+  lift $ $(logInfo) $ T.pack $ "CC end:" ++ show localTime
+  return x
+
+
+runTime :: (MonadIO m,MonadLogger m) => Text -> m a ->  m a
+runTime tag action = do
+  ZonedTime localTime zone  <- liftIO getZonedTime
+  $(logInfo) $ T.concat [ tag , ":start: " , T.pack $ show localTime ]
+  x <- action
+  ZonedTime localTime zone  <- liftIO getZonedTime
+  $(logInfo) $ T.concat [ tag , ":end  : " , T.pack $ show localTime ]
+  return x
+
+runCcTime :: Text -> CC (PS Html) Handler a -> CC (PS Html) Handler a
+runCcTime tag action = do
+  ZonedTime localTime zone  <- liftIO getZonedTime
+  lift $ $(logInfo) $ T.concat [ tag , ":start: " , T.pack $ show localTime ]
+  x <- action
+  ZonedTime localTime zone  <- liftIO getZonedTime
+  lift $ $(logInfo) $ T.concat [ tag , ":end  : " , T.pack $ show localTime ]
+  return x
+
+
 ------------------------------ Handlers ------------------------------
 
 getPrologProgramR ::  Handler Html
 getPrologProgramR  = do
-  muid <- maybeUserId
+  muid <- runTime "maybeUserId" $ maybeUserId
   case muid of
     Just uid ->  run $ ccMain uid
     Nothing  ->  do
@@ -116,14 +146,18 @@ prologProgramWidget klabel formWidget enctype forceSave = do
 prologProgramHtml ::  ProgramName ->  ProgramExplanation -> ProgramCode -> Bool
                   ->  CC (PS Html) Handler (ContId, Html)
 prologProgramHtml name expl program forceSave = do
-  (klabel, formWidget, enctype) <- lift $ generateCcFormPost $ prologProgramForm name expl program
-  html   <- lift $ defaultLayout $ prologProgramWidget klabel  formWidget enctype forceSave
+  (klabel, formWidget, enctype) <- runCcTime "generateCcFormPost" $
+                                   lift $ generateCcFormPost $ prologProgramForm name expl program
+  html   <- runCcTime "defaultLayout" $
+            lift $ defaultLayout $ runTime "widget" $ prologProgramWidget klabel  formWidget enctype forceSave
   return (klabel, html)
 
 inquirePrologProgram ::  ProgramName -> ProgramExplanation ->  ProgramCode -> Bool
                         -> CC (PS Html) Handler (ContId, Maybe PrologProgramAction, PrologProgramForm)
 inquirePrologProgram name expl program  forceSave = do
-  (klabel, html)         <- prologProgramHtml name expl program forceSave
+
+  (klabel, html)         <- runCcTime "prologProgramHtml" $ prologProgramHtml name expl program forceSave
+
   (answer, maybeAction)  <- inquirePostUntilButton klabel html (prologProgramForm name expl program)
                             [ ("save", Save) , ("next", Next) , ("prev" , Prev) , ("add_goal", AddGoal)
                             , ("delete", Delete) , ("checkSyntax" , CheckSyntax)
@@ -212,8 +246,8 @@ loopBrowse uid Nothing forceSave = do
                           Nothing   -> loopBrowse uid Nothing forceSave
         Nothing  ->  loopBrowse uid Nothing forceSave
 
-    Just Next ->  do nextProgram <- lift $ selectFirstUserProgram uid
-                     loopBrowse uid nextProgram forceSave
+    Just Next ->  runCCtime $ do nextProgram <- lift $ selectFirstUserProgram uid
+                                 loopBrowse uid nextProgram forceSave
 
     Just Prev ->  do prevProgram <- lift $ selectLastUserProgram uid
                      loopBrowse uid  prevProgram forceSave
@@ -225,12 +259,12 @@ loopBrowse uid (Just entity@(Entity pid currentProgram@(PrologProgram uid' name 
   (   _klabel
     , maybeAction
     , (PrologProgramForm newName (Textarea newExplanation) (Textarea newCode)))
-                <-  inquirePrologProgram name (Textarea expl) (Textarea code) forceSave
+                <-  runCCtime $ inquirePrologProgram name (Textarea expl) (Textarea code) forceSave
 
   let newProgram = PrologProgram uid newName newExplanation newCode
 
   if (not (elem maybeAction [Just Next, Just Prev, Just AddGoal]) &&  uid /= uid')
-    then do -- lift $ setMessage $ toHtml $ [whamlet|他のユーザのプログラムは変更できません|]
+    then do lift $ setMessage $ toHtml $ ("他のユーザのプログラムは変更できません" :: Text)
             loopBrowse uid (Just (Entity pid currentProgram)) forceSave
     else case maybeAction of
     Just Save -> do  if forceSave || syntaxOK newCode
@@ -241,8 +275,8 @@ loopBrowse uid (Just entity@(Entity pid currentProgram@(PrologProgram uid' name 
                        else do lift $ $(logInfo) $ "Enter force save mode:" ++ T.pack (show newProgram)
                                loopBrowse uid (Just (Entity pid newProgram))  True
 
-    Just Next ->  do nextProgram <- lift $ selectNextUserProgram uid (Just pid)
-                     loopBrowse uid nextProgram False
+    Just Next ->   do nextProgram <- runCCtime $ lift $ selectNextUserProgram uid (Just pid)
+                      runCCtime $ loopBrowse uid nextProgram False
 
     Just Prev ->  do prevProgram <- lift $ selectPrevUserProgram uid  (Just pid)
                      loopBrowse uid prevProgram False
