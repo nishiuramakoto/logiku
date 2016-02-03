@@ -2,7 +2,8 @@ module Authentication(
   clientId,
   clientSecret,
   maybeDisplayName,
-  maybeUserIdent
+  maybeUserIdent,
+  clearAuthSession
   )  where
 
 import Import.NoFoundation
@@ -26,9 +27,31 @@ clientId = "197748900362-pj584nskcninquf5mmgse28fg2tv2c4a.apps.googleusercontent
 clientSecret :: Text
 clientSecret = "SMbJxghU_ci-Fg2OzO1cwDkY"
 
+displayNameString =  "displayName"
+userIdentString   = "userIdent"
+
+cacheSession :: MonadHandler m => Text -> m (Maybe Text) -> m (Maybe Text)
+cacheSession key m = do
+  mval <- lookupSession key
+  case mval of
+    Just val -> return $ Just val
+    Nothing  -> do mval' <- m
+                   case mval' of
+                     Just val' -> do setSession key val'
+                                     return $ Just val'
+                     Nothing   -> return Nothing
+
+clearAuthSession :: YesodAuth master => HandlerT master IO ()
+clearAuthSession = do
+  deleteSession displayNameString
+  deleteSession userIdentString
+  deleteSession "credsIdent"
+  deleteSession "_GOOGLE_ACCESS_TOKEN"
+  deleteSession "_GOOGLE_CSRF_TOKEN"
+  -- clearCreds False
 
 maybeDisplayName :: YesodAuth master => HandlerT master IO (Maybe Text)
-maybeDisplayName = maybeDisplayNameGoogle
+maybeDisplayName = cacheSession displayNameString maybeDisplayNameGoogle
 
 maybeDisplayNameGoogle :: YesodAuth master => HandlerT master IO (Maybe Text)
 maybeDisplayNameGoogle = do
@@ -40,8 +63,13 @@ maybeDisplayNameGoogle = do
       return $ join $ fmap personDisplayName maybePerson
     Nothing -> return Nothing
 
-maybeUserIdent :: YesodAuth master => HandlerT master IO (Maybe Text)
-maybeUserIdent = do
+maybeUserIdent = lookupSession "credsIdent"
+
+--  cacheSession userIdentString maybeUserIdentGoogle
+
+
+maybeUserIdentGoogle :: YesodAuth master => HandlerT master IO (Maybe Text)
+maybeUserIdentGoogle = do
   mtoken <- getUserAccessToken
   case mtoken of
     Nothing    ->  return Nothing
