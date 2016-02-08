@@ -38,37 +38,37 @@
 -- See Control.Monad.CC.CCExc for further comments about the implementation
 
 module Control.Monad.CC.CCCxe (
-	      -- * Types
-	      CC,
-	      SubCont,
-	      CCT,
-	      Prompt,
+              -- * Types
+              CC,
+              SubCont,
+              CCT,
+              Prompt,
 
-	      -- * Basic delimited control operations
-	      pushPrompt,
+              -- * Basic delimited control operations
+              pushPrompt,
               takeSubCont,
               pushSubCont,
               runCC,
 
               -- * Useful derived operations
-	      abortP,
+              abortP,
               shiftP,
               shift0P,
               controlP,
 
               -- * Pre-defined prompt flavors
-	      PS, ps,
+              PS, ps,
               P2, p2L, p2R,
               PP, pp,
               PM, pm,
               PD, newPrompt,
               as_prompt_type
-	      ) where
+              ) where
 import Prelude
 import Control.Applicative
 import Control.Monad
 import Control.Monad.Trans
-import Data.Typeable			-- for prompts of the flavor PP, PD
+import Data.Typeable                    -- for prompts of the flavor PP, PD
 
 -- | Delimited-continuation monad transformer
 -- It is parameterized by the prompt flavor p
@@ -107,8 +107,8 @@ instance Monad m => Monad (CC p m) where
     return x = CC $ \ki kd -> ki x
 
     m >>= f = CC $ \ki kd -> unCC m
-	                      (\a -> unCC (f a) ki kd)
-			      (\ctx -> kd (\x -> ctx x >>= f))
+                              (\a -> unCC (f a) ki kd)
+                              (\ctx -> kd (\x -> ctx x >>= f))
 
 instance MonadTrans (CC p) where
     lift m = CC $ \ki kd -> m >>= ki
@@ -120,7 +120,7 @@ instance MonadIO m => MonadIO (CC p m) where
 -- Basic Operations of the delimited control interface
 
 pushPrompt :: Monad m =>
-	      Prompt p m w -> CC p m w -> CC p m w
+              Prompt p m w -> CC p m w -> CC p m w
 pushPrompt p@(_,proj) body = CC $ \ki kd ->
  let kd' ctx body | Just b <- proj body  = unCC (b ctx) ki kd
      kd' ctx body = kd (\x -> pushPrompt p (ctx x)) body
@@ -129,7 +129,7 @@ pushPrompt p@(_,proj) body = CC $ \ki kd ->
 
 -- | Create the initial bubble
 takeSubCont :: Monad m =>
-	       Prompt p m w -> CCT p m x w -> CC p m x
+               Prompt p m w -> CCT p m x w -> CC p m x
 takeSubCont p@(inj,_) body = CC $ \ki kd -> kd id (inj body)
 
 -- | Apply the captured continuation
@@ -146,26 +146,26 @@ runCC m = unCC m return err
 -- Useful derived operations
 
 abortP :: Monad m =>
-	  Prompt p m w -> CC p m w -> CC p m any
+          Prompt p m w -> CC p m w -> CC p m any
 abortP p e = takeSubCont p (\_ -> e)
 
 shiftP :: Monad m =>
-	  Prompt p m w -> ((a -> CC p m w) -> CC p m w) -> CC p m a
+          Prompt p m w -> ((a -> CC p m w) -> CC p m w) -> CC p m a
 shiftP p f = takeSubCont p $ \sk ->
-	       pushPrompt p (f (\c ->
-		  pushPrompt p (pushSubCont sk (return c))))
+               pushPrompt p (f (\c ->
+                  pushPrompt p (pushSubCont sk (return c))))
 
 shift0P :: Monad m =>
-	  Prompt p m w -> ((a -> CC p m w) -> CC p m w) -> CC p m a
+          Prompt p m w -> ((a -> CC p m w) -> CC p m w) -> CC p m a
 shift0P p f = takeSubCont p $ \sk ->
-	       f (\c ->
-		  pushPrompt p (pushSubCont sk (return c)))
+               f (\c ->
+                  pushPrompt p (pushSubCont sk (return c)))
 
 controlP :: Monad m =>
-	  Prompt p m w -> ((a -> CC p m w) -> CC p m w) -> CC p m a
+          Prompt p m w -> ((a -> CC p m w) -> CC p m w) -> CC p m a
 controlP p f = takeSubCont p $ \sk ->
-	       pushPrompt p (f (\c ->
-		  pushSubCont sk (return c)))
+               pushPrompt p (f (\c ->
+                  pushSubCont sk (return c)))
 
 -- --------------------------------------------------------------------
 -- Prompt flavors
@@ -250,7 +250,7 @@ newPrompt mark = (inj, prj)
  where
  inj = PD mark
  prj (PD mark' c) | mark' == mark,
-		    Just (NCCT x) <- gcast (NCCT c) = Just x
+                    Just (NCCT x) <- gcast (NCCT c) = Just x
  prj _ = Nothing
 
 -- | It is often helpful, for clarity of error messages, to specify the

@@ -5,9 +5,13 @@
         <header class="articleDetailHead">
             <h1  class="pageTitle"> Prolog Tester
             <p> Execute prolog programs
+            <div class="syntaxError">
+            <div class="ajaxTest">
+                Ajax Test
 
         <section class="articleDetailBody">
             <div id="prologProgramForm">
                 <form action=@{PrologExecuteTestR} method="POST" enctype #{enctype}>
                     ^{prolog_execute_test_widget}
+                    <input name=checkSyntax value="Check syntax" TYPE=button class="checkSyntax changeCode">
                     <button> Submit

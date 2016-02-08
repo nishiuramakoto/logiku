@@ -39,7 +39,7 @@ PrologProgram json
       UniquePrologProgram userId name
       deriving     Show
 
-PrologGoal json
+PrologGoal
       userId          UserId
       prologProgramId PrologProgramId
       name            Text
@@ -48,12 +48,19 @@ PrologGoal json
       UniquePrologGoal userId prologProgramId name
       deriving Show
 
-Tag json
+Tag
 	name		Text
 	UniqueTag	name
 	deriving Show
 
---------------------- Relations --------------------------------
+--------------------------  JSON Entities ----------------------------
+PrologGoalJson json
+      name            Text
+      explanation     Text
+      code            Text
+      deriving Show
+
+---------------------------- - Relations  ----------------------------
 
 PrologProgramsTags
 	prologProgramId	PrologProgramId

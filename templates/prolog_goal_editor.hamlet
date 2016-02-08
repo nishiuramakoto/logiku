@@ -7,7 +7,11 @@
             <section>
                 <header>
                     <h3 class="programNameHeader"> Program name
-                #{programName}
+                <div id="programName"> #{programName}
+            <section>
+                <header>
+                    <h3 class="programExplanationHeader"> Program explanation
+                #{programExplanation}
             <section>
                 <header>
                     <h3 class="programCodeHeader"> Program code
@@ -16,16 +20,19 @@
             <section>
                 <header>
                     <h3 class="programGoalsHeader"> Add a Goal
-            <form action=@{PrologProgramContSilentR} method="POST" enctype=#{enctype}>
-                <input type="hidden" name="_klabel" value="#{klabel}">
+            <form action=@{PrologProgramContSilentR} method="POST" enctype=#{enctype} id="goalEditor">
+                <input type="hidden" name="_klabel"    value="#{klabel}">
+                <input type="hidden" name="userIdent"  value="#{userIdent}">
                 ^{formWidget}
                 <input name=submit  value="Submit Goal" TYPE=Submit>
+                <input name=ajax    value="Ajax" TYPE=Button class="submitGoal">
 
             <a href="@{PrologProgramContR klabel}?action=back">
                 Back to Program Editor
             <section>
+                <ul id="goalList">
                 <table>
-                    $forall PrologGoal uid pid name expl code <- goals
+                    $forall PrologGoal _uid _pid name expl code <- goals
                         <tr>
                             <th> #{name}
                             <th> #{expl}

@@ -7,7 +7,7 @@ where
 import Import hiding(second)
 import qualified Prelude (foldl)
 
-import Control.Monad (MonadPlus, mzero)
+
 import Control.Arrow (second)
 import Data.Function (fix)
 import Data.Generics (everything, mkQ)
@@ -30,6 +30,8 @@ unify_with_occurs_check =
    occursIn t = everything (||) (mkQ False (==t))
 
 
+unify' :: forall (m :: * -> *). MonadPlus m
+          => (Term -> Term -> m Unifier) -> Term -> Term -> m [(VariableName, Term)]
 unify' _ Wildcard _ = return []
 unify' _ _ Wildcard = return []
 unify' _ (Var v) t  = return [(v,t)]
@@ -43,13 +45,15 @@ same f x y = f x == f y
 
 unifyList :: Monad m => (Term -> Term -> m Unifier) -> [(Term, Term)] -> m Unifier
 unifyList _ [] = return []
-unifyList unify ((x,y):xys) = do
-   u  <- unify x y
-   u' <- unifyList unify (map (both (apply u)) xys)
+unifyList unify'' ((x,y):xys) = do
+   u  <- unify'' x y
+   u' <- unifyList unify'' (map (both (apply u)) xys)
    return (u++u')
 
+both :: forall t t1. (t ->t1) -> (t,t) -> (t1,t1)
 both f (x,y) = (f x, f y)
 
+(+++) :: Unifier -> Unifier -> Unifier
 u1 +++ u2 = simplify $ u1 ++ u2
 
 simplify :: Unifier -> Unifier

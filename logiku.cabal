@@ -34,6 +34,7 @@ library
                      Handler.Base
                      Handler.PrologTest
                      Handler.PrologProgram
+                     -- Handler.PrologResolver
                      LogicT.LogicT
                      LogicT.SRReifT
                      Prolog
@@ -44,6 +45,8 @@ library
                      Prolog.Parser
                      Prolog.Syntax
                      Prolog.Quote
+                     Prolog.Inquire
+
 
     if flag(dev) || flag(library-only)
         cpp-options:   -DDEVELOPMENT
@@ -117,6 +120,7 @@ library
                  -- My additions
                  -- , my-CC-delcont-cxe
                  -- , CC-delcont-cxe
+                 , mono-traversable
                  , blaze-markup
                  , mtl              >=2.1.3.1
                  , syb              >= 0.3

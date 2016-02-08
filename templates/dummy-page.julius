@@ -1,0 +1,29 @@
+function setupAjaxTest(data) {
+    $('.ajaxTest').text("Ajax test success");
+};
+
+
+function setupAjax() {
+    var requestData = { userId      : 0,
+			name        : "",
+			explanation : "" ,
+			code        : ""
+                      };
+
+    $('.ajaxTest').click(function (event) {
+	$.ajax({
+	    url: '@{AjaxTestR}',
+	    type: 'POST',
+	    contentType: "application/json",
+            data: JSON.stringify(requestData) ,
+	    success: setupAjaxTest
+	});
+    });
+
+    window.alert("ajax set up");
+}
+
+
+$(document).ready(function () {
+    setupAjax();
+});

@@ -9,3 +9,5 @@ bench/runbench
 *.dyn_hi
 *.hp
 *.prof
+\#*
+.\#*

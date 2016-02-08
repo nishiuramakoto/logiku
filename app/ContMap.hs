@@ -38,7 +38,6 @@ import qualified   Data.Text as T
 import             Control.Monad.CC.CCCxe
 
 
-
 -- type AppHandler = HandlerT App IO
 type GeneralContinuation m a = a -> CC (PS a) m a
 type Cont site  = GeneralContinuation (HandlerT site IO)  Html

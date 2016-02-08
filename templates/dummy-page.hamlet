@@ -1,0 +1,6 @@
+<div class="ajaxTest">
+    ajaxTest
+<form action=@{PrologProgramContSilentR} method=POST>
+    <input type="hidden" name=_klabel value=#{klabel}>
+    ^{formWidget}
+    <input name=ok value=ok type=Submit>
