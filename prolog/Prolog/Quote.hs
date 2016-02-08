@@ -1,8 +1,6 @@
 {-# LANGUAGE TemplateHaskell, FlexibleInstances #-}
 module Prolog.Quote (t,ts,c,pl) where
 import Import hiding(lift)
-import Control.Applicative ((<*))
-import Data.Functor.Identity (Identity)
 
 import Language.Haskell.TH (listE, varE, viewP, mkName, Q, Exp, Pat)
 import Language.Haskell.TH.Syntax (Lift(lift))
@@ -20,7 +18,7 @@ $(deriveLiftMany [''Term, ''VariableName, ''Clause])
 instance Lift ([Term] -> [Goal]) where
    lift _ = fail "Clauses using Haskell functions can't be lifted."
 
-
+t,ts,c,pl :: QuasiQuoter
 t  = prologQuasiQuoter term    "term"
 ts = prologQuasiQuoter terms   "term list"
 c  = prologQuasiQuoter clause  "clause"

@@ -1,0 +1,35 @@
+
+function updateGoalList(data) {
+    var newNode = $("<li></li>");
+    newNode.text(data.code);
+    $('#goalList').append(newNode);
+};
+
+
+function setupAjax() {
+
+    // AJAX Request
+    $('.submitGoal').click(function (event) {
+        event.preventDefault();
+
+	var requestData = { name            : $('#goalEditor input[name="f1"]').val(),
+			    explanation     : $('#goalEditor textarea[name="f2"]').val() ,
+			    code            : $('#goalEditor textarea[name="f3"]').val()
+			  };
+        $.ajax({
+            url: '@{GoalR}',
+            type: 'POST',
+            contentType: "application/json",
+            data: JSON.stringify(requestData) ,
+            success: updateGoalList ,
+            error: function (data) {
+                console.log("Error creating comment: " + data);
+            },
+        });
+    });
+}
+
+
+$(document).ready(function () {
+    setupAjax();
+});

@@ -1,0 +1,61 @@
+
+function setupSyntaxErrorMessage(data) {
+    if (!data) {
+        //window.alert("Nothing");
+        $('.syntaxError').text("Syntax OK");
+    } else {
+        // window.alert(data);
+        // var newNode = $("<li></li>");
+        // newNode.text(data);
+        // $(".editorNotification").append(newNode);
+        $('.syntaxError').text("Error:" + data);
+    }
+};
+
+function setupAjaxTest(data) {
+    $('.ajaxTest').text("Ajax test success");
+};
+
+
+function setupAjax() {
+    var requestData = { userId      : 0,
+			name        : "",
+			explanation : "" ,
+			code        : $('textarea[name="f1"]').val()
+                      };
+
+    // AJAX Request
+    $('.checkSyntax').click(function (event) {
+	//window.alert("request ajax" + event);
+
+	//window.alert("request ajax:" + requestData.code);
+
+        $.ajax({
+            url: '@{SyntaxCheckR}',
+            type: 'POST',
+            contentType: "application/json",
+            data: JSON.stringify(requestData) ,
+            success: setupSyntaxErrorMessage ,
+            error: function (data) {
+                console.log("Error creating comment: " + data);
+            },
+        });
+    });
+
+    $('.ajaxTest').click(function (event) {
+	$.ajax({
+	    url: '@{AjaxTestR}',
+	    type: 'POST',
+	    contentType: "application/json",
+            data: JSON.stringify(requestData) ,
+	    success: setupAjaxTest
+	});
+    });
+
+//    window.alert("ajax set up");
+}
+
+
+$(document).ready(function () {
+    setupAjax();
+});

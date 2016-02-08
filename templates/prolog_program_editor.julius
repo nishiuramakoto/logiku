@@ -33,15 +33,24 @@ function setupSyntaxErrorMessage(data) {
     }
 };
 
+// function setupAjaxTest(data) {
+//     $('.ajaxTest').text("Ajax test success");
+// };
+
 
 function setupAjax() {
 
     // AJAX Request
     $('.checkSyntax').click(function (event) {
+	//window.alert("request ajax" + event);
         event.preventDefault();
-        var requestData = { name    : $('.prologProgramForm input:text').val() ,
-                            program : $('.prologProgramForm textarea').val()
-                          };
+	// window.alert("request ajax:" + requestData.code);
+
+	var requestData = { userId      : 0,
+			    name        : "",
+			    explanation : "" ,
+			    code        : $('textarea[name="f3"]').val()
+			  };
 
         $.ajax({
             url: '@{SyntaxCheckR}',
@@ -53,19 +62,30 @@ function setupAjax() {
                 console.log("Error creating comment: " + data);
             },
         });
-
     });
-    // window.alert("ajax set up");
+
+    // $('.ajaxTest').click(function (event) {
+    // 	$.ajax({
+    // 	    url: '@{AjaxTestR}',
+    // 	    type: 'POST',
+    // 	    contentType: "application/json",
+    //         data: JSON.stringify({userId: 0 , name: "" , explanation : "", code: "" }) ,
+    // 	    success: setupAjaxTest
+    // 	});
+    // });
+
+//    window.alert("ajax set up");
 }
 
 
 $(document).ready(function () {
 
-    var textarea = $('.prologProgramForm textarea');
+    var programArea = $('.prologProgramForm textarea[name="f3"]');
+    // var programArea = $('.prologProgramForm textarea');
     var div      = $('#prologProgramEditor');
 
-    textarea.addClass('hidden');
-    div.append(textarea.val());
+    programArea.addClass('hidden');
+    div.append(programArea.val());
 
     // Set up the Ace editor
     var editor = ace.edit("prologProgramEditor");
@@ -74,13 +94,13 @@ $(document).ready(function () {
 
     // reflect editor status to the textarea
     $('.prologProgramForm .changeCode').click(function() {
-        textarea.val(editor.getValue());
+        programArea.val(editor.getValue());
     });
 
 
     // Check code modification
     div.keyup( function () {
-        if (textarea.val() != editor.getValue()) {
+        if (programArea.val() != editor.getValue()) {
             $('.codeModification').removeClass('hidden');
         } else {
             $('.codeModification').addClass('hidden');

@@ -3,6 +3,8 @@ module Database  where
 import             Import
 import             Data.Time.LocalTime
 import qualified   Data.Text as T
+import Control.Monad.Trans.Maybe
+
 type Name         = Text
 type Explanation  = Text
 type Code         = Text
@@ -10,11 +12,11 @@ type TagText      = Text
 
 runDBtime :: YesodDB App a -> Handler a
 runDBtime action = do
-  ZonedTime localTime zone  <- liftIO getZonedTime
+  ZonedTime localTime _zone  <- liftIO getZonedTime
   $(logInfo) $ T.pack $ "sql begin:" ++ show localTime
   x <- runDB action
-  ZonedTime localTime zone  <- liftIO getZonedTime
-  $(logInfo) $ T.pack $ "sql end:" ++ show localTime
+  ZonedTime localTime' _zone  <- liftIO getZonedTime
+  $(logInfo) $ T.pack $ "sql end:" ++ show localTime'
   return x
 
 entityToId :: Entity t -> Key t
@@ -183,6 +185,12 @@ selectUserProgramGoals uid n m pid
                                    [OffsetBy n , LimitTo (m-n)]
   | otherwise = runDBtime $ selectList [PrologGoalUserId ==. uid ,  PrologGoalPrologProgramId ==. pid ] []
 
+selectFirstUserIdent :: Handler (Maybe Text)
+selectFirstUserIdent = do
+  us <- runDB $ selectList [] [ Asc UserId, LimitTo 1 ]
+  case us of
+    [ Entity _uid (User ident _password) ] ->  return $ Just ident
+    _ -> return Nothing
 
 
 -- submitGoal :: PrologProgramId -> PrologGoalForm -> CC (PS Html) Handler (Maybe (Key PrologGoal))
@@ -200,6 +208,9 @@ selectUserProgramGoals uid n m pid
 --       -- lift $ $(logInfo) $ "submitted goal:" ++ name
 --       return $ Just goalId
 
+
+----------------------------  Deletions ------------------------------
+
 deleteProgram :: PrologProgramId -> Handler ()
 deleteProgram pid = do
   goals <- selectProgramGoals 0 0 pid -- select all goals
@@ -213,3 +224,25 @@ deleteGoal :: PrologGoalId -> Handler ()
 deleteGoal gid = do
   runDBtime $ selectList [ PrologGoalsTagsPrologGoalId ==. gid ] [] >>=  mapM_ deleteEntity
   runDBtime $ delete gid
+
+
+------------------------------ Getters  ------------------------------
+
+getUserId :: Text -> Handler (Maybe UserId)
+getUserId uident = runMaybeT $ do
+  Entity uid _ <- MaybeT $ runDB $ getBy (UniqueUser uident)
+  return uid
+
+getUserIdent :: UserId -> Handler (Maybe Text)
+getUserIdent uid = do
+  muser <- runDB $ get uid
+  return $ fmap getUid muser
+
+  where
+    getUid (User ident _password) = ident
+
+
+getProgramId :: UserId -> Text -> Handler (Maybe PrologProgramId)
+getProgramId uid name = runMaybeT $ do
+  Entity pid _ <- MaybeT $ runDB $ getBy (UniquePrologProgram uid name)
+  return pid

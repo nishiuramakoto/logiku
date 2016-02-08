@@ -21,10 +21,16 @@
 
 /prolog                       PrologTestR         GET
 /prolog/execute               PrologExecuteTestR  POST
+/prolog/execute/#Int          PrologExecuteTestContR GET
 
-/prolog/edit       PrologProgramR            GET
--- /prolog/edit/#Int   PrologProgramContR        POST
+/prolog/edit                    PrologProgramR            GET
+/prolog/edit-impl               PrologProgramImplR        GET
+-- /prolog/edit/#Int            PrologProgramContR        POST
 /prolog/k/edit/browse           PrologProgramContSilentR  POST
 /prolog/k/edit/action/#Int      PrologProgramContR        GET
 
-/prolog/syntax-check SyntaxCheckR POST
+
+--  Ajax resources
+/prolog/goals                   GoalR POST
+/prolog/syntax-check            SyntaxCheckR POST
+/prolog/ajax-test               AjaxTestR    POST

@@ -20,3 +20,5 @@ tmp/
 static/css/ace-builds/
 \#*
 .\#*
+*.git
+*.git.gpg

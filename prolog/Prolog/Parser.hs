@@ -76,12 +76,14 @@ termWithoutConjunction = term' True
 term' ignoreConjunction = buildExpressionParser (reverse $ map (map toParser) $ hierarchy ignoreConjunction) (bottom <* whitespace)
 
 bottom = variable
+      <|> inquire_bool
       <|> struct
       <|> list
       <|> stringLiteral
       <|> cut <$ char '!'
       <|> Struct "{}" <$> between (charWs '{') (char '}') terms
       <|> between (charWs '(') (char ')') term
+
 
 toParser (PrefixOp name)      = Prefix (reservedOp name >> return (\t -> Struct name [t]))
 toParser (InfixOp assoc name) = Infix  (reservedOp name >> return (\t1 t2 -> Struct name [t1, t2]))
@@ -129,3 +131,9 @@ representChar c = Struct (show (fromEnum c)) [] -- This is the classical Prolog 
 --toChar :: Term -> Maybe Char
 --toChar (Struct "char" [Struct (toEnum . read->c) []]) = Just c
 --toChar _                                              = Nothing
+
+
+inquire_bool = try ( do string "inquire_bool"
+                        t <- between (charWs '(') (char ')') term
+                        return $ InquireBool  t
+                     <?> "inquire_bool" )

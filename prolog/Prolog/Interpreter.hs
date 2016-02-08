@@ -11,19 +11,20 @@ where
 import Import hiding(cons,trace,mapM_,sort)
 import qualified Prelude
 
+import Control.Monad.Except
 import Control.Monad.CC.CCCxe
 import Control.Monad.Reader
-import Control.Monad.Writer
-import Control.Monad.State
-import Control.Monad.Error
-import Data.Maybe (isJust)
 import Data.Generics (everywhere, mkT)
-import Control.Applicative ((<$>),(<*>),(<$),(<*), Applicative(..), Alternative(..))
+-- import Control.Applicative ((<$>),(<*>),(<$),(<*), Applicative(..), Alternative(..))
 import Data.List (sort, nub)
+
+import qualified Data.Text as T
 
 import Prolog.Syntax
 import Prolog.Unifier
 import Prolog.Database
+import Prolog.Inquire
+
 
 
 builtins :: [Clause]
@@ -71,11 +72,11 @@ builtins =
  where
    binaryIntegerPredicate :: (Integer -> Integer -> Bool) -> ([Term] -> [Goal])
    binaryIntegerPredicate p [eval->Just n, eval->Just m] | n `p` m = []
-   binaryIntegerPredicate p _ = [Struct "false" []]
+   binaryIntegerPredicate _ _ = [Struct "false" []]
 
    binaryPredicate :: (Term -> Term -> Bool) -> ([Term] -> [Goal])
    binaryPredicate p [t1, t2] | t1 `p` t2 = []
-   binaryPredicate p _ = [Struct "false" []]
+   binaryPredicate _ _ = [Struct "false" []]
 
    is [t, eval->Just n] = [Struct "=" [t, Struct (show n) []]]
    is _                 = [Struct "false" []]
@@ -115,8 +116,17 @@ instance MonadTrace (Either err) where
 instance (MonadTrace m, MonadTrans t, Monad (t m)) => MonadTrace (t m) where
    trace x = lift (trace x)
 
+instance MonadTrace Handler where
+  trace x = $(logInfo) (T.pack x)
+
+instance MonadThrow (CC (PS Html) Handler) where
+  throwM e = shiftP ps $ return $ lift $ defaultLayout [whamlet| #{show e} |]
+
 
 newtype Trace m a = Trace { withTrace :: m a }  deriving (Functor, Applicative, Monad, MonadError e)
+
+trace_ :: forall (m :: * -> *) a. (Show a, MonadTrace m) =>
+          String -> a -> m ()
 
 trace_ label x = trace (label++":\t"++show x)
 
@@ -150,10 +160,12 @@ instance Exception UnknownPredicateException
 type Stack = [(Unifier, [Goal], [Branch])]
 type Branch = (Unifier, [Goal])
 
-resolve :: (Functor m, MonadTrace m, MonadThrow m) => Program -> [Goal] -> m [Unifier]
+--resolve :: (Functor m, MonadTrace m, MonadThrow m) => Program -> [Goal] -> m [Unifier]
+resolve :: Program -> [Goal] -> CC (PS Html) Handler [Unifier]
 resolve program goals = runNoGraphT (resolve_ program goals)
 
-resolve_ :: (Functor m, MonadTrace m, MonadThrow m, MonadGraphGen m) => Program -> [Goal] -> m [Unifier]
+-- resolve_ :: (Functor m, MonadTrace m, MonadThrow m, MonadGraphGen m) => Program -> [Goal] -> m [Unifier]
+resolve_  :: Program -> [Goal] -> NoGraphT (CC (PS Html) Handler) [Unifier]
 -- Yield all unifiers that resolve <goal> using the clauses from <program>.
 resolve_ program goals = map cleanup <$> runReaderT (resolve' 1 [] goals []) (createDB (builtins ++ program) ["false","fail"])   -- NOTE Is it a good idea to "hardcode" the builtins like this?
   where
@@ -162,6 +174,8 @@ resolve_ program goals = map cleanup <$> runReaderT (resolve' 1 [] goals []) (cr
       whenPredicateIsUnknown sig action = asks (hasPredicate sig) >>= flip unless action
 
       --resolve' :: Int -> Unifier -> [Goal] -> Stack -> m [Unifier]
+      resolve' :: Int -> Unifier -> [Goal] -> Stack
+               -> ReaderT Database (NoGraphT (CC (PS Html) Handler)) [Unifier]
       resolve' depth usf [] stack = do
          trace "=== yield solution ==="
          trace_ "Depth" depth
@@ -182,39 +196,58 @@ resolve_ program goals = map cleanup <$> runReaderT (resolve' 1 [] goals []) (cr
          markCutBranches (take n stack)
 
          resolve' depth usf gs (drop n stack)
-      resolve' depth usf goals@(Struct "asserta" [fact]:gs) stack = do
+
+      resolve' depth usf goals'@(Struct "asserta" [fact]:gs) stack = do
          trace "=== resolve' (asserta/1) ==="
          trace_ "Depth"   depth
          trace_ "Unif."   usf
-         trace_ "Goals"   goals
+         trace_ "Goals"   goals'
          mapM_ (trace_ "Stack") stack
 
-         createConnections usf goals [(usf, gs)]
+         createConnections usf goals' [(usf, gs)]
 
          local (asserta fact) $ resolve' depth usf gs stack
-      resolve' depth usf goals@(Struct "assertz" [fact]:gs) stack = do
+
+      resolve' depth usf goals'@(Struct "assertz" [fact]:gs) stack = do
          trace "=== resolve' (assertz/1) ==="
          trace_ "Depth"   depth
          trace_ "Unif."   usf
-         trace_ "Goals"   goals
+         trace_ "Goals"   goals'
          mapM_ (trace_ "Stack") stack
 
-         createConnections usf goals [(usf, gs)]
+         createConnections usf goals' [(usf, gs)]
 
          local (assertz fact) $ resolve' depth usf gs stack
-      resolve' depth usf goals@(Struct "retract" [t]:gs) stack = do
+
+      resolve' depth usf goals'@(Struct "retract" [t]:gs) stack = do
          trace "=== resolve' (retract/1) ==="
          trace_ "Depth"   depth
          trace_ "Unif."   usf
-         trace_ "Goals"   goals
+         trace_ "Goals"   goals'
          mapM_ (trace_ "Stack") stack
 
-         createConnections usf goals [(usf, gs)]
+         createConnections usf goals' [(usf, gs)]
 
          clauses <- asks (getClauses t)
          case [ t' | Clause t' [] <- clauses, isJust (unify t t') ] of
             []       -> return (fail "retract/1")
             (fact:_) -> local (abolish fact) $ resolve' depth usf gs stack
+
+      resolve' depth usf (InquireBool t:gs) stack = do
+        trace "=== resolve' (inquire_bool/1) ==="
+        trace_ "Depth"   depth
+        trace_ "Unif."   usf
+        trace_ "Goals"   gs
+        mapM_ (trace_ "Stack") stack
+
+        (_klabel, form ) <- lift $ lift $ inquirePrologBool
+        let result = case form of
+              FormSuccess (PrologInquireBoolForm True)  -> Struct "true" []
+              _                                         -> Struct "false" []
+
+        trace_ "Result" result
+        resolve' depth usf (Struct "=" [t, result]:gs) stack
+
       resolve' depth usf (nextGoal:gs) stack = do
          trace "=== resolve' ==="
          trace_ "Depth"   depth
@@ -229,6 +262,7 @@ resolve_ program goals = map cleanup <$> runReaderT (resolve' 1 [] goals []) (cr
          createConnections usf (nextGoal:gs) branches
 
          choose depth usf gs branches stack
+
        where
          getBranches = do
             clauses <- asks (getClauses nextGoal)
