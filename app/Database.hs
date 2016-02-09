@@ -38,17 +38,19 @@ insertUser (User ident mpassword)  = do
 
 insertPrologProgram :: PrologProgram -> Handler (Maybe PrologProgramId)
 insertPrologProgram (PrologProgram userId name explanation code) = do
-  mProgram <- runDBtime $ getBy $ UniquePrologProgram userId name
+  let name' = T.strip name
+  mProgram <- runDBtime $ getBy $ UniquePrologProgram userId name'
   case mProgram of
     Just _program -> return Nothing
-    Nothing      -> Just <$> (runDBtime $ insert $ PrologProgram userId name explanation code)
+    Nothing      -> Just <$> (runDBtime $ insert $ PrologProgram userId name' explanation code)
 
 insertPrologGoal :: PrologGoal -> Handler (Maybe PrologGoalId)
 insertPrologGoal (PrologGoal userId progId name explanation code) = do
-  mProgram <- runDBtime $ getBy $ UniquePrologGoal userId progId name
+  let name' = T.strip name
+  mProgram <- runDBtime $ getBy $ UniquePrologGoal userId progId name'
   case mProgram of
     Just _program -> return Nothing
-    Nothing      -> Just <$> (runDBtime $ insert $ PrologGoal userId progId name explanation code)
+    Nothing      -> Just <$> (runDBtime $ insert $ PrologGoal userId progId name' explanation code)
 
 insertTag :: Tag -> Handler (Maybe TagId)
 insertTag (Tag tag) = do
@@ -244,5 +246,19 @@ getUserIdent uid = do
 
 getProgramId :: UserId -> Text -> Handler (Maybe PrologProgramId)
 getProgramId uid name = runMaybeT $ do
-  Entity pid _ <- MaybeT $ runDB $ getBy (UniquePrologProgram uid name)
+  let name' = T.strip name
+  Entity pid _ <- MaybeT $ runDB $ getBy (UniquePrologProgram uid name')
   return pid
+
+
+getGoalId :: UserId -> PrologProgramId -> Text -> Handler (Maybe PrologGoalId)
+getGoalId uid pid goalName = runMaybeT $ do
+  let goalName' = T.strip goalName
+  Entity gid _ <- MaybeT $ runDB $ getBy (UniquePrologGoal uid pid goalName')
+  return gid
+
+getGoalCode :: PrologGoalId -> Handler (Maybe Text)
+getGoalCode gid = runMaybeT $ prologGoalCode <$> (MaybeT $ runDB $ get gid)
+
+getProgramCode :: PrologProgramId -> Handler (Maybe Text)
+getProgramCode pid = runMaybeT $ prologProgramCode <$> (MaybeT $ runDB $ get pid)

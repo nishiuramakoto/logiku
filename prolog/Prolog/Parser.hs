@@ -134,6 +134,8 @@ representChar c = Struct (show (fromEnum c)) [] -- This is the classical Prolog 
 
 
 inquire_bool = try ( do string "inquire_bool"
-                        t <- between (charWs '(') (char ')') term
-                        return $ InquireBool  t
+                        ts <- option [] $ between (charWs '(') (char ')') terms
+                        case ts of
+                          [t,v]  -> return $ InquireBool  t v
+                          _      -> mzero
                      <?> "inquire_bool" )

@@ -233,20 +233,20 @@ resolve_ program goals = map cleanup <$> runReaderT (resolve' 1 [] goals []) (cr
             []       -> return (fail "retract/1")
             (fact:_) -> local (abolish fact) $ resolve' depth usf gs stack
 
-      resolve' depth usf (InquireBool t:gs) stack = do
+      resolve' depth usf (InquireBool t v:gs) stack = do
         trace "=== resolve' (inquire_bool/1) ==="
         trace_ "Depth"   depth
         trace_ "Unif."   usf
         trace_ "Goals"   gs
         mapM_ (trace_ "Stack") stack
 
-        (_klabel, form ) <- lift $ lift $ inquirePrologBool
+        (_klabel, form ) <- lift $ lift $ inquirePrologBool  t
         let result = case form of
               FormSuccess (PrologInquireBoolForm True)  -> Struct "true" []
               _                                         -> Struct "false" []
 
         trace_ "Result" result
-        resolve' depth usf (Struct "=" [t, result]:gs) stack
+        resolve' depth usf (Struct "=" [v, result]:gs) stack
 
       resolve' depth usf (nextGoal:gs) stack = do
          trace "=== resolve' ==="

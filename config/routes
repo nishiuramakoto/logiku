@@ -28,9 +28,10 @@
 -- /prolog/edit/#Int            PrologProgramContR        POST
 /prolog/k/edit/browse           PrologProgramContSilentR  POST
 /prolog/k/edit/action/#Int      PrologProgramContR        GET
-
+/prolog/edit/runner             PrologGoalRunnerR         GET
 
 --  Ajax resources
-/prolog/goals                   GoalR POST
+/prolog/goals                   GoalR        POST
+/prolog/delete-goals            DeleteGoalR  POST
 /prolog/syntax-check            SyntaxCheckR POST
 /prolog/ajax-test               AjaxTestR    POST

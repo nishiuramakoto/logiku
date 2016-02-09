@@ -22,7 +22,7 @@ data Term = Struct Atom [Term]
           | Wildcard
           | Cut Int
             -- Built-in predicates
-          | InquireBool Term
+          | InquireBool Term Term -- inquire_bool("explanation",Variable)
       deriving (Eq, Data, Typeable)
 
 var :: String -> Term
@@ -109,7 +109,8 @@ prettyPrint _ _ (Var v)         = show v
 prettyPrint _ _ Wildcard        = "_"
 prettyPrint _ _ ((==cut)->True) = "!"
 prettyPrint _ _ (Cut n)         = "!^" ++ show n
-prettyPrint _ _ (InquireBool v) = "inquire_bool(" ++ show v ++ ")"
+prettyPrint _ _ (InquireBool t v) = prettyPrint True 0 (Struct "inquire_bool" [t,v])
+
 
 spaced :: String -> String
 spaced (s@(h:_hs)) =

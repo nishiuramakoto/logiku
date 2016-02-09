@@ -5,6 +5,7 @@ module Handler.PrologTest (
   postPrologExecuteTestR,
   getPrologExecuteTestContR,
   categoryTree,
+  prologExecuteCcMain,
   prologExecuteTestFinishHtml
   ) where
 
@@ -35,16 +36,21 @@ getPrologTestR = do
   (widget, enctype) <- generateFormPost prologTestForm
   defaultLayout $ prologTestWidget widget enctype
 
+executePrologProgram :: Text -> Text -> Handler Html
+executePrologProgram progCode goalCode =
+  case (consultString (T.unpack progCode), parseQuery (T.unpack goalCode)) of
+  (Right clauses, Right terms)   -> run $ prologExecuteCcMain clauses terms
+
+  (Left  err, _ ) ->  defaultLayout $ [whamlet|Parse error in the program #{show err}|]
+  (_ , Left  err) ->  defaultLayout $ [whamlet|Parse error in the goals   #{show err}|]
+
+
 postPrologExecuteTestR :: Handler Html
 postPrologExecuteTestR = do
   ((result, _widget), _enctype) <- runFormPost prologTestForm
   case result of
     FormSuccess (PrologTestForm (Textarea program) (Textarea goal)) ->
-      case (consultString (T.unpack program), parseQuery (T.unpack goal)) of
-      (Right clauses, Right terms)   -> run $ ccMain clauses terms
-
-      (Left  err, _ ) ->  defaultLayout $ [whamlet|Parse error in the program #{show err}|]
-      (_ , Left  err) ->  defaultLayout $ [whamlet|Parse error in the goals   #{show err}|]
+      executePrologProgram program goal
     FormMissing     -> defaultLayout $ [whamlet| Form Missing|]
     FormFailure err -> defaultLayout $ [whamlet| Form failure   #{show err}|]
 
@@ -65,7 +71,7 @@ prologExecuteTestFinishHtml :: [Unifier] -> CC (PS Html) Handler Html
 prologExecuteTestFinishHtml unifiers =
   lift $ defaultLayout $ [whamlet| #{show unifiers}|]
 
-ccMain :: Program -> [Goal] -> CC (PS Html) Handler Html
-ccMain program goals = do
+prologExecuteCcMain :: Program -> [Goal] -> CC (PS Html) Handler Html
+prologExecuteCcMain program goals = do
   unifiers <- resolve program goals
   prologExecuteTestFinishHtml unifiers >>= inquireFinish
