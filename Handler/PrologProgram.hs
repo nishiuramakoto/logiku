@@ -2,7 +2,7 @@
 
 module Handler.PrologProgram  where
 
-import             Import
+import             Import hiding (parseQuery)
 import             Control.Monad.CC.CCCxe
 import             ContMap
 -- import             Data.Text(Text)
@@ -58,6 +58,14 @@ runCcTime tag action = do
   ZonedTime localTime' _zone  <- liftIO getZonedTime
   lift $ $(logInfo) $ T.concat [ tag , ":end  : " , T.pack $ show localTime' ]
   return x
+
+
+
+maybeNotFound :: MaybeT Handler a -> Handler a
+maybeNotFound body = do m <- runMaybeT body
+                        case m of
+                          Just html -> return html
+                          Nothing   -> notFound
 
 
 ------------------------------ Handlers ------------------------------
@@ -130,8 +138,9 @@ postAjaxTestR = do
 
   returnJson True
 
-
-
+--------------------------  Session values  --------------------------
+sessionProgramName =  "programName"
+sessionUserIdent   = "userIdent"
 ------------------------------  Types --------------------------------
 
 data PrologProgramAction = Cancel | Save | New | Prev | Next | Delete
@@ -192,6 +201,7 @@ data PrologGoalForm = PrologGoalForm { goalName   ::  Text
                                      , goalExpl   ::  Textarea
                                      , goalCode   ::  Textarea
                                      } deriving Show
+data PrologRunnerForm = PrologRunnerForm deriving Show
 
 prologGoalEditorForm ::  Html -> MForm Handler (FormResult PrologGoalForm, Widget)
 prologGoalEditorForm = renderDivs $ PrologGoalForm
@@ -199,19 +209,21 @@ prologGoalEditorForm = renderDivs $ PrologGoalForm
               <*> areq textareaField  "説明: "  Nothing
               <*> areq textareaField  "コード:" Nothing
 
-prologGoalEditorWidget :: UserIdent ->  ProgramName -> ProgramExplanation -> ProgramCode
-                       -> [PrologGoal] -> ContId ->  Widget -> Enctype
+prologGoalEditorWidget :: UserIdent ->  ProgramName -> ProgramExplanation -> ProgramCode  -> [PrologGoal]
+                       -> ContId ->  Widget -> Enctype
                        -> Widget
-prologGoalEditorWidget userIdent programName programExplanation programCode goals klabel formWidget enctype = do
-  setTitle "Edit Prolog Goals"
-  $(widgetFile "prolog_goal_editor")
+prologGoalEditorWidget userIdent programName programExplanation programCode goals
+                       klabel  formWidget  enctype
+  = do   setTitle "Edit Prolog Goals"
+         $(widgetFile "prolog_goal_editor")
 
 prologGoalEditorHtml ::  UserIdent -> ProgramName -> ProgramExplanation -> ProgramCode -> [PrologGoal]
                          -> CC (PS Html) Handler (ContId, Html)
 prologGoalEditorHtml  userIdent name explanation code goals = do
-  (klabel, formWidget, enctype) <- lift $ generateCcFormPost $ prologGoalEditorForm
+  (klabel , formWidget , enctype ) <- lift $ generateCcFormPost $ prologGoalEditorForm
   html  <- lift $ defaultLayout $
-           prologGoalEditorWidget userIdent name explanation code goals klabel formWidget enctype
+           prologGoalEditorWidget userIdent name explanation code goals
+                                  klabel  formWidget  enctype
   return (klabel, html)
 
 inquirePrologGoalEditor :: UserIdent -> ProgramName -> ProgramExplanation -> ProgramCode -> [PrologGoal]
@@ -387,3 +399,55 @@ maybeGoal = do
 
   gid  <- MaybeT $ insertPrologGoal (PrologGoal uid pid goalName explanation code)
   return (PrologGoalJson goalName explanation code)
+
+postDeleteGoalR :: Handler Value
+postDeleteGoalR = do
+  mval <- runMaybeT maybeDeleteGoal
+  case mval of
+    Just val -> returnJson val
+    Nothing  -> notFound
+
+
+maybeDeleteGoal :: MaybeT Handler PrologGoalJson
+maybeDeleteGoal = do
+  jsonVal@(PrologGoalJson goalName _ _) <- lift (requireJsonBody :: Handler PrologGoalJson)
+
+  user     <- MaybeT $ lookupSession sessionUserIdent
+  progName <- MaybeT $ lookupSession sessionProgramName
+
+  lift $ $(logInfo) "maybeDeleteGoal"
+
+  uid <- MaybeT $ getUserId user
+  pid <- MaybeT $ getProgramId uid progName
+
+  lift $  $(logInfo) "maybeDeleteGoal"
+
+  gid <- MaybeT $ getGoalId uid pid goalName
+
+  lift $ deleteGoal gid
+  return jsonVal
+
+
+getPrologGoalRunnerR :: Handler Html
+getPrologGoalRunnerR = maybeNotFound $ do
+  goalName   <- MaybeT $ lookupGetParam "goal"
+  progName   <- MaybeT $ lookupSession sessionProgramName
+  userIdent  <- MaybeT $ lookupSession sessionUserIdent
+
+  uid <- MaybeT $ getUserId userIdent
+  pid <- MaybeT $ getProgramId uid progName
+  gid <- MaybeT $ getGoalId uid pid goalName
+
+  progCode <- MaybeT $ getProgramCode  pid
+  goalCode <- MaybeT $ getGoalCode gid
+
+  lift $ executePrologProgram progCode goalCode
+  -- lift $ defaultLayout $ [whamlet|#{show (progCode,goalCode)}|]
+
+executePrologProgram :: Text -> Text -> Handler Html
+executePrologProgram progCode goalCode =
+  case (consultString (T.unpack progCode), parseQuery (T.unpack goalCode)) of
+  (Right clauses, Right terms)   -> run $ prologExecuteCcMain clauses terms
+
+  (Left  err, _ ) ->  defaultLayout $ [whamlet|Parse error in the program #{show err}|]
+  (_ , Left  err) ->  defaultLayout $ [whamlet|Parse error in the goals   #{show err}|]

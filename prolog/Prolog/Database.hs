@@ -26,7 +26,7 @@ instance Show Signature where
 
 signature :: Term -> Signature
 signature (Struct name ts) = Signature name (length ts)
-signature (InquireBool _t) = Signature "inquire_bool" 1
+signature (InquireBool _t _v) = Signature "inquire_bool" 2
 signature _ = Signature "no signature" 0
 
 newtype Database = DB (Map Signature [Clause])

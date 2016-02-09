@@ -1,12 +1,19 @@
 
 function updateGoalList(data) {
-    var newNode = $("<li></li>");
-    newNode.text(data.code);
-    $('#goalList').append(newNode);
+    var tdName = '<td>' + data.name + '</td>';
+    var tdExpl = '<td>' + data.explanation + '</td>';
+    var tdCode = '<td>' + data.code + '</td>';
+//    var runButton = '<button class="run"  type=submit value="' + data.name + '" name="goal">
+    //                     Run</button>';
+    var runButton = '<button class="run" type=submit name="goal" value="' + data.name + '" type=button> Run </button>';
+    var delButton = '<button class="delete" type=button> Delete </button>';
+    var tdRun  = '<td>' + runButton + ' </td>';
+    var tdDel  = '<td>' + delButton + ' </td>';
+    $('#goalTable tr:last').after('<tr>' + tdName + tdExpl + tdCode + tdRun + tdDel + '</tr>');
 };
 
 
-function setupAjax() {
+function setupAddButton() {
 
     // AJAX Request
     $('.submitGoal').click(function (event) {
@@ -29,7 +36,39 @@ function setupAjax() {
     });
 }
 
+function deleteGoal(row)
+{
+//    window.alert("ajax success");
+    row.remove();
+};
+
+function setupDeleteButtons() {
+    $('#goalTable').on('click','.delete', function() {
+
+	var thisRow = $(this).closest('tr');
+
+	requestData = { name        : thisRow.find("td:nth-child(1)").text(),
+			explanation : thisRow.find("td:nth-child(2)").text(),
+			code        : thisRow.find("td:nth-child(3)").text(),
+		      };
+
+//	window.alert(JSON.stringify(requestData));
+
+	$.ajax({
+	    url: '@{DeleteGoalR}',
+	    type: 'POST',
+	    contentType: "application/json",
+	    data: JSON.stringify(requestData),
+	    success: deleteGoal(thisRow),
+	    error:function (data) {
+		console.log("Error deleting an item:" + data);
+	    },
+	});
+    });
+}
+
 
 $(document).ready(function () {
-    setupAjax();
+    setupDeleteButtons();
+    setupAddButton();
 });
