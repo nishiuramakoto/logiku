@@ -17,6 +17,8 @@ import             Control.Monad.Trans.Maybe
 -- For testing
 import             Handler.PrologTest
 -------------------------- Helper functions --------------------------
+entityToVal (Entity _ val) = val
+
 readInt :: Text -> Maybe Int
 readInt s = case reads (T.unpack s) of
   [(i, s')] -> if s' == "" then Just i else Nothing
@@ -355,6 +357,8 @@ loopBrowse uid (Just entity@(Entity pid currentProgram@(PrologProgram uid' name 
 
 loopGoals :: UserId -> Entity PrologProgram ->  CC (PS Html) Handler ()
 loopGoals  uid currentEntity@(Entity pid (PrologProgram uid'  name expl code)) = do
+  lift $ $(logInfo) "loopGoals"
+
   goals      <- lift $ selectUserProgramGoals uid 0 0 pid -- current user
   muserIdent <- lift $ getUserIdent uid'                  -- program owner
   case muserIdent of
@@ -364,17 +368,26 @@ loopGoals  uid currentEntity@(Entity pid (PrologProgram uid'  name expl code)) =
 
 loopGoals' :: UserIdent -> Entity PrologProgram -> [Entity PrologGoal] -> CC (PS Html) Handler ()
 loopGoals' userIdent currentEntity@(Entity pid (PrologProgram uid'  name expl code)) goals = do
+  lift $ $(logInfo) "loopGoals'"
+
   lift $ setSession "userIdent"   userIdent
   lift $ setSession "programName" name
 
   (   _klabel
     , _maybeAction
     , resultForm )
-           <- inquirePrologGoalEditor userIdent name (Textarea expl) (Textarea code) (map entityToVal goals)
-  loopGoals' userIdent currentEntity goals
+           <- inquirePrologGoalEditor userIdent name  (Textarea expl) (Textarea code) (map entityToVal goals)
 
-  where
-    entityToVal (Entity _ val) = val
+  lift $ $(logInfo) "loopGoals'"
+  mval <- lift $ lookupGetParam "action"
+  lift $ $(logInfo) $ T.pack $ show mval
+
+  case resultForm of
+    FormSuccess _ ->  loopGoals' userIdent currentEntity goals
+    err           ->  do lift $ defaultLayout [whamlet|show err|]
+                         return ()
+
+
 
 postGoalR :: Handler Value
 postGoalR = do
