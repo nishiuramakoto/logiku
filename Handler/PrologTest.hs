@@ -10,12 +10,12 @@ module Handler.PrologTest (
   ) where
 
 import Import hiding(parseQuery,catch)
-import Prolog(resolve,consultString,parseQuery)
+import Language.Prolog2(resolveToTerms,consultString,parseQuery,evalPrologT,RuntimeError)
+import Language.Prolog2.Syntax
+
 import qualified Data.Text as T
 import ContMap
 import Control.Monad.CC.CCCxe
-import Prolog.Syntax
-import Prolog.Unifier
 
 
 data PrologTestForm = PrologTestForm
@@ -38,11 +38,13 @@ getPrologTestR = do
 
 executePrologProgram :: Text -> Text -> Handler Html
 executePrologProgram progCode goalCode =
-  case (consultString (T.unpack progCode), parseQuery (T.unpack goalCode)) of
-  (Right clauses, Right terms)   -> run $ prologExecuteCcMain clauses terms
+  run $ prologExecuteCcMain progCode goalCode
 
-  (Left  err, _ ) ->  defaultLayout $ [whamlet|Parse error in the program #{show err}|]
-  (_ , Left  err) ->  defaultLayout $ [whamlet|Parse error in the goals   #{show err}|]
+  -- case (consultString (T.unpack progCode), parseQuery (T.unpack goalCode)) of
+  -- (Right clauses, Right terms)   -> run $ prologExecuteCcMain clauses terms
+
+  -- (Left  err, _ ) ->  defaultLayout $ [whamlet|Parse error in the program #{show err}|]
+  -- (_ , Left  err) ->  defaultLayout $ [whamlet|Parse error in the goals   #{show err}|]
 
 
 postPrologExecuteTestR :: Handler Html
@@ -61,17 +63,34 @@ getPrologExecuteTestContR klabel = do
   resume klabel cont_html not_found_html
 
 
-
-
 categoryTree :: Widget
 categoryTree =  toWidget $(widgetFile "css-tree")
 
 
-prologExecuteTestFinishHtml :: [Unifier] -> CC (PS Html) Handler Html
+prologExecuteTestFinishHtml :: [[Term]] -> CC (PS Html) Handler Html
 prologExecuteTestFinishHtml unifiers =
   lift $ defaultLayout $ [whamlet| #{show unifiers}|]
 
-prologExecuteCcMain :: Program -> [Goal] -> CC (PS Html) Handler Html
-prologExecuteCcMain program goals = do
-  unifiers <- resolve program goals
-  prologExecuteTestFinishHtml unifiers >>= inquireFinish
+prologExecuteTestSyntaxErrorHtml :: String -> CC (PS Html) Handler Html
+prologExecuteTestSyntaxErrorHtml error =
+  lift $ defaultLayout $ [whamlet| #{show error}|]
+
+prologExecuteTestRuntimeErrorHtml :: RuntimeError -> CC (PS Html) Handler Html
+prologExecuteTestRuntimeErrorHtml error =
+  lift $ defaultLayout $ [whamlet| #{show error}|]
+
+prologExecuteCcMain :: Text -> Text -> CC (PS Html) Handler Html
+prologExecuteCcMain progCode goalCode = do
+   result <- evalPrologT $ do
+        eprog <- consultString (T.unpack progCode)
+        case eprog of
+          Left  err  -> return $ Left $ "syntax error in program:" ++ show err
+          Right prog -> do egoal <- parseQuery (T.unpack goalCode)
+                           case egoal of
+                             Left  err -> return $ Left $ "syntax error in query:" ++ show err
+                             Right goal -> do Right <$>  resolveToTerms prog goal
+
+   case result of
+    Left  err         ->  prologExecuteTestRuntimeErrorHtml err >>= inquireFinish
+    Right (Left err)  ->  prologExecuteTestSyntaxErrorHtml err >>= inquireFinish
+    Right (Right tss) ->  prologExecuteTestFinishHtml tss >>= inquireFinish

@@ -9,7 +9,7 @@ import             ContMap
 import qualified   Data.Text as T
 import             Text.Read(reads)
 import             Data.Time.LocalTime
-import             Prolog
+import             Language.Prolog2
 import             Database
 import             Text.Parsec
 import             Control.Monad.Trans.Maybe
@@ -17,6 +17,8 @@ import             Control.Monad.Trans.Maybe
 -- For testing
 import             Handler.PrologTest
 -------------------------- Helper functions --------------------------
+type ProgramError = Either RuntimeError ParseError
+
 entityToVal (Entity _ val) = val
 
 readInt :: Text -> Maybe Int
@@ -24,13 +26,27 @@ readInt s = case reads (T.unpack s) of
   [(i, s')] -> if s' == "" then Just i else Nothing
   _         -> Nothing
 
+either3iso :: Either a (Either b c) -> Either (Either a b) c
+either3iso x = case x of Left a -> Left (Left a)
+                         Right (Left b) -> Left (Right b)
+                         Right (Right c) -> Right c
 
-syntaxOK :: Text -> Bool
-syntaxOK text =
-  case consultString (T.unpack text) of
+programCheck' :: Text -> Either RuntimeError (Either ParseError Program)
+programCheck' text = runIdentity $ evalPrologT $ consultString (T.unpack text)
+
+programCheck :: Text -> Either ProgramError Program
+programCheck text = either3iso $ programCheck' text
+
+goalCheck' :: Text -> Either RuntimeError (Either ParseError [Goal])
+goalCheck' text = runIdentity $ evalPrologT $ parseQuery (T.unpack text)
+
+goalCheck :: Text -> Either ProgramError [Goal]
+goalCheck text = either3iso $ goalCheck' text
+
+programOK :: Text -> Bool
+programOK text =  case programCheck text of
   Left  _    -> False
   Right _    -> True
-
 
 maybeUserId :: Handler (Maybe UserId)
 maybeUserId = do
@@ -124,11 +140,10 @@ postSyntaxCheckR = do
   PrologProgram _uid _name _expl code <- (requireJsonBody :: Handler PrologProgram)
   -- Comment code muid <- (requireJsonBody :: Handler Comment)
 
-
   $(logInfo) $ "postSyntaxCheckR"
-  let result = case consultString (T.unpack code) of
+  let result = case programCheck code of
         Left err -> Just (show err)
-        Right _    -> Nothing
+        Right _  -> Nothing
   $(logInfo) $ T.pack $ show result
   returnJson result
 
@@ -329,7 +344,7 @@ loopBrowse uid (Just entity@(Entity pid currentProgram@(PrologProgram uid' name 
     then do lift $ setMessage $ toHtml $ ("他のユーザのプログラムは変更できません" :: Text)
             loopBrowse uid (Just (Entity pid currentProgram)) forceSave
     else case maybeAction of
-    Just Save -> do  if forceSave || syntaxOK newCode
+    Just Save -> do  if forceSave || programOK newCode
                        then do lift $ $(logInfo)  $ "saving code:" ++ T.pack (show newProgram)
                                newProg <- lift $ upsertPrologProgram newProgram
                                loopBrowse uid (Just newProg) False
@@ -459,8 +474,8 @@ getPrologGoalRunnerR = maybeNotFound $ do
 
 executePrologProgram :: Text -> Text -> Handler Html
 executePrologProgram progCode goalCode =
-  case (consultString (T.unpack progCode), parseQuery (T.unpack goalCode)) of
-  (Right clauses, Right terms)   -> run $ prologExecuteCcMain clauses terms
+  case (programCheck  progCode , goalCheck goalCode) of
+  (Right clauses, Right terms)   -> run $ prologExecuteCcMain progCode goalCode
 
   (Left  err, _ ) ->  defaultLayout $ [whamlet|Parse error in the program #{show err}|]
   (_ , Left  err) ->  defaultLayout $ [whamlet|Parse error in the goals   #{show err}|]
