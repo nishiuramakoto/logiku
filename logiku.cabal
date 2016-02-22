@@ -12,7 +12,8 @@ Flag library-only
     Default:       False
 
 library
-    hs-source-dirs: ., app,prolog, mylogict, my-CC-delcont-cxe-0.1.0.2
+    hs-source-dirs: ., app, prolog2/src, prolog2/unification-fd-0.10.0.1/src , mylogict, my-CC-delcont-cxe-0.1.0.2
+
     exposed-modules: Application
                      Foundation
                      Import
@@ -37,16 +38,25 @@ library
                      -- Handler.PrologResolver
                      LogicT.LogicT
                      LogicT.SRReifT
-                     Prolog
-                     Prolog.Database
-                     Prolog.Interpreter
-                     Prolog.IsString
-                     Prolog.Unifier
-                     Prolog.Parser
-                     Prolog.Syntax
-                     Prolog.Quote
-                     Prolog.Inquire
+                     --
+                     Inquire
+                     Language.Prolog2
+                     Language.Prolog2.Database
+                     Language.Prolog2.Parser
+                     Language.Prolog2.Interpreter
+                     Language.Prolog2.Syntax
 
+                     Control.Monad.State.UnificationExtras
+                     Control.Monad.MaybeK
+                     Control.Monad.EitherK
+                     Control.Unification
+                     Control.Unification.STVar
+                     Control.Unification.Types
+                     Control.Unification.Ranked
+                     Control.Unification.IntVar
+                     Control.Unification.Ranked.STVar
+                     Control.Unification.Ranked.IntVar
+                     Data.Functor.Fixedpoint
 
     if flag(dev) || flag(library-only)
         cpp-options:   -DDEVELOPMENT
@@ -130,6 +140,8 @@ library
                  , transformers     >= 0.2.2.0
                  , exceptions
                  , warp-tls
+                 , list-extras
+                 , logict
 executable         logiku
     if flag(library-only)
         Buildable: False
