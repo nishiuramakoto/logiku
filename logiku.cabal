@@ -12,7 +12,7 @@ Flag library-only
     Default:       False
 
 library
-    hs-source-dirs: ., app, prolog2/src, prolog2/unification-fd-0.10.0.1/src , mylogict, my-CC-delcont-cxe-0.1.0.2
+    hs-source-dirs: ., app, prolog-fd/src, prolog-fd/unification-fd-0.10.0.1/src , mylogict, my-CC-delcont-cxe-0.1.0.2
 
     exposed-modules: Application
                      Foundation
