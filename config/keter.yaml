@@ -22,7 +22,11 @@ stanzas:
       # to. The primary hostname will be used for generating your application
       # root.
       #- www.logiku.com
+      - localhost
+      - localhost:3000
+      - localhost:3443
       - t3400.local
+      - ec2-52-37-0-250.us-west-2.compute.amazonaws.com
 
     # Enable to force Keter to redirect to https
     # Can be added to any stanza
@@ -31,7 +35,8 @@ stanzas:
   # Static files.
   - type: static-files
     hosts:
-      - static.logiku.com
+      # - static.logiku.com
+      - localhost
     root: ../static
 
     # Uncomment to turn on directory listings.
@@ -52,11 +57,12 @@ stanzas:
 
 # Use the following to automatically copy your bundle upon creation via `yesod
 # keter`. Uses `scp` internally, so you can set it to a remote destination
-# copy-to: user@host:/opt/keter/incoming/
+#copy-to: ubuntu@ec2-52-37-0-250.us-west-2.compute.amazonaws.com:/opt/keter/incoming/
 
 # You can pass arguments to `scp` used above. This example limits bandwidth to
 # 1024 Kbit/s and uses port 2222 instead of the default 22
-# copy-to-args:
+#copy-to-args:
+#  - "-i /mnt/crypt/home/makoto/private/ec2-keypair.pem"
 #   - "-l 1024"
 #   - "-P 2222"
 
