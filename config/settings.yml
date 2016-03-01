@@ -27,7 +27,7 @@ database:
   user:     "_env:PGUSER:logiku_LOWER"
   password: "_env:PGPASS:logiku"
   host:     "_env:PGHOST:localhost"
-  port:     "_env:PGPORT:5432"
+  port:     "_env:PGPORT:5434"
   database: "_env:PGDATABASE:logiku_LOWER"
   poolsize: "_env:PGPOOLSIZE:10"
 

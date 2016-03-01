@@ -12,8 +12,8 @@ stanzas:
 
     # Name of your executable. You are unlikely to need to change this.
     # Note that all file paths are relative to the keter.yml file.
-    exec: ../dist/build/logiku/logiku
-
+    #exec: ../dist/build/logiku/logiku
+    exec: ../.stack-work/install/x86_64-linux/lts-5.4/7.10.3/bin/logiku
     # Command line options passed to your application.
     args: []
 
@@ -26,11 +26,15 @@ stanzas:
       - localhost:3000
       - localhost:3443
       - t3400.local
-      - ec2-52-37-0-250.us-west-2.compute.amazonaws.com
+      # This is an amazon elastic ip address
+      - ec2-52-37-98-130.us-west-2.compute.amazonaws.com
+#      - "*.us-west-2.compute.amazonaws.com"
+    extra-hosts:
+      - "*.us-west-2.compute.amazonaws.com"
 
     # Enable to force Keter to redirect to https
     # Can be added to any stanza
-    requires-secure: false
+    requires-secure: true
 
   # Static files.
   - type: static-files
