@@ -141,7 +141,7 @@ library
                  , transformers     >= 0.2.2.0
                  , exceptions
                  , warp-tls
-                 , list-extras
+                 , list-extras      >= 0.4.1.4
                  , logict
 executable         logiku
     if flag(library-only)
