@@ -2,6 +2,7 @@
 
 module Handler.PrologProgram  where
 
+import             Authentication
 import             Import hiding (parseQuery)
 import             Control.Monad.CC.CCCxe
 import             ContMap
@@ -19,6 +20,7 @@ import             Handler.PrologTest
 -------------------------- Helper functions --------------------------
 type ProgramError = Either RuntimeError ParseError
 
+entityToVal :: Entity t -> t
 entityToVal (Entity _ val) = val
 
 readInt :: Text -> Maybe Int
@@ -48,13 +50,14 @@ programOK text =  case programCheck text of
   Left  _    -> False
   Right _    -> True
 
-maybeUserId :: Handler (Maybe UserId)
+
+maybeUserId :: Handler (Maybe UserAccountId)
 maybeUserId = do
-  -- muident <- maybeUserIdent
-  muident <- selectFirstUserIdent
+  muident <- maybeUserIdent
+  -- muident <- selectFirstUserIdent
   $(logInfo) $ T.pack $ "muident" ++ show muident
   case muident of
-    Just ident -> do Entity uid _ <- runDB $ upsert (User ident Nothing) ([] :: [Update User])
+    Just ident -> do Entity uid _ <- runDB $ upsert (makeUser ident Nothing) ([] :: [Update UserAccount])
                      return $ Just uid
     Nothing    -> return Nothing
 
@@ -137,11 +140,11 @@ getPrologProgramContR klabel = do
 postSyntaxCheckR :: Handler Value
 postSyntaxCheckR = do
   $(logInfo) $ "postSyntaxCheckR"
-  PrologProgram _uid _name _expl code <- (requireJsonBody :: Handler PrologProgram)
+  program <- (requireJsonBody :: Handler PrologProgram)
   -- Comment code muid <- (requireJsonBody :: Handler Comment)
 
   $(logInfo) $ "postSyntaxCheckR"
-  let result = case programCheck code of
+  let result = case programCheck (prologProgramCode program) of
         Left err -> Just (show err)
         Right _  -> Nothing
   $(logInfo) $ T.pack $ show result
@@ -150,7 +153,7 @@ postSyntaxCheckR = do
 postAjaxTestR :: Handler Value
 postAjaxTestR = do
   $(logInfo) $ "getAjaxTestR"
-  PrologProgram _uid _name _expl code <- (requireJsonBody :: Handler PrologProgram)
+  _program <- (requireJsonBody :: Handler PrologProgram)
   $(logInfo) $ "getAjaxTestR"
 
   returnJson True
@@ -293,7 +296,9 @@ prologProgramFinishHtml = lift $ redirect Portfolio01R
 
 ------------------------  Application logic  ------------------------
 
-ccMain :: UserId -> CC (PS Html) Handler Html
+-- entityKey (Entity key _) = key
+
+ccMain :: UserAccountId -> CC (PS Html) Handler Html
 ccMain uid =  do
   -- lift $ do
   --   (widget, enctype) <- generateFormPost prologTestForm
@@ -302,11 +307,11 @@ ccMain uid =  do
 --   lift $ redirect PrologTestR
   -- inquireDummy
 
-   code <- lift $ selectFirstUserProgram uid
-   loopBrowse uid code False
-   prologProgramFinishHtml >>=  inquireFinish
+  mentity <- lift $ selectFirstUserProgram uid
+  loopBrowse uid (fmap entityKey mentity) False
+  prologProgramFinishHtml >>=  inquireFinish
 
-loopBrowse :: UserId -> Maybe (Entity PrologProgram) -> Bool -> CC (PS Html) Handler ()
+loopBrowse :: UserAccountId -> Maybe PrologProgramId -> Bool -> CC (PS Html) Handler ()
 loopBrowse uid Nothing forceSave = do
   (   _klabel
     , maybeAction
@@ -315,92 +320,118 @@ loopBrowse uid Nothing forceSave = do
 
   case maybeAction of
     Just Save -> do
-      mkey <- lift $ insertPrologProgram (PrologProgram uid name expl code)
+      mkey <- lift $ createProgram uid name expl code
       case mkey of
         Just pid ->  do mprog <- lift $ runDB $ get pid
                         case mprog of
-                          Just prog -> loopBrowse uid (Just (Entity pid prog)) forceSave
+                          Just prog -> loopBrowse uid (Just  pid) forceSave
                           Nothing   -> loopBrowse uid Nothing forceSave
         Nothing  ->  loopBrowse uid Nothing forceSave
 
-    Just Next ->   do nextProgram <- lift $ selectFirstUserProgram uid
-                      loopBrowse uid nextProgram forceSave
+    Just Next ->   do mentity <- lift $ selectFirstUserProgram uid
+                      loopBrowse uid (entityKey <$> mentity) forceSave
 
-    Just Prev ->  do prevProgram <- lift $ selectLastUserProgram uid
-                     loopBrowse uid  prevProgram forceSave
+    Just Prev ->  do  mentity <- lift $ selectLastUserProgram uid
+                      loopBrowse uid  (entityKey <$> mentity) forceSave
     _ -> loopBrowse uid Nothing forceSave
 
-loopBrowse uid (Just entity@(Entity pid currentProgram@(PrologProgram uid' name expl code ))) forceSave = do
-  lift $ $(logInfo) $ T.pack $ show uid ++ show uid' ++ show name ++ show code ++ show forceSave
+loopBrowse uid (Just pid) forceSave = do
+  mentity <- lift $ runDB $ get pid
+  case mentity of
+    Just currentProgram -> loopBrowse' currentProgram
+    Nothing -> return ()
 
-  (   _klabel
-    , maybeAction
-    , (PrologProgramForm newName (Textarea newExplanation) (Textarea newCode)))
-                <-  inquirePrologProgram name (Textarea expl) (Textarea code) forceSave
+  where
+    loopBrowse' currentProgram = do
 
-  let newProgram = PrologProgram uid newName newExplanation newCode
+      let uid' = prologProgramUserId currentProgram
+          name = Import.prologProgramName   currentProgram
+          expl = Import.prologProgramExplanation   currentProgram
+          code = Import.prologProgramCode   currentProgram
+      lift $ $(logInfo) $ T.pack $ show uid ++ show uid' ++ show name ++ show code ++ show forceSave
 
-  if (not (elem maybeAction [Just Next, Just Prev, Just AddGoal]) &&  uid /= uid')
-    then do lift $ setMessage $ toHtml $ ("他のユーザのプログラムは変更できません" :: Text)
-            loopBrowse uid (Just (Entity pid currentProgram)) forceSave
-    else case maybeAction of
-    Just Save -> do  if forceSave || programOK newCode
-                       then do lift $ $(logInfo)  $ "saving code:" ++ T.pack (show newProgram)
-                               newProg <- lift $ upsertPrologProgram newProgram
-                               loopBrowse uid (Just newProg) False
+      (   _klabel
+        , maybeAction
+        , (PrologProgramForm newName (Textarea newExplanation) (Textarea newCode)))
+                  <-  inquirePrologProgram name (Textarea expl) (Textarea code) forceSave
 
-                       else do lift $ $(logInfo) $ "Enter force save mode:" ++ T.pack (show newProgram)
-                               loopBrowse uid (Just (Entity pid newProgram))  True
+      if (not (elem maybeAction [Just Next, Just Prev, Just AddGoal]) &&  uid /= uid')
+        then do lift $ setMessage $ toHtml $ ("他のユーザのプログラムは変更できません" :: Text)
+                loopBrowse uid (Just pid) forceSave
+        else case maybeAction of
+        Just Save -> do
+          if forceSave || programOK newCode
+            then do lift $ $(logInfo)  $ "saving code:" ++ T.pack (show newName)
+                    newProg <- lift $ writeProgram uid newName newExplanation newCode
+                    loopBrowse uid newProg False
 
-    Just Next ->   do nextProgram <- lift $ selectNextUserProgram uid (Just pid)
-                      loopBrowse uid nextProgram False
+            else do lift $ $(logInfo) $ "Enter force save mode:" ++ T.pack (show newName)
+                    loopBrowse uid (Just pid)  True
 
-    Just Prev ->  do prevProgram <- lift $ selectPrevUserProgram uid  (Just pid)
-                     loopBrowse uid prevProgram False
+        Just Next ->   do mentity <- lift $ selectNextUserProgram uid (Just pid)
+                          loopBrowse uid (entityKey <$> mentity) False
 
-    Just AddGoal -> do loopGoals  uid  entity
-                       loopBrowse uid (Just entity) False
+        Just Prev ->  do mentity <- lift $ selectPrevUserProgram uid  (Just pid)
+                         loopBrowse uid (entityKey <$> mentity) False
 
-    Just Delete  -> do nextProgram <- lift $ selectNextUserProgram uid (Just pid)
-                       lift $ deleteProgram pid
-                       loopBrowse uid nextProgram False
+        Just AddGoal -> do loopGoals  uid  pid
+                           loopBrowse uid  (Just pid) False
 
-    _ -> loopBrowse uid (Just entity) forceSave
+        Just Delete  -> do mentity <- lift $ selectNextUserProgram uid (Just pid)
+                           lift $ deleteProgram pid
+                           loopBrowse uid (entityKey <$> mentity) False
+
+        _ -> loopBrowse uid (Just pid) forceSave
 
 
 
 
-loopGoals :: UserId -> Entity PrologProgram ->  CC (PS Html) Handler ()
-loopGoals  uid currentEntity@(Entity pid (PrologProgram uid'  name expl code)) = do
+loopGoals :: UserAccountId ->  PrologProgramId ->  CC (PS Html) Handler ()
+loopGoals  uid pid = do
   lift $ $(logInfo) "loopGoals"
+  ment <- lift $ runDB $ get pid
+  case ment of
+    Just prog -> go prog
+    Nothing     -> return ()
+    where
+      go  program = do
+        goals      <- lift $ selectUserProgramGoals uid 0 0 pid -- current user
+        muserIdent <- lift $ getUserIdent (prologProgramUserId program)  -- program owner
+        case muserIdent of
+          Just userIdent -> loopGoals' userIdent pid goals
+          Nothing        -> do lift $ setMessage "Database is broken. Please report to the maintainer."
+                               loopBrowse uid (Just pid) False
 
-  goals      <- lift $ selectUserProgramGoals uid 0 0 pid -- current user
-  muserIdent <- lift $ getUserIdent uid'                  -- program owner
-  case muserIdent of
-    Just userIdent -> loopGoals' userIdent currentEntity goals
-    Nothing        -> do lift $ setMessage "Database is broken. Please report to the maintainer."
-                         loopBrowse uid (Just currentEntity) False
+loopGoals' :: UserIdent ->  PrologProgramId -> [Entity PrologGoal] -> CC (PS Html) Handler ()
+loopGoals' userIdent pid goals = do
+  mprog <- lift $ runDB $ get pid
+  case mprog of
+    Just prog -> go prog
+    Nothing   -> return ()
 
-loopGoals' :: UserIdent -> Entity PrologProgram -> [Entity PrologGoal] -> CC (PS Html) Handler ()
-loopGoals' userIdent currentEntity@(Entity pid (PrologProgram uid'  name expl code)) goals = do
-  lift $ $(logInfo) "loopGoals'"
+  where
+    go prog = do
+      let name = Import.prologProgramName prog
+          expl = Import.prologProgramExplanation prog
+          code = Import.prologProgramCode prog
 
-  lift $ setSession "userIdent"   userIdent
-  lift $ setSession "programName" name
+      lift $ $(logInfo) "loopGoals'"
+      lift $ setSession "userIdent"   userIdent
+      lift $ setSession "programName" name
 
-  (   _klabel
-    , _maybeAction
-    , resultForm )
-           <- inquirePrologGoalEditor userIdent name  (Textarea expl) (Textarea code) (map entityToVal goals)
+      (   _klabel
+        , _maybeAction
+        , resultForm )
+         <- inquirePrologGoalEditor userIdent name  (Textarea expl) (Textarea code) (map entityToVal goals)
 
-  lift $ $(logInfo) "loopGoals'"
-  mval <- lift $ lookupGetParam "action"
-  lift $ $(logInfo) $ T.pack $ show mval
+      lift $ $(logInfo) "loopGoals'"
+      mval <- lift $ lookupGetParam "action"
+      lift $ $(logInfo) $ T.pack $ show mval
 
-  case resultForm of
-    FormSuccess _ ->  loopGoals' userIdent currentEntity goals
-    err           ->  do lift $ defaultLayout [whamlet|show err|]
-                         return ()
+      case resultForm of
+        FormSuccess _ ->  loopGoals' userIdent pid goals
+        err           ->  do lift $ defaultLayout [whamlet|show err|]
+                             return ()
 
 
 
@@ -425,7 +456,8 @@ maybeGoal = do
 
   lift $  $(logInfo) "maybeGoal"
 
-  gid  <- MaybeT $ insertPrologGoal (PrologGoal uid pid goalName explanation code)
+  gid <- MaybeT $ createGoal uid pid goalName explanation code
+
   return (PrologGoalJson goalName explanation code)
 
 postDeleteGoalR :: Handler Value

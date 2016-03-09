@@ -8,13 +8,9 @@ module Authentication(
 
 import Import.NoFoundation
 
-import           Data.Default                (def)
-import           Data.Text                   (Text)
+import Data.Text(Text)
 import qualified Data.Text as T
-import           Network.HTTP.Client.Conduit (Manager, newManager)
-import           Yesod
-import           Yesod.Auth
-import           Yesod.Auth.BrowserId
+-- import           Yesod.Auth.BrowserId
 import           Yesod.Auth.GoogleEmail2
 
 
@@ -27,7 +23,9 @@ clientId = "197748900362-pj584nskcninquf5mmgse28fg2tv2c4a.apps.googleusercontent
 clientSecret :: Text
 clientSecret = "SMbJxghU_ci-Fg2OzO1cwDkY"
 
+displayNameString :: Text
 displayNameString =  "displayName"
+userIdentString   :: Text
 userIdentString   = "userIdent"
 
 cacheSession :: MonadHandler m => Text -> m (Maybe Text) -> m (Maybe Text)
@@ -63,6 +61,8 @@ maybeDisplayNameGoogle = do
       return $ join $ fmap personDisplayName maybePerson
     Nothing -> return Nothing
 
+
+maybeUserIdent :: MonadHandler m => m (Maybe Text)
 maybeUserIdent = lookupSession "credsIdent"
 
 --  cacheSession userIdentString maybeUserIdentGoogle

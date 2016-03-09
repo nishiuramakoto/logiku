@@ -26,14 +26,11 @@ module ContMap (
   ) where
 
 import             Import.NoFoundation
-import             Yesod
 import             Text.Blaze (Markup)
 import             Data.Time.LocalTime
 import             Data.Unique
 --import             Data.IORef
-import             Data.Map(Map)
 import qualified   Data.Map as Map
-import             Data.Text(Text)
 import qualified   Data.Text as T
 import             Control.Monad.CC.CCCxe
 
@@ -98,7 +95,7 @@ sendk klabel html k = do
 
 inquire :: YesodCC site => ContId -> Html -> CC (PS Html) (HandlerT site IO) Html
 inquire klabel html = do
-  ZonedTime localTime zone  <- liftIO getZonedTime
+  ZonedTime localTime _zone  <- liftIO getZonedTime
   lift $ $(logInfo) $ T.pack $ "ShiftP: " ++ show klabel ++ ":" ++ show localTime
 
   shiftP ps $ sendk klabel html
@@ -207,14 +204,14 @@ answerGet form error_action = do
 
 run :: (YesodCC site) => (CC (PS Html) (HandlerT site IO) Html) ->  (HandlerT site IO) Html
 run f = do
-  ZonedTime localTime zone  <- liftIO getZonedTime
+  ZonedTime localTime _zone  <- liftIO getZonedTime
   $(logInfo) $ T.pack $ "Running a new continuation" ++ ":" ++ show localTime
 
   runCC $ pushPrompt ps f
 
 resume :: YesodCC site =>  ContId -> Html -> Html -> HandlerT site IO Html
 resume klabel cont_html not_found = do
-  ZonedTime localTime zone  <- liftIO getZonedTime
+  ZonedTime localTime _zone  <- liftIO getZonedTime
   $(logInfo) $ T.pack $ "resuming " ++ show klabel ++ ":" ++ show localTime
 
   maybe_k <- lookupContMap klabel

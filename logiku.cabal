@@ -29,6 +29,7 @@ library
                      ContMap
                      SideMenu
                      Database
+                     -- DBFS
                      Authentication
                      Handler.Portfolio
                      Handler.Blog
@@ -143,6 +144,7 @@ library
                  , warp-tls
                  , list-extras      >= 0.4.1.4
                  , logict
+                 , esqueleto        >= 2.4.3
 executable         logiku
     if flag(library-only)
         Buildable: False

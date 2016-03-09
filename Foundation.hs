@@ -8,7 +8,7 @@ import Database.Persist.Sql (ConnectionPool, runSqlPool)
 import Text.Hamlet          (hamletFile)
 import Text.Jasmine         (minifym)
 import Yesod.Auth.BrowserId (authBrowserId)
-import Yesod.Auth.Message   (AuthMessage (InvalidLogin))
+-- import Yesod.Auth.Message   (AuthMessage (InvalidLogin))
 import Yesod.Auth.GoogleEmail2
 import Yesod.Default.Util   (addStaticContentExternal)
 import Yesod.Core.Types     (Logger)
@@ -16,12 +16,31 @@ import qualified Yesod.Core.Unsafe as Unsafe
 import qualified Data.CaseInsensitive as CI
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text as T
-import Data.Time.LocalTime
+-- import Data.Time.LocalTime
 import Authentication
 import ContMap
 import SideMenu
 
 
+-------------------------- TODO move this to somewhere else --------------------------
+makeUser :: Text -> Maybe Text -> UserAccount
+makeUser ident mpass =
+  UserAccount
+  { userAccountIdent = ident
+  , userAccountPassword = mpass
+                   -- Default umask=022
+  , userAccountUmaskOwnerR = False
+  , userAccountUmaskOwnerW = False
+  , userAccountUmaskOwnerX = False
+  , userAccountUmaskGroupR = False
+  , userAccountUmaskGroupW = True
+  , userAccountUmaskGroupX = False
+  , userAccountUmaskEveryoneR = False
+  , userAccountUmaskEveryoneW = True
+  , userAccountUmaskEveryoneX = False
+  }
+
+--------------------------------------------------------------------------
 
 -- | The foundation datatype for your application. This can be a good place to
 -- keep settings and values requiring initialization before your application
@@ -122,13 +141,13 @@ instance Yesod App where
 
     errorHandler = myErrorHandler
     defaultLayout widget = do
-      ZonedTime localTime zone  <- liftIO getZonedTime
+      -- ZonedTime localTime zone  <- liftIO getZonedTime
       -- $(logInfo) $ T.concat [ "1:" , T.pack $ show localTime ]
 
       master <- getYesod
       mmsg <- getMessage
 
-      ZonedTime localTime zone  <- liftIO getZonedTime
+      -- ZonedTime localTime zone  <- liftIO getZonedTime
       -- $(logInfo) $ T.concat [ "2:" , T.pack $ show localTime ]
 
       mName <- maybeUserIdent
@@ -136,7 +155,7 @@ instance Yesod App where
       let categoryTree =  $(widgetFile "css-tree")
         -- let categoryTree = [whamlet|tree|]
 
-      ZonedTime localTime zone  <- liftIO getZonedTime
+      -- ZonedTime localTime zone  <- liftIO getZonedTime
       -- $(logInfo) $ T.concat [ "3:" , T.pack $ show localTime ]
 
         -- We break up the default layout into two components:
@@ -150,7 +169,7 @@ instance Yesod App where
         addStylesheet $ StaticR css_searchbox_css
         $(widgetFile "default-layout")
 
-      ZonedTime localTime zone  <- liftIO getZonedTime
+      -- ZonedTime localTime zone  <- liftIO getZonedTime
       -- $(logInfo) $ T.concat [ "4:" , T.pack $ show localTime ]
 
       withUrlRenderer $(hamletFile "templates/default-layout-wrapper.hamlet")
@@ -204,7 +223,7 @@ instance YesodPersistRunner App where
     getDBRunner = defaultGetDBRunner appConnPool
 
 instance YesodAuth App where
-    type AuthId App = UserId
+    type AuthId App = UserAccountId
 
     -- Where to send a user after successful login
     loginDest _ = HomeR
@@ -214,15 +233,12 @@ instance YesodAuth App where
     redirectToReferer _ = True
 
     authenticate creds = runDB $ do
-        x <- getBy $ UniqueUser $ credsIdent creds
+        x <- getBy $ UniqueUserAccount $ credsIdent creds
         $(logInfo) $  T.concat [ "credsIdent" , (T.pack (show (credsIdent creds)))]
         setSession "credsIdent" (credsIdent creds)
         case x of
             Just (Entity uid _) -> return $ Authenticated uid
-            Nothing -> Authenticated <$> insert User
-                { userIdent = credsIdent creds
-                , userPassword = Nothing
-                }
+            Nothing -> Authenticated <$> insert (makeUser (credsIdent creds) Nothing)
 
     -- You can add other plugins like BrowserID, email or OAuth here
     authPlugins _ = [ authBrowserId def
@@ -233,8 +249,8 @@ instance YesodAuth App where
     authHttpManager = getHttpManager
 
     onLogin = do
-      maybeUserIdent
-      maybeDisplayName
+      -- maybeUserIdent
+      -- maybeDisplayName
       setMessage $ toHtml ("Logged In " :: Text )
 
     onLogout = do
@@ -271,4 +287,4 @@ instance YesodCC App where
 
 --------------------------  Authorization ----------------------------
 myIsAuthorized :: Route App -> Bool -> HandlerT App IO  AuthResult
-myIsAuthorized route isWrite = return Authorized
+myIsAuthorized _route _isWrite = return Authorized
