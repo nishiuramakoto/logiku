@@ -1,57 +1,116 @@
-
-Email
-    email Text
-    userId UserId Maybe
-    verkey Text Maybe
-
-    UniqueEmail email
-
-Comment json -- Adding "json" causes ToJSON and FromJSON instances to be derived.
-    message Text
-    userId UserId Maybe
-    deriving Eq
-    deriving Show
-
- -- By default this file is used in Model.hs (which is imported by Foundation.hs)
-
-Blog
-    ownerId UserId
-    blogTitle  Text
-    blogBody   Text
-    deriving Show
-
-
 ------------------ Prolog Program Database Schema -------------------------------
 
-User
+-- What !? 'user' is a reserved name in postgres...
+UserAccount
     ident    Text
     password Text Maybe
+    -- Umask TODO:Factor this out!
+    umaskOwnerR Bool
+    umaskOwnerW Bool
+    umaskOwnerX Bool
+    umaskGroupR Bool
+    umaskGroupW Bool
+    umaskGroupX Bool
+    umaskEveryoneR Bool
+    umaskEveryoneW Bool
+    umaskEveryoneX Bool
 
-    UniqueUser ident
+    UniqueUserAccount ident
     deriving Show Typeable
 
+
 PrologProgram json
-      userId        UserId
+      userId        UserAccountId
       name          Text
       explanation   Text
       code          Text
+
+      ownerR Bool
+      ownerW Bool
+      ownerX Bool
+      everyoneR Bool
+      everyoneW Bool
+      everyoneX Bool
 
       UniquePrologProgram userId name
       deriving     Show
 
 PrologGoal
-      userId          UserId
+      userId          UserAccountId
       prologProgramId PrologProgramId
       name            Text
       explanation     Text
       code            Text
+
+      ownerR Bool
+      ownerW Bool
+      ownerX Bool
+      everyoneR Bool
+      everyoneW Bool
+      everyoneX Bool
+
       UniquePrologGoal userId prologProgramId name
       deriving Show
 
+
+------------------------------ Groups ------------------------------
+
+Group
+    group        Text
+    owner        UserAccountId
+    explanation  Text Maybe
+
+    UniqueGroup  group
+    deriving Show
+
+GroupMembers
+    groupId      GroupId
+    member       UserAccountId
+
+    UniqueGroupMember groupId member
+    deriving Show
+
+ProgramGroups
+  prologProgramId    PrologProgramId
+  groupId            GroupId
+
+  groupR Bool
+  groupW Bool
+  groupX Bool
+
+  UniqueProgramGroups  prologProgramId groupId
+  deriving Show
+
+GoalGroups
+  prologGoalId   PrologGoalId
+  groupId        GroupId
+
+  groupR Bool
+  groupW Bool
+  groupX Bool
+
+  UniqueGoalGroups prologGoalId groupId
+  deriving Show
+
+
+----------------------------- Tags  ----------------------------
 Tag
 	name		Text
 	UniqueTag	name
 	deriving Show
+
+PrologProgramTags
+	prologProgramId	PrologProgramId
+	tagId		TagId
+	UniquePrologProgramTags prologProgramId tagId
+	deriving Show
+
+PrologGoalTags
+	prologGoalId	PrologGoalId
+	tagId		TagId
+	UniquePrologGoalTags prologGoalId tagId
+        deriving Show
+
 
 --------------------------  JSON Entities ----------------------------
 PrologGoalJson json
@@ -60,15 +119,25 @@ PrologGoalJson json
       code            Text
       deriving Show
 
----------------------------- - Relations  ----------------------------
+---------------------------- For testing  ----------------------------
 
-PrologProgramsTags
-	prologProgramId	PrologProgramId
-	tagId		TagId
-	UniquePrologProgramsTags prologProgramId tagId
-	deriving Show
+Email
+    email Text
+    userId UserAccountId Maybe
+    verkey Text Maybe
 
-PrologGoalsTags
-	prologGoalId	PrologGoalId
-	tagId		TagId
-	UniquePrologGoalsTags prologGoalId tagId
+    UniqueEmail email
+
+Comment json -- Adding "json" causes ToJSON and FromJSON instances to be derived.
+    message Text
+    userId UserAccountId Maybe
+    deriving Eq
+    deriving Show
+
+ -- By default this file is used in Model.hs (which is imported by Foundation.hs)
+
+Blog
+    ownerId UserAccountId
+    blogTitle  Text
+    blogBody   Text
+    deriving Show

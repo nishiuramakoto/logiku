@@ -19,8 +19,8 @@ import Control.Monad.CC.CCCxe
 
 
 data PrologTestForm = PrologTestForm
-                      { program :: Textarea
-                      , goal    :: Textarea
+                      { _program :: Textarea
+                      , _goal    :: Textarea
                       } deriving Show
 
 prologTestWidget :: Widget -> Enctype -> Widget
@@ -72,12 +72,12 @@ prologExecuteTestFinishHtml unifiers =
   lift $ defaultLayout $ [whamlet| #{show unifiers}|]
 
 prologExecuteTestSyntaxErrorHtml :: String -> CC (PS Html) Handler Html
-prologExecuteTestSyntaxErrorHtml error =
-  lift $ defaultLayout $ [whamlet| #{show error}|]
+prologExecuteTestSyntaxErrorHtml err =
+  lift $ defaultLayout $ [whamlet| #{show err}|]
 
 prologExecuteTestRuntimeErrorHtml :: RuntimeError -> CC (PS Html) Handler Html
-prologExecuteTestRuntimeErrorHtml error =
-  lift $ defaultLayout $ [whamlet| #{show error}|]
+prologExecuteTestRuntimeErrorHtml err =
+  lift $ defaultLayout $ [whamlet| #{show err}|]
 
 prologExecuteCcMain :: Text -> Text -> CC (PS Html) Handler Html
 prologExecuteCcMain progCode goalCode = do

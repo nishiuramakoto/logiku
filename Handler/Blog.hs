@@ -6,8 +6,6 @@ import             Import
 import             Control.Monad.CC.CCCxe
 import             ContMap
 
-
-
 -------------------------------------------------------------------------------------------
 
 getBlogR :: Handler Html
@@ -152,15 +150,15 @@ inquireBlogView user blog_data = do
 ------------------------  Database handling --------------------------
 readBlogs :: CC (PS Html) Handler Widget
 readBlogs = lift $ do
-  users <- runDB $ selectList [] [Asc UserIdent]
+  users <- runDB $ selectList [] [Asc UserAccountIdent]
   ws <- mapM printUserBlog users
   return $ concat_widgets ws
   where
-    printUserBlog :: Entity User -> Handler Widget
+    printUserBlog :: Entity UserAccount -> Handler Widget
     printUserBlog (Entity userId user) = do
       blogs  <- runDB $ selectList [BlogOwnerId ==. userId] []
       return [whamlet|
-          <p> <b> #{userIdent user}'s blog </b>
+          <p> <b> #{userAccountIdent user}'s blog </b>
           $forall Entity _blogid blog <- blogs
             <p> [#{blogBlogTitle blog}]
             <p> #{blogBlogBody  blog}
@@ -171,9 +169,9 @@ readBlogs = lift $ do
 
 submitBlog :: UserForm -> BlogForm -> CC (PS Html) Handler ()
 submitBlog (UserForm name pass) (BlogForm title (Textarea body)) = lift $  do
-  users  <- runDB $ selectList [UserIdent ==. name ] []
+  users  <- runDB $ selectList [UserAccountIdent ==. name ] []
   userid <- case users of
-    []     -> runDB $ insert $ User  name (Just pass)
+    []     -> runDB $ insert $ makeUser name (Just pass)
     (Entity userid _user: _us) -> return userid
   _blogid <- runDB $ insert $ Blog  userid title body
   return ()

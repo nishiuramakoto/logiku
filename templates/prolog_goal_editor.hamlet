@@ -40,12 +40,12 @@
                                 <th> Code
                                 <th> Run
                                 <th> Delete
-                            $forall PrologGoal _uid _pid name expl code <- goals
+                            $forall goal <- goals
                                 <tr>
-                                    <td> #{name}
-                                    <td> #{expl}
-                                    <td> <code> #{code}
-                                    <td> <button class="run"    type=submit value="#{name}" name="goal">Run
+                                    <td> #{prologGoalName goal}
+                                    <td> #{prologGoalExplanation goal}
+                                    <td> <code> #{prologGoalCode goal}
+                                    <td> <button class="run"    type=submit value="#{prologGoalName goal}" name="goal">Run
                                     <td> <button class="delete" type=button> Delete
 
 
