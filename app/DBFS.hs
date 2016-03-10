@@ -499,7 +499,7 @@ readGoal uid gid = do
               _   -> throwM $ FileSystemError "impossible error"
     else return Nothing
 
-----------------------------  WriteProgram ------------------------------
+----------------------------  Write ------------------------------
 
 writeProgram :: UserId -> Entity PrologProgram -> SqlPersistT Handler (Maybe (Entity PrologProgram))
 writeProgram uid prog@(Entity pid (PrologProgram uid' name expl code)) = do
@@ -516,7 +516,7 @@ writeProgram uid prog@(Entity pid (PrologProgram uid' name expl code)) = do
     else
     return Nothing
 
-----------------------------  WriteGoal ------------------------------
+
 
 writeGoal :: UserId -> Entity PrologGoal -> SqlPersistT Handler (Maybe (Entity PrologGoal))
 writeGoal uid goal@(Entity gid (PrologGoal uid' pid name expl code)) = do
