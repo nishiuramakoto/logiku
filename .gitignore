@@ -24,3 +24,4 @@ static/css/ace-builds/
 *.git.gpg
 test/password-test
 test/password-test.gpg
+ec2/
