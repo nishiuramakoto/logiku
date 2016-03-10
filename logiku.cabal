@@ -84,6 +84,7 @@ library
                 TupleSections
                 RecordWildCards
                 -- my additions
+                CPP
                 PatternGuards
                 KindSignatures
                 ExistentialQuantification
