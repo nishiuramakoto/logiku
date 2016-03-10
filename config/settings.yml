@@ -29,7 +29,9 @@ database:
   host:     "_env:PGHOST:localhost"
   port:     "_env:PGPORT:5434"
   database: "_env:PGDATABASE:logiku_LOWER"
+#  database: "_env:PGDATABASE:logiku_test"
   poolsize: "_env:PGPOOLSIZE:10"
 
-copyright: copyright statement from settings.yml
+
+copyright: copyright 2016 Makoto Nishiura All rights reserved.
 #analytics: UA-YOURCODE
