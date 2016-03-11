@@ -45,7 +45,7 @@ logiku.keter :
 install-keter: logiku.keter
 	cp logiku.keter ec2/opt/keter/incoming/
 
-rsync-keter : install-keter
+rsync : install-keter
 	rsync -avz --exclude '**/temp' --exclude '**/log' \
 		-e 'ssh -i /mnt/crypt/home/makoto/private/ec2-keypair.pem' ec2/ ubuntu@$(EC2):ec2
 
