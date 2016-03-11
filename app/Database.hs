@@ -36,12 +36,12 @@ userExists uid = do user <- runDB $ get uid
                       Nothing -> return False
 
 createProgram ::  UserAccountId -> Text -> Text -> Text
-                  -> Handler (Maybe PrologProgramId)
+                  -> Handler (Maybe DirectoryId)
 createProgram  uid name expl code = runDB $ do
   muser <- get uid
   case muser of
     Just user -> do
-      pid <-  insert $ PrologProgram uid name expl code
+      pid <-  insert $ Directory uid name expl code
               (not (userAccountUmaskOwnerR user))
               (not (userAccountUmaskOwnerW user))
               (not (userAccountUmaskOwnerX user))
@@ -51,13 +51,13 @@ createProgram  uid name expl code = runDB $ do
       return $ Just pid
     Nothing -> return Nothing
 
-createGoal ::  UserAccountId -> PrologProgramId -> Text -> Text -> Text
-           -> Handler (Maybe PrologGoalId)
+createGoal ::  UserAccountId -> DirectoryId -> Text -> Text -> Text
+           -> Handler (Maybe FileId)
 createGoal  uid pid name expl code = runDB $ do
   muser <- get uid
   case muser of
     Just user -> do
-      goalid <- insert $ PrologGoal uid pid name expl code
+      goalid <- insert $ File uid pid name expl code
                 (not (userAccountUmaskOwnerR user))
                 (not (userAccountUmaskOwnerW user))
                 (not (userAccountUmaskOwnerX user))
@@ -69,14 +69,14 @@ createGoal  uid pid name expl code = runDB $ do
 
 
 writeProgram :: UserAccountId -> Text -> Text -> Text
-                ->  Handler (Maybe PrologProgramId)
+                ->  Handler (Maybe DirectoryId)
 writeProgram uid name expl code = runDB $ do
-  mpid <- getBy $ UniquePrologProgram uid name
+  mpid <- getBy $ UniqueDirectory uid name
   case mpid of
-    Just (Entity pid _) -> do update pid [ PrologProgramUserId     =.  uid
-                                         , PrologProgramName       =.  name
-                                         , PrologProgramExplanation =.  expl
-                                         , PrologProgramCode        =.  code
+    Just (Entity pid _) -> do update pid [ DirectoryUserId     =.  uid
+                                         , DirectoryName       =.  name
+                                         , DirectoryExplanation =.  expl
+                                         , DirectoryCode        =.  code
                                          ]
                               return $ Just pid
 
@@ -90,38 +90,39 @@ insertUser user = do
   muser <- runDBtime $ getBy $ UniqueUserAccount (userAccountIdent user)
   case muser of
     Just _user -> return Nothing
-    Nothing   -> Just <$> (runDBtime $ insert $ makeUser (userAccountIdent user) (userAccountPassword user))
+    Nothing   -> Just <$> (runDBtime $ insert $ (makeUser (userAccountIdent user))
+                           { userAccountPassword = userAccountPassword user } )
 
-insertPrologProgram :: PrologProgram -> Handler (Maybe PrologProgramId)
-insertPrologProgram program = do
-  let name' = T.strip (prologProgramName program)
-  mProgram <- runDBtime $ getBy $ UniquePrologProgram (prologProgramUserId program) name'
+insertDirectory :: Directory -> Handler (Maybe DirectoryId)
+insertDirectory program = do
+  let name' = T.strip (directoryName program)
+  mProgram <- runDBtime $ getBy $ UniqueDirectory (directoryUserId program) name'
   case mProgram of
     Just _program -> return Nothing
     Nothing      -> do
       createProgram
-        (prologProgramUserId program)
+        (directoryUserId program)
         name'
-        (prologProgramExplanation program)
-        (prologProgramCode program)
+        (directoryExplanation program)
+        (directoryCode program)
 
 
-insertPrologGoal :: PrologGoal -> Handler (Maybe PrologGoalId)
-insertPrologGoal goal = do
-  let name' = T.strip (prologGoalName goal)
-  mProgram <- runDBtime $ getBy $ UniquePrologGoal
-              (prologGoalUserId goal)
-              (prologGoalPrologProgramId goal)
+insertFile :: File -> Handler (Maybe FileId)
+insertFile goal = do
+  let name' = T.strip (fileName goal)
+  mProgram <- runDBtime $ getBy $ UniqueFile
+              (fileUserId goal)
+              (fileDirectoryId goal)
               name'
   case mProgram of
     Just _program -> return Nothing
     Nothing      ->
       createGoal
-      (prologGoalUserId goal)
-      (prologGoalPrologProgramId goal)
+      (fileUserId goal)
+      (fileDirectoryId goal)
       name'
-      (prologGoalExplanation goal)
-      (prologGoalCode goal)
+      (fileExplanation goal)
+      (fileCode goal)
 
 
 insertTag :: Tag -> Handler (Maybe TagId)
@@ -131,92 +132,92 @@ insertTag (Tag tag) = do
     Just _  -> return Nothing
     Nothing -> Just <$> (runDBtime $ insert $ Tag tag)
 
-insertPrologProgramTag :: PrologProgramTags -> Handler (Maybe PrologProgramTagsId)
-insertPrologProgramTag (PrologProgramTags progId tagId) = do
-  mTag <- runDBtime $ getBy $ UniquePrologProgramTags progId tagId
+insertDirectoryTag :: DirectoryTags -> Handler (Maybe DirectoryTagsId)
+insertDirectoryTag (DirectoryTags progId tagId) = do
+  mTag <- runDBtime $ getBy $ UniqueDirectoryTags progId tagId
   case mTag of
     Just _  -> return Nothing
-    Nothing -> Just <$> (runDBtime $ insert $ PrologProgramTags progId tagId)
+    Nothing -> Just <$> (runDBtime $ insert $ DirectoryTags progId tagId)
 
-insertPrologGoalTag :: PrologGoalTags -> Handler (Maybe PrologGoalTagsId)
-insertPrologGoalTag (PrologGoalTags goalId tagId) = do
-  mTag <- runDBtime $ getBy $ UniquePrologGoalTags goalId tagId
+insertFileTag :: FileTags -> Handler (Maybe FileTagsId)
+insertFileTag (FileTags goalId tagId) = do
+  mTag <- runDBtime $ getBy $ UniqueFileTags goalId tagId
   case mTag of
     Just _  -> return Nothing
-    Nothing -> Just <$> (runDBtime $ insert $ PrologGoalTags goalId tagId)
+    Nothing -> Just <$> (runDBtime $ insert $ FileTags goalId tagId)
 
 ------------------------  Insert or Replace --------------------------
 
-upsertPrologProgram :: PrologProgram -> Handler (Entity PrologProgram)
-upsertPrologProgram pp = runDBtime $ upsert pp []
+upsertDirectory :: Directory -> Handler (Entity Directory)
+upsertDirectory pp = runDBtime $ upsert pp []
 
-upsertPrologGoal :: PrologGoal -> Handler (Entity PrologGoal)
-upsertPrologGoal pg =  runDBtime $ upsert pg []
+upsertFile :: File -> Handler (Entity File)
+upsertFile pg =  runDBtime $ upsert pg []
 
 ----------------------------  Selecting for All Users ------------------------------
 
 countPrograms :: Handler Int
-countPrograms =  runDBtime $ count ([] :: [Filter PrologProgram])
+countPrograms =  runDBtime $ count ([] :: [Filter Directory])
 
 
 countUserPrograms :: UserAccountId -> Handler Int
-countUserPrograms uid = runDBtime $ count [PrologProgramUserId ==. uid]
+countUserPrograms uid = runDBtime $ count [DirectoryUserId ==. uid]
 
-selectPrograms :: Int -> Int -> Handler [Entity PrologProgram]
+selectPrograms :: Int -> Int -> Handler [Entity Directory]
 selectPrograms n m
   | n < m     = runDBtime $ selectList [] [OffsetBy n, LimitTo (m-n) ]
   | otherwise = runDBtime $ selectList [] []
 
-selectUserPrograms :: UserAccountId -> Int -> Int -> Handler [Entity PrologProgram]
+selectUserPrograms :: UserAccountId -> Int -> Int -> Handler [Entity Directory]
 selectUserPrograms uid n m
-  | n < m     = runDBtime $ selectList [PrologProgramUserId ==. uid ] [OffsetBy n, LimitTo (m-n) ]
+  | n < m     = runDBtime $ selectList [DirectoryUserId ==. uid ] [OffsetBy n, LimitTo (m-n) ]
   | otherwise = runDBtime $ selectList [] []
 
-selectFirstProgram :: Handler (Maybe (Entity PrologProgram))
+selectFirstProgram :: Handler (Maybe (Entity Directory))
 selectFirstProgram =  do
-  entity <- runDBtime $ selectList [] [Asc PrologProgramId , LimitTo 1 ]
+  entity <- runDBtime $ selectList [] [Asc DirectoryId , LimitTo 1 ]
   case entity of
     [ e ]
         ->  return $ Just e
     _   ->  return Nothing
 
-selectFirstUserProgram :: UserAccountId -> Handler (Maybe (Entity PrologProgram))
+selectFirstUserProgram :: UserAccountId -> Handler (Maybe (Entity Directory))
 selectFirstUserProgram uid =  do
-  entity <- runDBtime $ selectList [PrologProgramUserId ==. uid ] [Asc PrologProgramId , LimitTo 1 ]
+  entity <- runDBtime $ selectList [DirectoryUserId ==. uid ] [Asc DirectoryId , LimitTo 1 ]
   case entity of
     [ e ]
         ->  return $ Just e
     _   ->  return Nothing
 
-selectLastProgram :: Handler (Maybe (Entity PrologProgram))
+selectLastProgram :: Handler (Maybe (Entity Directory))
 selectLastProgram =  do
-  entity <- runDBtime $ selectList [] [Desc PrologProgramId , LimitTo 1 ]
+  entity <- runDBtime $ selectList [] [Desc DirectoryId , LimitTo 1 ]
   case entity of
     [ e ]
         ->  return $ Just e
     _   ->  return Nothing
 
-selectLastUserProgram :: UserAccountId -> Handler (Maybe (Entity PrologProgram))
+selectLastUserProgram :: UserAccountId -> Handler (Maybe (Entity Directory))
 selectLastUserProgram uid =  do
-  entity <- runDBtime $ selectList [PrologProgramUserId ==. uid] [Desc PrologProgramId , LimitTo 1 ]
+  entity <- runDBtime $ selectList [DirectoryUserId ==. uid] [Desc DirectoryId , LimitTo 1 ]
   case entity of
     [ e ]
         ->  return $ Just e
     _   ->  return Nothing
 
-selectNextProgram :: Maybe PrologProgramId -> Handler (Maybe (Entity PrologProgram))
+selectNextProgram :: Maybe DirectoryId -> Handler (Maybe (Entity Directory))
 selectNextProgram  Nothing  = selectFirstProgram
 selectNextProgram (Just progId) =  do
-  nextProgram <- runDBtime $ selectList [PrologProgramId >. progId] [LimitTo 1]
+  nextProgram <- runDBtime $ selectList [DirectoryId >. progId] [LimitTo 1]
   case nextProgram of
     [e]
       -> return  $ Just e
     _ -> selectFirstProgram
 
-selectNextUserProgram :: UserAccountId -> Maybe PrologProgramId -> Handler (Maybe (Entity PrologProgram))
+selectNextUserProgram :: UserAccountId -> Maybe DirectoryId -> Handler (Maybe (Entity Directory))
 selectNextUserProgram  uid Nothing  = selectFirstUserProgram uid
 selectNextUserProgram  uid (Just progId) =  do
-  nextProgram <- runDBtime $ selectList [PrologProgramUserId ==. uid, PrologProgramId >. progId ] [LimitTo 1]
+  nextProgram <- runDBtime $ selectList [DirectoryUserId ==. uid, DirectoryId >. progId ] [LimitTo 1]
   case nextProgram of
     [e]
       -> return  $ Just e
@@ -224,40 +225,40 @@ selectNextUserProgram  uid (Just progId) =  do
 
 
 
-selectPrevProgram :: Maybe PrologProgramId -> Handler (Maybe (Entity PrologProgram))
+selectPrevProgram :: Maybe DirectoryId -> Handler (Maybe (Entity Directory))
 selectPrevProgram  Nothing  = selectLastProgram
 selectPrevProgram (Just progId ) = do
-  prevProgram <- runDBtime $ selectList [PrologProgramId <. progId] [LimitTo 1]
+  prevProgram <- runDBtime $ selectList [DirectoryId <. progId] [LimitTo 1]
   case prevProgram of
     [e]
       -> return $ Just e
     _ -> selectLastProgram
 
-selectPrevUserProgram :: UserAccountId -> Maybe PrologProgramId -> Handler (Maybe (Entity PrologProgram))
+selectPrevUserProgram :: UserAccountId -> Maybe DirectoryId -> Handler (Maybe (Entity Directory))
 selectPrevUserProgram  uid Nothing  = selectLastUserProgram uid
 selectPrevUserProgram  uid (Just progId ) = do
-  prevProgram <- runDBtime $ selectList [PrologProgramUserId ==. uid, PrologProgramId <. progId ] [LimitTo 1]
+  prevProgram <- runDBtime $ selectList [DirectoryUserId ==. uid, DirectoryId <. progId ] [LimitTo 1]
   case prevProgram of
     [e]
       -> return $ Just e
     _ -> selectLastProgram
 
-countProgramGoals :: PrologProgramId -> Handler Int
-countProgramGoals pid =  runDBtime $ count [ PrologGoalPrologProgramId ==. pid ]
+countProgramGoals :: DirectoryId -> Handler Int
+countProgramGoals pid =  runDBtime $ count [ FileDirectoryId ==. pid ]
 
-countUserProgramGoals :: UserAccountId -> PrologProgramId -> Handler Int
-countUserProgramGoals uid pid =  runDBtime $ count [ PrologGoalUserId ==. uid, PrologGoalPrologProgramId ==. pid ]
+countUserProgramGoals :: UserAccountId -> DirectoryId -> Handler Int
+countUserProgramGoals uid pid =  runDBtime $ count [ FileUserId ==. uid, FileDirectoryId ==. pid ]
 
-selectProgramGoals :: Int -> Int -> PrologProgramId  -> Handler [Entity PrologGoal]
+selectProgramGoals :: Int -> Int -> DirectoryId  -> Handler [Entity File]
 selectProgramGoals n m pid
-  | m > n     = runDBtime $ selectList [PrologGoalPrologProgramId ==. pid ] [OffsetBy n , LimitTo (m-n)]
-  | otherwise = runDBtime $ selectList [PrologGoalPrologProgramId ==. pid ] []
+  | m > n     = runDBtime $ selectList [FileDirectoryId ==. pid ] [OffsetBy n , LimitTo (m-n)]
+  | otherwise = runDBtime $ selectList [FileDirectoryId ==. pid ] []
 
-selectUserProgramGoals :: UserAccountId -> Int -> Int -> PrologProgramId  -> Handler [Entity PrologGoal]
+selectUserProgramGoals :: UserAccountId -> Int -> Int -> DirectoryId  -> Handler [Entity File]
 selectUserProgramGoals uid n m pid
-  | m > n     = runDBtime $ selectList [PrologGoalUserId ==. uid ,  PrologGoalPrologProgramId ==. pid ]
+  | m > n     = runDBtime $ selectList [FileUserId ==. uid ,  FileDirectoryId ==. pid ]
                                    [OffsetBy n , LimitTo (m-n)]
-  | otherwise = runDBtime $ selectList [PrologGoalUserId ==. uid ,  PrologGoalPrologProgramId ==. pid ] []
+  | otherwise = runDBtime $ selectList [FileUserId ==. uid ,  FileDirectoryId ==. pid ] []
 
 selectFirstUserIdent :: Handler (Maybe Text)
 selectFirstUserIdent = do
@@ -267,10 +268,10 @@ selectFirstUserIdent = do
     _ -> return Nothing
 
 
--- submitGoal :: PrologProgramId -> PrologGoalForm -> CC (PS Html) Handler (Maybe (Key PrologGoal))
--- submitGoal progId (PrologGoalForm name (Textarea code)) = do
+-- submitGoal :: DirectoryId -> FileForm -> CC (PS Html) Handler (Maybe (Key File))
+-- submitGoal progId (FileForm name (Textarea code)) = do
 --   -- lift $ $(logInfo) $ "submitting goal:" ++ name
---   maybeGoal <- lift $ runDBtime $ getBy $ PrologGoalUniqueName progId name
+--   maybeGoal <- lift $ runDBtime $ getBy $ FileUniqueName progId name
 --   case maybeGoal of
 --     Just _  -> do
 --       klabel <- lift $ generateCcLabel
@@ -278,25 +279,25 @@ selectFirstUserIdent = do
 --       inquire klabel html
 --       return Nothing
 --     Nothing -> do
---       goalId <- lift $ runDBtime $ insert $ PrologGoal name progId  code
+--       goalId <- lift $ runDBtime $ insert $ File name progId  code
 --       -- lift $ $(logInfo) $ "submitted goal:" ++ name
 --       return $ Just goalId
 
 
 ----------------------------  Deletions ------------------------------
 
-deleteProgram :: PrologProgramId -> Handler ()
+deleteProgram :: DirectoryId -> Handler ()
 deleteProgram pid = do
   goals <- selectProgramGoals 0 0 pid -- select all goals
   mapM_ ( deleteGoal . entityToId )  goals
-  ts <- runDBtime $ selectList [ PrologProgramTagsPrologProgramId ==. pid ] []
+  ts <- runDBtime $ selectList [ DirectoryTagsDirectoryId ==. pid ] []
   runDBtime $ mapM_ deleteEntity ts
   runDBtime $ delete pid
 
 
-deleteGoal :: PrologGoalId -> Handler ()
+deleteGoal :: FileId -> Handler ()
 deleteGoal gid = do
-  runDBtime $ selectList [ PrologGoalTagsPrologGoalId ==. gid ] [] >>=  mapM_ deleteEntity
+  runDBtime $ selectList [ FileTagsFileId ==. gid ] [] >>=  mapM_ deleteEntity
   runDBtime $ delete gid
 
 
@@ -316,21 +317,21 @@ getUserIdent uid = do
     getUid user = userAccountIdent user
 
 
-getProgramId :: UserAccountId -> Text -> Handler (Maybe PrologProgramId)
+getProgramId :: UserAccountId -> Text -> Handler (Maybe DirectoryId)
 getProgramId uid name = runMaybeT $ do
   let name' = T.strip name
-  Entity pid _ <- MaybeT $ runDB $ getBy (UniquePrologProgram uid name')
+  Entity pid _ <- MaybeT $ runDB $ getBy (UniqueDirectory uid name')
   return pid
 
 
-getGoalId :: UserAccountId -> PrologProgramId -> Text -> Handler (Maybe PrologGoalId)
+getGoalId :: UserAccountId -> DirectoryId -> Text -> Handler (Maybe FileId)
 getGoalId uid pid goalName = runMaybeT $ do
   let goalName' = T.strip goalName
-  Entity gid _ <- MaybeT $ runDB $ getBy (UniquePrologGoal uid pid goalName')
+  Entity gid _ <- MaybeT $ runDB $ getBy (UniqueFile uid pid goalName')
   return gid
 
-getGoalCode :: PrologGoalId -> Handler (Maybe Text)
-getGoalCode gid = runMaybeT $ prologGoalCode <$> (MaybeT $ runDB $ get gid)
+getGoalCode :: FileId -> Handler (Maybe Text)
+getGoalCode gid = runMaybeT $ fileCode <$> (MaybeT $ runDB $ get gid)
 
-getProgramCode :: PrologProgramId -> Handler (Maybe Text)
-getProgramCode pid = runMaybeT $ prologProgramCode <$> (MaybeT $ runDB $ get pid)
+getProgramCode :: DirectoryId -> Handler (Maybe Text)
+getProgramCode pid = runMaybeT $ directoryCode <$> (MaybeT $ runDB $ get pid)

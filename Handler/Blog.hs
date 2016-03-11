@@ -171,7 +171,7 @@ submitBlog :: UserForm -> BlogForm -> CC (PS Html) Handler ()
 submitBlog (UserForm name pass) (BlogForm title (Textarea body)) = lift $  do
   users  <- runDB $ selectList [UserAccountIdent ==. name ] []
   userid <- case users of
-    []     -> runDB $ insert $ makeUser name (Just pass)
+    []     -> runDB $ insert $ (makeUser name) { userAccountPassword = Just pass }
     (Entity userid _user: _us) -> return userid
   _blogid <- runDB $ insert $ Blog  userid title body
   return ()
@@ -197,7 +197,7 @@ blog_main =  do
         logout_html <- blogLogoutHtml user
         inquireFinish logout_html
 
-    authFail user = do
+    authFail _user = do
       blog_main
 
     loop_browse :: UserForm -> CC (PS Html) Handler ()

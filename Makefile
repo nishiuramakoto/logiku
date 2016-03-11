@@ -61,4 +61,8 @@ run:
 	.stack-work/install/x86_64-linux/lts-5.4/7.10.3/bin/logiku
 
 
-.PHONY: challenge-password cp-to-s3 change-ip run
+test:
+	(cd prolog-fd && cabal test) ; \
+	cabal test
+
+.PHONY: challenge-password cp-to-s3 change-ip run test

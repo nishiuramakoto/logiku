@@ -65,8 +65,8 @@ module Control.Monad.CC.CCCxe (
               as_prompt_type
               ) where
 import Prelude
-import Control.Applicative
-import Control.Monad
+-- import Control.Applicative
+-- import Control.Monad
 import Control.Monad.Trans
 import Data.Typeable                    -- for prompts of the flavor PP, PD
 
@@ -104,14 +104,14 @@ instance Monad m => Applicative (CC p m) where
 ------------------------------ End fix  ------------------------------
 
 instance Monad m => Monad (CC p m) where
-    return x = CC $ \ki kd -> ki x
+    return x = CC $ \ki _kd -> ki x
 
     m >>= f = CC $ \ki kd -> unCC m
                               (\a -> unCC (f a) ki kd)
                               (\ctx -> kd (\x -> ctx x >>= f))
 
 instance MonadTrans (CC p) where
-    lift m = CC $ \ki kd -> m >>= ki
+    lift m = CC $ \ki _kd -> m >>= ki
 
 instance MonadIO m => MonadIO (CC p m) where
     liftIO = lift . liftIO
@@ -122,15 +122,15 @@ instance MonadIO m => MonadIO (CC p m) where
 pushPrompt :: Monad m =>
               Prompt p m w -> CC p m w -> CC p m w
 pushPrompt p@(_,proj) body = CC $ \ki kd ->
- let kd' ctx body | Just b <- proj body  = unCC (b ctx) ki kd
-     kd' ctx body = kd (\x -> pushPrompt p (ctx x)) body
+ let kd' ctx body' | Just b <- proj body'  = unCC (b ctx) ki kd
+     kd' ctx body' = kd (\x -> pushPrompt p (ctx x)) body'
  in unCC body ki kd'
 
 
 -- | Create the initial bubble
 takeSubCont :: Monad m =>
                Prompt p m w -> CCT p m x w -> CC p m x
-takeSubCont p@(inj,_) body = CC $ \ki kd -> kd id (inj body)
+takeSubCont (inj,_) body = CC $ \_ki kd -> kd id (inj body)
 
 -- | Apply the captured continuation
 pushSubCont :: Monad m => SubCont p m a b -> CC p m a -> CC p m b

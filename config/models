@@ -2,15 +2,17 @@
 
 -- What !? 'user' is a reserved name in postgres...
 UserAccount
-    ident    Text
-    password Text Maybe
+    ident       Text
+    password    Text Maybe
+    displayName Text Maybe
+
     -- Umask TODO:Factor this out!
-    umaskOwnerR Bool
-    umaskOwnerW Bool
-    umaskOwnerX Bool
-    umaskGroupR Bool
-    umaskGroupW Bool
-    umaskGroupX Bool
+    umaskOwnerR    Bool
+    umaskOwnerW    Bool
+    umaskOwnerX    Bool
+    umaskGroupR    Bool
+    umaskGroupW    Bool
+    umaskGroupX    Bool
     umaskEveryoneR Bool
     umaskEveryoneW Bool
     umaskEveryoneX Bool
@@ -19,48 +21,48 @@ UserAccount
     deriving Show Typeable
 
 
-PrologProgram json
+Directory json
       userId        UserAccountId
       name          Text
       explanation   Text
       code          Text
 
-      ownerR Bool
-      ownerW Bool
-      ownerX Bool
+      ownerR    Bool
+      ownerW    Bool
+      ownerX    Bool
       everyoneR Bool
       everyoneW Bool
       everyoneX Bool
 
-      UniquePrologProgram userId name
-      deriving     Show
+      UniqueDirectory userId name
+      deriving  Show
 
-PrologGoal
+File
       userId          UserAccountId
-      prologProgramId PrologProgramId
+      directoryId     DirectoryId
       name            Text
       explanation     Text
       code            Text
 
-      ownerR Bool
-      ownerW Bool
-      ownerX Bool
+      ownerR    Bool
+      ownerW    Bool
+      ownerX    Bool
       everyoneR Bool
       everyoneW Bool
       everyoneX Bool
 
-      UniquePrologGoal userId prologProgramId name
+      UniqueFile userId directoryId name
       deriving Show
 
 
 ------------------------------ Groups ------------------------------
 
 Group
-    group        Text
+    name         Text
     owner        UserAccountId
     explanation  Text Maybe
 
-    UniqueGroup  group
+    UniqueGroup  name
     deriving Show
 
 GroupMembers
@@ -70,26 +72,26 @@ GroupMembers
     UniqueGroupMember groupId member
     deriving Show
 
-ProgramGroups
-  prologProgramId    PrologProgramId
-  groupId            GroupId
+DirectoryGroups
+  directoryId   DirectoryId
+  groupId       GroupId
 
   groupR Bool
   groupW Bool
   groupX Bool
 
-  UniqueProgramGroups  prologProgramId groupId
+  UniqueDirectoryGroups  directoryId groupId
   deriving Show
 
-GoalGroups
-  prologGoalId   PrologGoalId
-  groupId        GroupId
+FileGroups
+  fileId     FileId
+  groupId    GroupId
 
   groupR Bool
   groupW Bool
   groupX Bool
 
-  UniqueGoalGroups prologGoalId groupId
+  UniqueFileGroups fileId groupId
   deriving Show
 
 
@@ -99,21 +101,21 @@ Tag
 	UniqueTag	name
 	deriving Show
 
-PrologProgramTags
-	prologProgramId	PrologProgramId
+DirectoryTags
+	directoryId	DirectoryId
 	tagId		TagId
-	UniquePrologProgramTags prologProgramId tagId
+	UniqueDirectoryTags directoryId tagId
 	deriving Show
 
-PrologGoalTags
-	prologGoalId	PrologGoalId
-	tagId		TagId
-	UniquePrologGoalTags prologGoalId tagId
+FileTags
+	fileId	FileId
+	tagId	TagId
+	UniqueFileTags fileId tagId
         deriving Show
 
 
 --------------------------  JSON Entities ----------------------------
-PrologGoalJson json
+FileJson json
       name            Text
       explanation     Text
       code            Text
