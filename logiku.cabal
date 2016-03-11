@@ -29,7 +29,7 @@ library
                      ContMap
                      SideMenu
                      Database
-                     -- DBFS
+                     DBFS
                      Authentication
                      Handler.Portfolio
                      Handler.Blog

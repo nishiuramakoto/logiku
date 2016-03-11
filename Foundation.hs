@@ -22,23 +22,6 @@ import ContMap
 import SideMenu
 
 
--------------------------- TODO move this to somewhere else --------------------------
-makeUser :: Text -> Maybe Text -> UserAccount
-makeUser ident mpass =
-  UserAccount
-  { userAccountIdent = ident
-  , userAccountPassword = mpass
-                   -- Default umask=022
-  , userAccountUmaskOwnerR = False
-  , userAccountUmaskOwnerW = False
-  , userAccountUmaskOwnerX = False
-  , userAccountUmaskGroupR = False
-  , userAccountUmaskGroupW = True
-  , userAccountUmaskGroupX = False
-  , userAccountUmaskEveryoneR = False
-  , userAccountUmaskEveryoneW = True
-  , userAccountUmaskEveryoneX = False
-  }
 
 --------------------------------------------------------------------------
 
@@ -56,10 +39,10 @@ data App = App
     , appMenuTree    :: MenuTree
     }
 
--- | Check database availability. In heroku, A database may be unavailable for maximum of 4hr/month.
+-- | Check database availability. In heroku, A database may be unavailable for a maximum of 4hr/month.
 databaseAvailable ::  HandlerT App IO Bool
 databaseAvailable = do
-  mEntity <- runDB $ selectFirst [PrologProgramName !=. ""] []
+  mEntity <- runDB $ selectFirst [DirectoryName !=. ""] []
   case mEntity of
     Just _  ->  return True
     Nothing ->  return False
@@ -238,7 +221,7 @@ instance YesodAuth App where
         setSession "credsIdent" (credsIdent creds)
         case x of
             Just (Entity uid _) -> return $ Authenticated uid
-            Nothing -> Authenticated <$> insert (makeUser (credsIdent creds) Nothing)
+            Nothing -> Authenticated <$> insert (makeUser (credsIdent creds))
 
     -- You can add other plugins like BrowserID, email or OAuth here
     authPlugins _ = [ authBrowserId def

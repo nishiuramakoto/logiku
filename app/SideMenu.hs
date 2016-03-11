@@ -6,4 +6,5 @@ module SideMenu (
 
 data MenuTree = MenuTree -- To be done later
 
+menuTree :: MenuTree
 menuTree = MenuTree

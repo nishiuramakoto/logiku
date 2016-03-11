@@ -1,4 +1,4 @@
-module Handler.HomeSpec (spec) where
+module Handler.HomeSpec () where
 
 import TestImport
 

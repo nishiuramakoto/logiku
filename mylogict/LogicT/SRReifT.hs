@@ -16,8 +16,8 @@ module LogicT.SRReifT (
   SG, runM, observe
 ) where
 import Import
-import Control.Monad
-import Control.Monad.Trans
+-- import Control.Monad
+-- import Control.Monad.Trans
 import LogicT.LogicT
 
 -- Choose an implementation of the CC transformer
@@ -100,15 +100,15 @@ instance LogicT SR where
 
 refl :: Monad m => m (Tree m a) -> SR m a
 -- refl m = SR (lift m >>= check)
-refl m = SR ( lift m >>= check)
+refl m = SR ( lift m >>= check')
 
  where                 -- we inline mzero and mplus
 --   newtype SR m a = SR{unSR:: forall ans. CC (PS (Tree m ans)) m a}
 
- check :: Monad m => Tree m a -> forall ans. CC (PS (Tree m ans)) m a
- check HZero         = abortP ps (return HZero)
- check (HOne a)      = return a
- check (HChoice a r) = (id =<<) . shift0P ps $ \sk ->
+ check' :: Monad m => Tree m a -> forall ans. CC (PS (Tree m ans)) m a
+ check' HZero         = abortP ps (return HZero)
+ check' (HOne a)      = return a
+ check' (HChoice a r) = (id =<<) . shift0P ps $ \sk ->
                          do f1 <- sk (return a)
                             let f2 = sk (unSR . refl $ runCC r)
                             compose_trees f1 f2
@@ -121,10 +121,10 @@ runM :: Monad m => Maybe Int -> SR m a -> m [a]
 runM n m = runCC (reify m >>= flatten n)
   where
   flatten _ HZero = return []
-  flatten (Just n) _ | n <= 0 = return []
+  flatten (Just n') _ | n' <= 0 = return []
   flatten _ (HOne a) = return [a]
-  flatten (Just 1) (HChoice a r) = return [a] -- Don't run r unless needed!
-  flatten n (HChoice a r) = r >>= flatten (fmap pred n) >>= (return . (a:))
+  flatten (Just 1) (HChoice a _r) = return [a] -- Don't run r unless needed!
+  flatten n' (HChoice a r) = r >>= flatten (fmap pred n') >>= (return . (a:))
 
 -- Hinze's `observe' -- the opposite of `lift'
 --      observe . lift == id

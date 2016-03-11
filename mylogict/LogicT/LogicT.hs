@@ -2,23 +2,23 @@
 -- Definition and implementation of generic operations, in terms of msplit
 
 {- Copyright (c) 2005, Amr Sabry, Chung-chieh Shan, Oleg Kiselyov,
-	and Daniel P. Friedman
+        and Daniel P. Friedman
 -}
 
 module LogicT.LogicT (
-	       LogicT(..),
-	       interleave,
-	       bindi,
-	       ifte,
-	       once,
-	       gsuccess,
-	       gfail,
-	       bagofN,
-	       reflect
-	      ) where
+               LogicT(..),
+               interleave,
+               bindi,
+               ifte,
+               once,
+               gsuccess,
+               gfail,
+               bagofN,
+               reflect
+              ) where
 import Import
-import Control.Monad
-import Control.Monad.Trans
+-- import Control.Monad
+-- import Control.Monad.Trans
 
 class MonadTrans t => LogicT t where
     msplit :: (Monad m, MonadPlus (t m)) => t m a -> t m (Maybe (a, t m a))
@@ -29,22 +29,22 @@ class MonadTrans t => LogicT t where
 
 -- fair disjunction
 interleave :: (LogicT t, Monad m, MonadPlus (t m)) =>
-	      t m a -> t m a -> t m a
+              t m a -> t m a -> t m a
     -- The code is *verbatim* from Logic.hs
-interleave sg1 sg2 = msplit sg1 >>= check
- where check Nothing            = sg2
-       check (Just (sg11,sg12)) = (return sg11) `mplus`
-				  (interleave sg2 sg12)
+interleave sg1 sg2 = msplit sg1 >>= check'
+ where check' Nothing            = sg2
+       check' (Just (sg11,sg12)) = (return sg11) `mplus`
+                                  (interleave sg2 sg12)
 
 
 -- standard `bind' is the conjunction
 -- the following is a fair conjunction
 -- Again, the old Logic.hs code works verbatim
 bindi:: (LogicT t, Monad m, MonadPlus (t m)) =>
-	    t m a -> (a -> t m b) -> t m b
-bindi sg g = msplit sg >>= check
- where check Nothing          = mzero
-       check (Just (sg1,sg2)) = interleave (g sg1) (bindi sg2 g)
+            t m a -> (a -> t m b) -> t m b
+bindi sg g = msplit sg >>= check'
+ where check' Nothing          = mzero
+       check' (Just (sg1,sg2)) = interleave (g sg1) (bindi sg2 g)
 
 -- Pruning things
 
@@ -52,15 +52,15 @@ bindi sg g = msplit sg >>= check
 -- ifte t th el = (or (and t th) (and (not t) el))
 -- However, t is evaluated only once
 ifte :: (LogicT t, Monad m, MonadPlus (t m)) =>
-	t m a -> (a -> t m b) -> t m b -> t m b
-ifte t th el = msplit t >>= check
- where check Nothing          = el
-       check (Just (sg1,sg2)) = (th sg1) `mplus` (sg2 >>= th)
+        t m a -> (a -> t m b) -> t m b -> t m b
+ifte t th el = msplit t >>= check'
+ where check' Nothing          = el
+       check' (Just (sg1,sg2)) = (th sg1) `mplus` (sg2 >>= th)
 
 once :: (LogicT t, Monad m, MonadPlus (t m)) => t m a -> t m a
-once m = msplit m >>= check
- where check Nothing        = mzero
-       check (Just (sg1,_)) = return sg1
+once m = msplit m >>= check'
+ where check' Nothing        = mzero
+       check' (Just (sg1,_)) = return sg1
 
 {- A particular transformer must define
     -- The inverse of `lift'. Hinze calls it `observe'. Others may call
@@ -87,12 +87,12 @@ bagofN :: (Monad m, LogicT t, MonadPlus (t m)) => Maybe Int -> t m a -> t m [a]
 bagofN (Just n) _ | n <= 0  = return []
 bagofN n m = msplit m >>= bagofN'
     where bagofN' Nothing = return []
-	  bagofN' (Just (a,m')) = bagofN (fmap (-1 +) n) m' >>= (return . (a:))
+          bagofN' (Just (a,m')) = bagofN (fmap (-1 +) n) m' >>= (return . (a:))
 
 
     -- This is like the opposite of `msplit'
     -- The law is: msplit tm >>= reflect === tm
 reflect :: (Monad m, LogicT t, MonadPlus (t m)) => Maybe (a, t m a) -> t m a
 reflect r = case r of
-		   Nothing -> mzero
-		   Just (a,tmr) -> return a `mplus` tmr
+                   Nothing -> mzero
+                   Just (a,tmr) -> return a `mplus` tmr

@@ -8,8 +8,8 @@ module Authentication(
 
 import Import.NoFoundation
 
-import Data.Text(Text)
-import qualified Data.Text as T
+-- import Data.Text(Text)
+-- import qualified Data.Text as T
 -- import           Yesod.Auth.BrowserId
 import           Yesod.Auth.GoogleEmail2
 
@@ -68,18 +68,18 @@ maybeUserIdent = lookupSession "credsIdent"
 --  cacheSession userIdentString maybeUserIdentGoogle
 
 
-maybeUserIdentGoogle :: YesodAuth master => HandlerT master IO (Maybe Text)
-maybeUserIdentGoogle = do
-  mtoken <- getUserAccessToken
-  case mtoken of
-    Nothing    ->  return Nothing
-    Just token -> do app <- getYesod
-                     mperson <- getPerson (authHttpManager app) token
-                     case mperson of
-                       Nothing -> return Nothing
-                       Just person ->
-                         case personEmails person of
-                         (Yesod.Auth.GoogleEmail2.Email val _type : _ ) -> do
-                           $(logInfo) $ T.pack $ "AuthId=" ++ show val
-                           return $ Just val
-                         _ -> return Nothing
+-- maybeUserIdentGoogle :: YesodAuth master => HandlerT master IO (Maybe Text)
+-- maybeUserIdentGoogle = do
+--   mtoken <- getUserAccessToken
+--   case mtoken of
+--     Nothing    ->  return Nothing
+--     Just token -> do app <- getYesod
+--                      mperson <- getPerson (authHttpManager app) token
+--                      case mperson of
+--                        Nothing -> return Nothing
+--                        Just person ->
+--                          case personEmails person of
+--                          (Yesod.Auth.GoogleEmail2.Email val _type : _ ) -> do
+--                            $(logInfo) $ T.pack $ "AuthId=" ++ show val
+--                            return $ Just val
+--                          _ -> return Nothing
