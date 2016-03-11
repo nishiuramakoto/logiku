@@ -378,7 +378,7 @@ loopBrowse uid (Just pid) forceSave = do
                            loopBrowse uid  (Just pid) False
 
         Just Delete  -> do mentity <- lift $ selectNextUserProgram uid (Just pid)
-                           lift $ deleteProgram pid
+                           -- lift $ deleteProgram pid
                            loopBrowse uid (entityKey <$> mentity) False
 
         _ -> loopBrowse uid (Just pid) forceSave

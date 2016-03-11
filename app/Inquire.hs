@@ -9,6 +9,8 @@ import ContMap
 import Control.Monad.CC.CCCxe
 import Language.Prolog2.Syntax
 
+import qualified Data.Text as T
+
 -------------------------- Primitive forms  --------------------------
 
 data PrologInquireBoolForm = PrologInquireBoolForm Bool
@@ -16,7 +18,8 @@ data PrologInquireBoolForm = PrologInquireBoolForm Bool
 
 prologInquireBoolForm :: Term -> Html -> MForm Handler (FormResult PrologInquireBoolForm, Widget)
 prologInquireBoolForm t = renderDivs $ PrologInquireBoolForm
-                         <$> areq boolField (fromString $ show t) Nothing
+                          <$> areq boolField (fromString $ showU t) Nothing
+--                         <$> areq boolField (fromString $ show t) Nothing
 
 prologInquireBoolWidget ::  ContId -> Widget -> Enctype -> Widget
 prologInquireBoolWidget klabel formWidget _enctype = do
@@ -37,3 +40,8 @@ inquirePrologBool t = do
   (klabel, html) <- prologInquireBoolHtml  t
   answer         <- inquireGet klabel html (prologInquireBoolForm t)
   return (klabel, answer)
+
+
+showU :: Term -> String
+showU (UTerm (TStruct a [])) = T.unpack a
+showU t =  show t
