@@ -221,7 +221,7 @@ instance YesodAuth App where
         setSession "credsIdent" (credsIdent creds)
         case x of
             Just (Entity uid _) -> return $ Authenticated uid
-            Nothing -> Authenticated <$> insert (makeUser (credsIdent creds))
+            Nothing -> Authenticated <$> insert (makeUserAccount (credsIdent creds))
 
     -- You can add other plugins like BrowserID, email or OAuth here
     authPlugins _ = [ authBrowserId def

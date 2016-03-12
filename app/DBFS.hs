@@ -1,8 +1,19 @@
-{-# LANGUAGE OverloadedStrings
+{-# LANGUAGE OverloadedStrings,
+             ScopedTypeVariables
   #-}
 
 module DBFS
-       (   -- programReadable
+       ( DbfsError(..), UserModOptions(..)
+
+       ,  mkdir
+       , touch
+       , lsRootByOwnerAccess
+       , lsRootByGroupAccess
+       , lsRootByEveryoneAccess
+       , lsRootOwnerReadable
+       , isPrivileged
+       , isGroupOwnerOf
+-- programReadable
 --         , programWritable
 --         , programExecutable
 
@@ -34,13 +45,13 @@ module DBFS
          -- , chmodProgram
          -- , chmodGoal
 
-         -- , useradd
-         -- , usermod
-         -- , userdel
+       , useradd
+       , usermod
+       , userdel
 
-         -- , groupadd
+       , groupadd
          -- , groupmod
-         -- , groupdel
+       , groupdel
 
          -- , programTagsAdd
          -- , programTagsDel
@@ -52,85 +63,50 @@ module DBFS
 
          -- TODO User accounting functions
 
-           mkdir
-         , touch
   ) where
 
 
-import             Import hiding ((==.), (>=.) ,(||.)  , on , Value , update , (=.) )
+import             Import hiding ((==.), (>=.) ,(||.)  , on , Value , update , (=.) , forM_ , delete)
 import             Database.Esqueleto
-import             Control.Monad.Trans.Maybe
+import  qualified  Data.Text as T
+import             Data.Foldable
 
+data DbfsError = DirectoryDoesNotExist Text
+               | UserDoesNotExist   Text
+               | GroupAlreadyExists Text
+               | PermissionError  Text
+               deriving (Eq,Show)
 
-data DbfsError = GoalAccessError String
-               | ProgramAccessError String
-               | FileSystemError String
-               deriving (Show)
-
-data Perm = Perm {permR :: Bool
-                 ,permW :: Bool
-                 ,permX :: Bool
-                 }
-            deriving Show
-
-type UMask = Perm
 type Result a = Either DbfsError a
 
+data UserModOptions = AddToGroup GroupId
+                    | SetDisplayName Text
+                    deriving (Eq,Show)
 
 
 -------------------------- Entity creation  --------------------------
-mkdir :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Maybe DirectoryId)
+mkdir :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result DirectoryId)
 mkdir uid name = do
   muser <- get uid
   case muser of
-    Just user -> do dir <- insert (mkdir' user)
-                    return $ Just dir
-    Nothing   -> return Nothing
+    Just user -> do dir <- insert (makeDirectory uid name (umaskFromUserAccount user))
+                    return $ Right dir
+    Nothing   -> return $ Left $ UserDoesNotExist $ T.pack $  "user does not exist:" ++ show uid
 
-    where
-      mkdir' user = Directory
-                    { directoryUserId = uid
-                    , directoryName   = name
-                    , directoryExplanation = ""
-                    , directoryCode   = ""
-                                        -- default is 777
-                    , directoryOwnerR    = True && not (userAccountUmaskOwnerR user)
-                    , directoryOwnerW    = True && not (userAccountUmaskOwnerW user)
-                    , directoryOwnerX    = True && not (userAccountUmaskOwnerX user)
-                    , directoryEveryoneR = True && not (userAccountUmaskEveryoneR user)
-                    , directoryEveryoneW = True && not (userAccountUmaskEveryoneW user)
-                    , directoryEveryoneX = True && not (userAccountUmaskEveryoneX user)
-                    }
 
-touch :: MonadIO m => UserAccountId -> DirectoryId -> Text -> SqlPersistT m (Maybe FileId)
+touch :: MonadIO m => UserAccountId -> DirectoryId -> Text -> SqlPersistT m (Result FileId)
 touch uid dir name = do
   muser <- get uid
   mdir  <- get dir
   case (muser, mdir) of
-    (Just user, Just d) ->  do file <- insert (touch' user dir)
-                               return $ Just file
-    _   -> return Nothing
+    (Just user, Just _) ->  do file <- insert (makeFile uid dir name (umaskFromUserAccount user))
+                               return $ Right file
+    (_      , Nothing)  -> return $ Left $ DirectoryDoesNotExist $ T.pack (show dir)
+    (Nothing, _      )  -> return $ Left $ UserDoesNotExist      $ T.pack (show uid)
 
-    where
-      touch' user dir = File
-                    { fileUserId = uid
-                    , fileDirectoryId = dir
-                    , fileName   = name
-                    , fileExplanation = ""
-                    , fileCode   = ""
-                                        -- default is 777
-                    , fileOwnerR    = True && not (userAccountUmaskOwnerR user)
-                    , fileOwnerW    = True && not (userAccountUmaskOwnerW user)
-                    , fileOwnerX    = True && not (userAccountUmaskOwnerX user)
-                    , fileEveryoneR = True && not (userAccountUmaskEveryoneR user)
-                    , fileEveryoneW = True && not (userAccountUmaskEveryoneW user)
-                    , fileEveryoneX = True && not (userAccountUmaskEveryoneX user)
-                    }
 
----
-
--- lsHeadP :: UserId -> Int -> Int -> Handler [ Entity PrologProgram ]
--- lsHeadP uid n m
+-- lsRoot :: UserId -> Int -> Int -> Handler [ Entity PrologProgram ]
+-- lsRoot uid n m
 --   | n < m     = findP uid [] [OffsetBy n, LimitTo (m-n) ]
 --   | otherwise = findP uid [] []
 
@@ -149,44 +125,42 @@ touch uid dir name = do
 --      return ( prog, flag, grp)
 
 
--- ---------------------- Access function template ----------------------
--- selectProgramOwnerAccess :: UserId -> PrologProgramId -> EntityField PrologProgramOwnerSecurity Bool
---                             -> SqlPersistT Handler [Entity PrologProgram]
--- selectProgramOwnerAccess uid pid field =
---   select $
---     from $ \(ownerFlag `InnerJoin` prog) -> do
---       on (ownerFlag^.PrologProgramOwnerSecurityPrologProgramId ==. prog^.PrologProgramId)
---       where_( prog^.PrologProgramUserId ==. val uid
---               &&. prog^.PrologProgramId ==. val pid
---               &&. ownerFlag^. field ==. val True
---           )
---       return prog
+---------------------- Access function template ----------------------
+lsRootByOwnerAccess :: MonadIO m
+                       =>  UserAccountId -> EntityField Directory Bool
+                       -> SqlPersistT m [Entity Directory]
+lsRootByOwnerAccess uid field =
+  select $
+    from $ \dir -> do
+      where_( dir^.DirectoryUserId  ==. val uid
+              &&. dir^.field        ==. val True
+          )
+      return dir
 
--- selectProgramEveryoneAccess ::  PrologProgramId -> EntityField PrologProgramEveryoneSecurity Bool
---                                 -> SqlPersistT Handler [Entity PrologProgram]
--- selectProgramEveryoneAccess pid field =
---   select $
---     from $ \(everyoneFlag `InnerJoin` prog) -> do
---       on (everyoneFlag^.PrologProgramEveryoneSecurityPrologProgramId ==. prog^.PrologProgramId)
---       where_( prog^.PrologProgramId ==. val pid
---               &&. everyoneFlag^. field ==. val True
---             )
---       return prog
-
+lsRootByEveryoneAccess ::  MonadIO m
+                           => UserAccountId -> EntityField Directory Bool
+                           -> SqlPersistT m [Entity Directory]
+lsRootByEveryoneAccess uid field =
+  select $
+    from $ \dir -> do
+      where_( dir^.DirectoryUserId ==. val uid
+              &&. dir^.field ==. val True
+            )
+      return dir
 
 
--- selectProgramGroupAccess ::  UserId -> PrologProgramId -> EntityField PrologProgramGroupSecurity Bool
---                              -> SqlPersistT Handler [Entity PrologProgram]
--- selectProgramGroupAccess uid pid field =
---   select $
---         from $ \(prog `InnerJoin` flag `InnerJoin` grp) -> do
---           on (grp^.GroupMemberGroupId ==. flag^.PrologProgramGroupSecurityGroupId)
---           on (flag^.PrologProgramGroupSecurityPrologProgramId ==. prog^.PrologProgramId)
---           where_ ( grp^.GroupMemberMember ==. val uid
---                    &&. prog^.PrologProgramId ==. val pid
---                    &&. flag^. field ==. val True )
 
---           return prog
+lsRootByGroupAccess :: MonadIO m
+                       => UserAccountId -> EntityField DirectoryGroups Bool
+                       -> SqlPersistT m [Entity Directory]
+lsRootByGroupAccess uid field =
+  select $
+        from $ \(dir `InnerJoin` directoryGroups `InnerJoin` groupMembers) -> do
+          on (groupMembers^.GroupMembersGroupId ==. directoryGroups^.DirectoryGroupsGroupId)
+          on (directoryGroups^.DirectoryGroupsDirectoryId ==. dir^.DirectoryId)
+          where_ ( groupMembers^.GroupMembersMember ==. val uid
+                   &&. directoryGroups^.field ==. val True )
+          return dir
 
 
 -- ----------------------  Goal Access templates ------------------------
@@ -231,8 +205,9 @@ touch uid dir name = do
 
 
 -- ------------------------ Permission API for programs  ------------------------
--- selectProgramOwnerReadable :: UserId -> PrologProgramId -> SqlPersistT Handler [Entity PrologProgram]
--- selectProgramOwnerReadable uid pid = selectProgramOwnerAccess uid pid  PrologProgramOwnerSecurityR
+lsRootOwnerReadable :: MonadIO m
+                                =>  UserAccountId -> SqlPersistT m [Entity Directory]
+lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 
 -- selectProgramOwnerWritable :: UserId -> PrologProgramId -> SqlPersistT Handler [Entity PrologProgram]
 -- selectProgramOwnerWritable uid pid = selectProgramOwnerAccess uid pid  PrologProgramOwnerSecurityW
@@ -791,48 +766,101 @@ touch uid dir name = do
 
 
 
--- ------------------------------ User ------------------------------
+ ------------------------------ User ------------------------------
 
--- useradd :: Text -> Maybe Text -> UMask -> Result UserId
--- useradd ident mpassword umask = do uid <- insert (User ident mpassword umask)
---                                    return $ Right uid
 
--- usermod :: UserId ->  GroupId -> Result UserId
--- usermod uid gid = do
---   prv <- privileged uid
---   own <- groupOwner uid gid
+isPrivileged :: MonadIO m => UserAccountId -> SqlPersistT m Bool
+isPrivileged he = maybe False userAccountPrivileged <$> get he
 
---   if (prv || own)
---     then
---     insert (GroupMembers gid uid)
---     return $ Right gid
---     else
---     return $ Left $ PermissionError "not root or the group owner"
+useradd :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result UserAccountId)
+useradd he ident = do
+  prv <- isPrivileged he
+  if prv
+    then  Right <$>  (insert $ makeUserAccount ident)
+    else  return $ Left  $ PermissionError "needs to be root to create a user"
 
--- usermod' :: UserId -> GroupId -> Result GroupId
--- usermod' uid gid = do
---   prv <- privileged uid
---   own <- groupOwner uid gid
 
---   if (prv || own)
---     then
---     deleteBy (UniqueGroupMember gid uid)
---     return $ Right gid
---     else
---     return $ Left $ PermissionError "not root or the group owner"
+usermod :: MonadIO m
+           => UserAccountId -> UserAccountId -> [UserModOptions] -> SqlPersistT m (Result UserAccountId)
+usermod he him opts = foldlM (>>>) (Right him) opts
+  where
+    Left  a   >>> _   = return $ Left a
+    Right _ >>> AddToGroup gid = do
+      prv <- isPrivileged he
+      own <- he `isGroupOwnerOf`  gid
 
--- -- Doesn't delete the programs by default
--- userdel :: UserId -> Bool
--- userdel uid = do
---   delete $ \p -> do
---     where_ (p^.GroupMembersMember ==. uid)
---   return True
+      if (prv || own)
+        then do _<- insert $ makeGroupMembers gid him
+                return $ Right him
+        else do return $ Left $ PermissionError $
+                  T.concat [ T.pack $  show he , "is neither root nor the group owner" ]
 
--- ------------------------------  Group --------------------------------
--- groupadd :: UserId -> Text -> Maybe Text -> SqlPersistT Handler (Result GroupId)
--- groupadd uid groupName explanation = do
---   gid <- insert (Group groupName uid explanation)
---   return $ Right gid
+    Right _ >>> SetDisplayName newName = do
+      prv <- isPrivileged he
+      let himself = he == him
+
+      if (prv || himself)
+        then do update $ \user -> do
+                  set user [ UserAccountDisplayName =. val (Just newName) ]
+                  where_   (user^.UserAccountId ==. val him)
+
+                return $ Right him
+        else do return $ Left $ PermissionError $
+                  T.concat [ T.pack $ show he
+                           , "is neither root nor the person he is trying to change the display name" ]
+
+
+isGroupOwnerOf :: MonadIO m => UserAccountId -> GroupId -> SqlPersistT m Bool
+isGroupOwnerOf he gid =  do
+  mgroup <- get gid
+  case mgroup of
+    Just grp  -> return (groupOwner grp == he)
+    Nothing     -> return False
+
+
+-- Doesn't delete the programs by default
+userdel :: MonadIO m => UserAccountId -> UserAccountId -> SqlPersistT m (Result UserAccountId)
+userdel he him = do
+  prv <- isPrivileged he
+
+  if prv || he == him
+    then do ownedGroups <- select $
+                           from $ \grp -> do
+                             where_ (grp^.GroupOwner ==. val him)
+                             return grp
+
+            forM_ (map entityKey ownedGroups) (he `groupdel`)
+
+            delete $
+              from $ \groupMembers -> do
+                where_ (groupMembers^.GroupMembersMember ==. val him)
+
+            delete $
+              from $ \directory -> do
+                where_ (directory^.DirectoryUserId ==. val him)
+
+            delete $
+              from $ \file -> do
+                where_ (file^.FileUserId ==. val him)
+
+            delete $
+              from $ \userAccount -> do
+                where_ (userAccount^.UserAccountId ==. val him)
+
+            return $ Right he
+
+    else do
+    return $ Left $ PermissionError (T.pack (show he ++ " needs to be root to delete " ++ show him))
+
+--------------------------------  Group --------------------------------
+groupadd :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result GroupId)
+groupadd he groupName = do
+   mgid <- insert (makeGroup groupName he)
+   return $ Right mgid
+
+   -- case mgid of
+   --   Just gid ->
+   --   Nothing  -> return $ Left  $ GroupAlreadyExists $ T.concat ["group " , show groupName , "already exists" ]
 
 -- groupmod :: UserId -> GroupId -> Text -> Maybe Text -> SqlPersistT Handler (Result GroupId)
 -- groupmod uid gid groupName explanation = do
@@ -847,15 +875,33 @@ touch uid dir name = do
 --     else
 --     return $ Left $ PermissionError "only root or the owner can modify the group"
 
--- groupdel :: UserId -> GroupId -> SqlPersistT Handler (Result Bool)
--- groupdel uid gid = do
---   prv   <- privileged uid
---   owner <- groupOwner gid
---   if (prv || owner == uid)
---     then do deleteBy (UniqueGroupMember gid uid)
---             return $ Right gid
---     else
---     return $ Left $ PermissionError "only root or the owner can modify the group"
+groupdel :: MonadIO m => UserAccountId -> GroupId -> SqlPersistT m (Result UserAccountId)
+groupdel he gid = do
+  prv   <- isPrivileged he
+  own   <- he `isGroupOwnerOf` gid
+  if  prv || own
+    then do delete $
+              from $ \directoryGroups -> do
+                where_ (directoryGroups^.DirectoryGroupsGroupId ==. val gid)
+
+            delete $
+              from $ \fileGroups -> do
+                where_ (fileGroups^.FileGroupsGroupId ==. val gid)
+
+            delete $
+              from $ \groupMembers -> do
+                where_ (groupMembers^.GroupMembersGroupId  ==. val gid)
+
+            delete $
+              from $ \grp -> do
+                where_ (grp^.GroupId ==. val gid)
+
+            return $ Right he
+
+    else
+    return $ Left $ PermissionError
+    (T.pack $ show he ++ " needs to be root or the group owner to delete the group")
+
 
 
 -- ------------------------  Database Invariants  ------------------------
@@ -876,14 +922,14 @@ touch uid dir name = do
 
 
 ------------------------ Auxillary functions  ------------------------
-negateMaybe :: Monad m => m [a] -> m (Maybe Bool)
-negateMaybe m  = do x <- m
-                    case x of
-                      []  -> return (Just True)
-                      _   -> return Nothing
+_negateMaybe :: Monad m => m [a] -> m (Maybe Bool)
+_negateMaybe m  = do x <- m
+                     case x of
+                       []  -> return (Just True)
+                       _   -> return Nothing
 
-negateMaybe' :: Monad m => m (Maybe Bool) -> m Bool
-negateMaybe' m = do x <- m
-                    case x of
-                      Just _ -> return False
-                      Nothing -> return True
+_negateMaybe' :: Monad m => m (Maybe Bool) -> m Bool
+_negateMaybe' m = do x <- m
+                     case x of
+                       Just _ -> return False
+                       Nothing -> return True

@@ -171,7 +171,7 @@ submitBlog :: UserForm -> BlogForm -> CC (PS Html) Handler ()
 submitBlog (UserForm name pass) (BlogForm title (Textarea body)) = lift $  do
   users  <- runDB $ selectList [UserAccountIdent ==. name ] []
   userid <- case users of
-    []     -> runDB $ insert $ (makeUser name) { userAccountPassword = Just pass }
+    []     -> runDB $ insert $ (makeUserAccount name) { userAccountPassword = Just pass }
     (Entity userid _user: _us) -> return userid
   _blogid <- runDB $ insert $ Blog  userid title body
   return ()
