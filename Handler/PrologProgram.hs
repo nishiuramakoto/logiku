@@ -1,4 +1,5 @@
--- A temporary version, NOT THREAD SAFE
+-- Temporary version, NOT THREAD SAFE
+{-# OPTIONS_GHC -w #-}
 
 module Handler.PrologProgram  where
 
@@ -57,7 +58,7 @@ maybeUserId = do
   -- muident <- selectFirstUserIdent
   $(logInfo) $ T.pack $ "muident" ++ show muident
   case muident of
-    Just ident -> do Entity uid _ <- runDB $ upsert (makeUser ident) ([] :: [Update UserAccount])
+    Just ident -> do Entity uid _ <- runDB $ upsert (makeUserAccount ident) ([] :: [Update UserAccount])
                      return $ Just uid
     Nothing    -> return Nothing
 

@@ -3,10 +3,10 @@
 -- What !? 'user' is a reserved name in postgres...
 UserAccount
     ident       Text
+    privileged  Bool
     password    Text Maybe
     displayName Text Maybe
 
-    -- Umask TODO:Factor this out!
     umaskOwnerR    Bool
     umaskOwnerW    Bool
     umaskOwnerX    Bool
@@ -24,8 +24,8 @@ UserAccount
 Directory json
       userId        UserAccountId
       name          Text
-      explanation   Text
       code          Text
+      explanation   Text
 
       ownerR    Bool
       ownerW    Bool
@@ -41,8 +41,8 @@ File
       userId          UserAccountId
       directoryId     DirectoryId
       name            Text
-      explanation     Text
       code            Text
+      explanation     Text
 
       ownerR    Bool
       ownerW    Bool
@@ -60,7 +60,7 @@ File
 Group
     name         Text
     owner        UserAccountId
-    explanation  Text Maybe
+    explanation  Text
 
     UniqueGroup  name
     deriving Show

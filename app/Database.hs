@@ -90,7 +90,7 @@ insertUser user = do
   muser <- runDBtime $ getBy $ UniqueUserAccount (userAccountIdent user)
   case muser of
     Just _user -> return Nothing
-    Nothing   -> Just <$> (runDBtime $ insert $ (makeUser (userAccountIdent user))
+    Nothing   -> Just <$> (runDBtime $ insert $ (makeUserAccount (userAccountIdent user))
                            { userAccountPassword = userAccountPassword user } )
 
 insertDirectory :: Directory -> Handler (Maybe DirectoryId)
