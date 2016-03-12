@@ -1,3 +1,6 @@
+{-# LANGUAGE OverloadedStrings
+  #-}
+
 module DBFS
        (   -- programReadable
 --         , programWritable
@@ -48,12 +51,9 @@ module DBFS
          -- , goalTagsFind
 
          -- TODO User accounting functions
-           sqlTest1
-         , sqlTest2
-         , sqlTest3
-         , sqlTest4
-         , sqlTest5
-         , sqlTest6
+
+           mkdir
+         , touch
   ) where
 
 
@@ -76,48 +76,58 @@ data Perm = Perm {permR :: Bool
 type UMask = Perm
 type Result a = Either DbfsError a
 
-sqlTest1 :: MonadIO m => SqlPersistT m [Entity UserAccount]
-sqlTest1 = do people <- select $
-                        from $ \user -> do
-                          return user
-              return people
 
 
-sqlTest2 :: MonadIO m => SqlPersistT m [Entity UserAccount]
-sqlTest2 = do people <- select $
-                        from $ \user -> do
-                          where_ (user ^. UserAccountUmaskEveryoneW ==. val True)
-                          return user
-              return people
+-------------------------- Entity creation  --------------------------
+mkdir :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Maybe DirectoryId)
+mkdir uid name = do
+  muser <- get uid
+  case muser of
+    Just user -> do dir <- insert (mkdir' user)
+                    return $ Just dir
+    Nothing   -> return Nothing
 
-sqlTest3 :: MonadIO m => SqlPersistT m [Entity Group]
-sqlTest3 =  select $
-            from $ \group -> do
-              where_ (group ^. GroupExplanation ==. just (val "abc"))
-              return group
+    where
+      mkdir' user = Directory
+                    { directoryUserId = uid
+                    , directoryName   = name
+                    , directoryExplanation = ""
+                    , directoryCode   = ""
+                                        -- default is 777
+                    , directoryOwnerR    = True && not (userAccountUmaskOwnerR user)
+                    , directoryOwnerW    = True && not (userAccountUmaskOwnerW user)
+                    , directoryOwnerX    = True && not (userAccountUmaskOwnerX user)
+                    , directoryEveryoneR = True && not (userAccountUmaskEveryoneR user)
+                    , directoryEveryoneW = True && not (userAccountUmaskEveryoneW user)
+                    , directoryEveryoneX = True && not (userAccountUmaskEveryoneX user)
+                    }
 
+touch :: MonadIO m => UserAccountId -> DirectoryId -> Text -> SqlPersistT m (Maybe FileId)
+touch uid dir name = do
+  muser <- get uid
+  mdir  <- get dir
+  case (muser, mdir) of
+    (Just user, Just d) ->  do file <- insert (touch' user dir)
+                               return $ Just file
+    _   -> return Nothing
 
-sqlTest4 :: MonadIO m => SqlPersistT m [(Entity Directory, Entity File)]
-sqlTest4 = select $
-           from $ \(dir,file) -> do
-             where_ (dir^.DirectoryUserId ==. file^.FileUserId)
-             orderBy [asc (dir^.DirectoryName)]
-             return (dir,file)
+    where
+      touch' user dir = File
+                    { fileUserId = uid
+                    , fileDirectoryId = dir
+                    , fileName   = name
+                    , fileExplanation = ""
+                    , fileCode   = ""
+                                        -- default is 777
+                    , fileOwnerR    = True && not (userAccountUmaskOwnerR user)
+                    , fileOwnerW    = True && not (userAccountUmaskOwnerW user)
+                    , fileOwnerX    = True && not (userAccountUmaskOwnerX user)
+                    , fileEveryoneR = True && not (userAccountUmaskEveryoneR user)
+                    , fileEveryoneW = True && not (userAccountUmaskEveryoneW user)
+                    , fileEveryoneX = True && not (userAccountUmaskEveryoneX user)
+                    }
 
-sqlTest5 :: MonadIO m => SqlPersistT m [(Entity Directory, Maybe (Entity File))]
-sqlTest5 = select $
-           from $ \(dir `LeftOuterJoin` mfile) -> do
-             on (just (dir^.DirectoryUserId) ==. mfile?.FileUserId)
-             orderBy [asc (dir^.DirectoryName), asc (mfile?.FileName) ]
-             return (dir,mfile)
-
-sqlTest6 :: MonadIO m => SqlPersistT m [(Entity Directory , Entity File, Entity Group)]
-sqlTest6 = select $
-           from $ \(dir `InnerJoin` file `InnerJoin` group) -> do
-             on (group^.GroupOwner ==. file^.FileUserId )
-             on (dir^.DirectoryUserId ==. file^.FileUserId)
-             return (dir,file,group)
-
+---
 
 -- lsHeadP :: UserId -> Int -> Int -> Handler [ Entity PrologProgram ]
 -- lsHeadP uid n m

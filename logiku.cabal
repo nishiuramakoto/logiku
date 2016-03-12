@@ -195,6 +195,7 @@ test-suite test
                  , classy-prelude
                  , classy-prelude-yesod
                  , aeson
+                 , esqueleto
 
 -- library
 --         hs-source-dirs: CC-delcont-cxe-0.1.0.2
