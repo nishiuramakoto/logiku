@@ -53,8 +53,8 @@ sqlTest6 = select $
              return (dir,file,group)
 
 
-runDBExample :: SqlPersistT (NoLoggingT (ResourceT IO)) () ->  YesodExample App ()
-runDBExample m = runDB m
+
+
 
 setupTestDB1 :: YesodExample App ()
 setupTestDB1 =
@@ -105,6 +105,33 @@ sqlTest7 = do privileged <- select $
               return privileged
 
 
+type Test a = YesodExample App a
+
+selectPrivilegedUsers = runDB  $ do  select $
+                                       from $ \users -> do
+                                         where_ (users^.UserAccountPrivileged ==. val True)
+                                         return users
+
+selectAll = runDB $ do select $
+                         from $ \groupMembers -> do
+                           return groupMembers
+
+
+deleteUser user = runDB $ do  Just root <- getBy $ UniqueUserAccount "root"
+                              Just u    <- getBy $ UniqueUserAccount user
+                              entityKey root `userdel` entityKey u
+
+deleteGroup grp = runDB $ do  Just root <- getBy $ UniqueUserAccount "root"
+                              Just g    <- getBy $ UniqueGroup grp
+                              entityKey root `groupdel` entityKey g
+
+deleteFromGroup user grp = runDB $ do Just root <- getBy $ UniqueUserAccount "root"
+                                      Just u    <- getBy $ UniqueUserAccount  user
+                                      Just g    <- getBy $ UniqueGroup grp
+                                      entityKey root `usermod` entityKey u $ [DelFromGroup $ entityKey g]
+
+selectUser user = runDB $ do Just u <- getBy $ UniqueUserAccount user
+                             return $ entityVal u
 
 spec :: Spec
 spec = withApp $ do
@@ -168,52 +195,50 @@ spec = withApp $ do
       Right group2 <- user2 `groupadd` "group2"
       Right group3 <- user3 `groupadd` "group3"
 
+      Right u  <- user1 `usermod` user1 $ [ AddToGroup group1 ]
       Right u  <- user1 `usermod` user2 $ [ AddToGroup group1 ]
+      Right u  <- user2 `usermod` user2 $ [ AddToGroup group2 ]
+      Right u  <- user3 `usermod` user3 $ [ AddToGroup group3 ]
       Right u' <- user2 `usermod` user2 $ [ SetDisplayName "me" ]
 
       return ()
 
-    roots <- runDB  $ do  select $
-                             from $ \users -> do
-                               where_ (users^.UserAccountPrivileged ==. val True)
-                               return users
+    user2 <- selectUser "user2"
+    lift $ userAccountDisplayName user2 `shouldBe` Just "me"
 
+    roots <- selectPrivilegedUsers
     lift $ length roots `shouldBe` 1
 
-    groups <- runDB $ do select $
-                           from $ \grp -> do
-                             return grp
-    lift $ length (groups :: [Entity Group]) `shouldBe` 3
+    groupMembers <- selectAll :: Test [Entity GroupMembers]
+    lift $ length groupMembers `shouldBe` 4
 
-    users <- runDB $ do  Just root <- getBy $ UniqueUserAccount "root"
-                         Just user1 <- getBy $ UniqueUserAccount "user1"
-                         entityKey root `userdel` entityKey user1
-                         select $
-                           from $ \users -> do
-                             return users
+    groups <- selectAll :: Test [Entity Group]
+    lift $ length groups `shouldBe` 3
 
-    lift $ length (users :: [Entity UserAccount]) `shouldBe` 3
+    deleteGroup "group1"
 
-    users <- runDB $ do  Just root  <- getBy $ UniqueUserAccount "root"
-                         Just user2 <- getBy $ UniqueUserAccount "user2"
-                         Just user3 <- getBy $ UniqueUserAccount "user3"
+    groups <- selectAll :: Test [Entity Group]
+    lift $ length groups `shouldBe` 2
 
-                         entityKey root `userdel` entityKey user2
-                         entityKey root `userdel` entityKey user3
+    groupMembers <- selectAll :: Test [Entity GroupMembers]
+    lift $ length groupMembers `shouldBe` 2
 
-                         select $
-                           from $ \users -> do
-                             return users
+    deleteFromGroup "user3" "group3"
 
-    lift $ length (users :: [Entity UserAccount]) `shouldBe` 1
+    groupMembers <- selectAll :: Test [Entity GroupMembers]
+    lift $ length groupMembers `shouldBe` 1
 
-    groups <- runDB $ do select $
-                           from $ \grp -> do
-                             return grp
+    deleteUser "user1"
+    users <- selectAll :: Test [Entity UserAccount]
+    lift $ length users  `shouldBe` 3
 
-    lift $ length (groups :: [Entity Group]) `shouldBe` 0
+    deleteUser "user2"
+    deleteUser "user3"
+    users <- selectAll :: Test [Entity UserAccount]
+    lift $ length users  `shouldBe` 1
 
-    groupMembers <- runDB $ do select $
-                                 from $ \groupMembers -> do
-                                   return groupMembers
-    lift $ length (groupMembers :: [Entity GroupMembers]) `shouldBe` 0
+    groups <- selectAll :: Test [Entity Group]
+    lift $ length groups `shouldBe` 0
+
+    groupMembers <- selectAll :: Test [Entity GroupMembers]
+    lift $ length groupMembers `shouldBe` 0
