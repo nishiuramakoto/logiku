@@ -197,6 +197,9 @@ test-suite test
                  , aeson
                  , esqueleto
                  , yesod-persistent >= 1.4.0.3
+                 , time >= 1.5.0.1
+                 , text >= 1.2.2.0
+                 , mtl  >= 2.2.1
 
 -- library
 --         hs-source-dirs: CC-delcont-cxe-0.1.0.2

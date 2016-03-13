@@ -4,16 +4,34 @@
 
 module DBFS
        ( DbfsError(..), UserModOptions(..)
-
-       ,  mkdir
-       , touch
-       , lsRootByOwnerAccess
-       , lsRootByGroupAccess
-       , lsRootByEveryoneAccess
-       , lsRootOwnerReadable
+       , Perm(..)
+       , mkdir
+       , touch , touchAt
        , isPrivileged
        , isGroupOwnerOf
--- programReadable
+
+
+       , isDirectoryOwnerReadableBy
+       , isDirectoryOwnerWritableBy
+       , isDirectoryOwnerExecutableBy
+
+       , isDirectoryGroupReadableBy
+       , isDirectoryGroupWritableBy
+       , isDirectoryGroupExecutableBy
+
+       , isDirectoryEveryoneReadableBy
+       , isDirectoryEveryoneWritableBy
+       , isDirectoryEveryoneExecutableBy
+
+       , isDirectoryReadableBy
+       , isDirectoryWritableBy
+       , isDirectoryExecutableBy
+
+       , isFileReadableBy
+       , isFileWritableBy
+       , isFileExecutableBy
+
+         -- programReadable
 --         , programWritable
 --         , programExecutable
 
@@ -42,7 +60,7 @@ module DBFS
          -- , chownProgram
          -- , chownGoal
 
-         -- , chmodProgram
+       , chmodDirectory
          -- , chmodGoal
 
        , useradd
@@ -67,9 +85,11 @@ module DBFS
 
 
 import             Import hiding ((==.), (>=.) ,(||.)  , on , Value , update , (=.) , forM_ , delete)
+import  qualified  Import as I
 import             Database.Esqueleto
 import  qualified  Data.Text as T
-import             Data.Foldable
+import             Data.Foldable hiding(null, mapM_)
+
 
 data DbfsError = DirectoryDoesNotExist Text
                | UserDoesNotExist   Text
@@ -85,229 +105,298 @@ data UserModOptions = AddToGroup GroupId
                     deriving (Eq,Show)
 
 
--------------------------- Entity creation  --------------------------
-mkdir :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result DirectoryId)
-mkdir uid name = do
-  muser <- get uid
+belongs :: MonadIO m => UserAccountId -> SqlPersistT m (Result [GroupId])
+belongs he = do
+  muser <- get he
   case muser of
-    Just user -> do dir <- insert (makeDirectory uid name (umaskFromUserAccount user))
-                    return $ Right dir
-    Nothing   -> return $ Left $ UserDoesNotExist $ T.pack $  "user does not exist:" ++ show uid
+    Just _ -> do  groups  <- select $
+                                from $ \groupMembers -> do
+                                  where_ (groupMembers^.GroupMembersMember ==. val he)
+                                  return groupMembers
+                  return $ Right $ map (groupMembersGroupId . entityVal)  groups
+
+    Nothing -> return $ Left $ UserDoesNotExist $ T.pack $ show he
+
+-------------------------- Entity creation  --------------------------
+-- In our system, everyone is allowed to create a directory (which is really a prolog program)
+mkdir :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result DirectoryId)
+mkdir he name = do
+  muser <- get he
+
+  case muser of
+    Just user -> do
+      let umask = umaskFromUserAccount user
+      dir <- insert (makeDirectory he name umask)
+      groups <- belongs he -- should not throw
+
+      case groups of
+        Right gs -> do
+          forM_  gs $ \g -> do
+            liftIO $ putStrLn $ T.pack $ show (dir,g)
+            insert $ makeDirectoryGroups dir g umask
+          return $ Right dir
+
+        Left err -> return $ Left err
+
+    Nothing   -> return $ Left $ UserDoesNotExist $ T.pack $  "user does not exist:" ++ show he
 
 
+
+-- Unlike a unix filesystem creating files is allowed iff the directory is executable, not writable
 touch :: MonadIO m => UserAccountId -> DirectoryId -> Text -> SqlPersistT m (Result FileId)
-touch uid dir name = do
-  muser <- get uid
+touch he dir name = do
+  muser <- get he
   mdir  <- get dir
-  case (muser, mdir) of
-    (Just user, Just _) ->  do file <- insert (makeFile uid dir name (umaskFromUserAccount user))
-                               return $ Right file
-    (_      , Nothing)  -> return $ Left $ DirectoryDoesNotExist $ T.pack (show dir)
-    (Nothing, _      )  -> return $ Left $ UserDoesNotExist      $ T.pack (show uid)
+  x     <- dir `isDirectoryExecutableBy` he
+  case (muser, mdir, x) of
+    (Just user, Just _ , True) ->  do
+      file <- insert (makeFile he dir name (umaskFromUserAccount user))
+      groups <- belongs he -- should not throw
+      case groups of
+        Right gs -> do
+          forM_  gs $  \g -> do
+            liftIO $ putStrLn $ T.pack $ show (dir,g)
+            insert (makeDirectoryGroups dir g (umaskFromUserAccount user))
+          return $ Right file
+        Left err -> return $ Left err
+
+    (Nothing, _      , _  )  -> return $ Left $ UserDoesNotExist      $ T.pack (show he)
+    (_      , Nothing , _ )  -> return $ Left $ DirectoryDoesNotExist $ T.pack (show dir)
+    (_ , _ ,  _ ) -> return $ Left $ PermissionError $ T.pack "directory not executable(but MAY be writable)"
 
 
--- lsRoot :: UserId -> Int -> Int -> Handler [ Entity PrologProgram ]
+touchAt :: MonadIO m => UserAccountId -> DirectoryId -> Text -> SqlPersistT m (Result FileId)
+touchAt = touch
+
+
+-- lsRoot :: UserId -> Int -> Int -> Handler [ Entity Directory ]
 -- lsRoot uid n m
 --   | n < m     = findP uid [] [OffsetBy n, LimitTo (m-n) ]
 --   | otherwise = findP uid [] []
 
--- findP :: UserId -> [ Filter PrologProgram ] -> [ SelectOpt PrologProgram ] -> Handler [ Entity PrologProgram ]
+-- findP :: UserId -> [ Filter Directory ] -> [ SelectOpt Directory ] -> Handler [ Entity Directory ]
 -- findP uid filter select = undefined
 
--- _selectGroupPrograms :: UserId -> SqlPersistT Handler [ (Entity PrologProgram
---                                                        , Entity PrologProgramGroupSecurity
+-- _selectGroupPrograms :: UserId -> SqlPersistT Handler [ (Entity Directory
+--                                                        , Entity DirectoryGroupSecurity
 --                                                        , Entity GroupMember) ]
 -- _selectGroupPrograms uid   =
 --   select $
 --   from $ \(prog `InnerJoin` flag `InnerJoin` grp) -> do
---      on (grp ^. GroupMemberGroupId ==. flag ^. PrologProgramGroupSecurityGroupId)
---      on (flag ^. PrologProgramGroupSecurityPrologProgramId ==. prog ^. PrologProgramId)
+--      on (grp ^. GroupMemberGroupId ==. flag ^. DirectoryGroupSecurityGroupId)
+--      on (flag ^. DirectoryGroupSecurityDirectoryId ==. prog ^. DirectoryId)
 --      where_ ( grp ^. GroupMemberMember ==. val uid )
 --      return ( prog, flag, grp)
 
 
 ---------------------- Access function template ----------------------
-lsRootByOwnerAccess :: MonadIO m
-                       =>  UserAccountId -> EntityField Directory Bool
-                       -> SqlPersistT m [Entity Directory]
-lsRootByOwnerAccess uid field =
-  select $
-    from $ \dir -> do
-      where_( dir^.DirectoryUserId  ==. val uid
-              &&. dir^.field        ==. val True
-          )
-      return dir
+isDirectoryOwnerAccessibleBy:: MonadIO m
+                       =>  DirectoryId -> UserAccountId -> EntityField Directory Bool -> SqlPersistT m Bool
+isDirectoryOwnerAccessibleBy dir him field = do
+  ds <- select $
+        from $ \directory -> do
+          where_( directory^.DirectoryId          ==. val dir
+                  &&. directory^.DirectoryUserId  ==. val him
+                  &&. directory^.field            ==. val True
+                )
+          return directory
+  return $ not $ null ds
 
-lsRootByEveryoneAccess ::  MonadIO m
-                           => UserAccountId -> EntityField Directory Bool
-                           -> SqlPersistT m [Entity Directory]
-lsRootByEveryoneAccess uid field =
-  select $
-    from $ \dir -> do
-      where_( dir^.DirectoryUserId ==. val uid
-              &&. dir^.field ==. val True
-            )
-      return dir
+isDirectoryEveryoneAccessibleBy:: MonadIO m
+                       =>  DirectoryId -> UserAccountId -> EntityField Directory Bool -> SqlPersistT m Bool
+isDirectoryEveryoneAccessibleBy dir _him field = do
+  ds <- select $
+        from $ \directory -> do
+          where_( directory^.DirectoryId          ==. val dir
+                  &&. directory^.field            ==. val True
+                )
+          return directory
+  return $ not $ null ds
 
-
-
-lsRootByGroupAccess :: MonadIO m
-                       => UserAccountId -> EntityField DirectoryGroups Bool
-                       -> SqlPersistT m [Entity Directory]
-lsRootByGroupAccess uid field =
-  select $
-        from $ \(dir `InnerJoin` directoryGroups `InnerJoin` groupMembers) -> do
+isDirectoryGroupAccessibleBy :: MonadIO m
+                                => DirectoryId -> UserAccountId -> EntityField DirectoryGroups Bool
+                             -> SqlPersistT m Bool
+isDirectoryGroupAccessibleBy dir him field = do
+  ds <- select $
+        from $ \(directory `InnerJoin` directoryGroups `InnerJoin` groupMembers) -> do
           on (groupMembers^.GroupMembersGroupId ==. directoryGroups^.DirectoryGroupsGroupId)
-          on (directoryGroups^.DirectoryGroupsDirectoryId ==. dir^.DirectoryId)
-          where_ ( groupMembers^.GroupMembersMember ==. val uid
-                   &&. directoryGroups^.field ==. val True )
-          return dir
+          on (directoryGroups^.DirectoryGroupsDirectoryId ==. directory^.DirectoryId)
+          where_ ( directory^.DirectoryId ==. val dir
+                   &&. directoryGroups^.field ==. val True
+                   &&. groupMembers^.GroupMembersMember ==. val him )
+          return directory
+  return $ not $ null ds
 
 
--- ----------------------  Goal Access templates ------------------------
+isFileOwnerAccessibleBy:: MonadIO m
+                       =>  FileId -> UserAccountId -> EntityField File Bool -> SqlPersistT m Bool
+isFileOwnerAccessibleBy f him field = do
+  ds <- select $
+        from $ \file -> do
+          where_( file^.FileId          ==. val f
+                  &&. file^.FileUserId  ==. val him
+                  &&. file^.field       ==. val True
+                )
+          return file
+  return $ not $ null ds
 
--- selectGoalOwnerAccess :: UserId -> PrologGoalId -> EntityField PrologGoalOwnerSecurity Bool
---                             -> SqlPersistT Handler [Entity PrologGoal]
--- selectGoalOwnerAccess uid pid field =
---   select $
---     from $ \(ownerFlag `InnerJoin` prog) -> do
---       on (ownerFlag^.PrologGoalOwnerSecurityPrologGoalId ==. prog^.PrologGoalId)
---       where_( prog^.PrologGoalUserId ==. val uid
---               &&. prog^.PrologGoalId ==. val pid
---               &&. ownerFlag^. field ==. val True
---           )
---       return prog
+isFileEveryoneAccessibleBy:: MonadIO m
+                       =>  FileId -> UserAccountId -> EntityField File Bool -> SqlPersistT m Bool
+isFileEveryoneAccessibleBy f _him field = do
+  ds <- select $
+        from $ \file -> do
+          where_( file^.FileId       ==. val f
+                  &&. file^.field    ==. val True
+                )
+          return file
+  return $ not $ null ds
 
--- selectGoalEveryoneAccess ::  PrologGoalId -> EntityField PrologGoalEveryoneSecurity Bool
---                                 -> SqlPersistT Handler [Entity PrologGoal]
--- selectGoalEveryoneAccess pid field =
---   select $
---     from $ \(everyoneFlag `InnerJoin` prog) -> do
---       on (everyoneFlag^.PrologGoalEveryoneSecurityPrologGoalId ==. prog^.PrologGoalId)
---       where_( prog^.PrologGoalId ==. val pid
---               &&. everyoneFlag^. field ==. val True
---             )
---       return prog
-
-
-
--- selectGoalGroupAccess ::  UserId -> PrologGoalId -> EntityField PrologGoalGroupSecurity Bool
---                              -> SqlPersistT Handler [Entity PrologGoal]
--- selectGoalGroupAccess uid pid field =
---   select $
---         from $ \(prog `InnerJoin` flag `InnerJoin` grp) -> do
---           on (grp^.GroupMemberGroupId ==. flag^.PrologGoalGroupSecurityGroupId)
---           on (flag^.PrologGoalGroupSecurityPrologGoalId ==. prog^.PrologGoalId)
---           where_ ( grp^.GroupMemberMember ==. val uid
---                    &&. prog^.PrologGoalId ==. val pid
---                    &&. flag^. field ==. val True )
---           return prog
+isFileGroupAccessibleBy :: MonadIO m
+                                => FileId -> UserAccountId -> EntityField FileGroups Bool
+                             -> SqlPersistT m Bool
+isFileGroupAccessibleBy f him field = do
+  ds <- select $
+        from $ \(file `InnerJoin` fileGroups `InnerJoin` groupMembers) -> do
+          on (groupMembers^.GroupMembersGroupId ==. fileGroups^.FileGroupsGroupId)
+          on (fileGroups^.FileGroupsFileId ==. file^.FileId)
+          where_ ( file^.FileId ==. val f
+                   &&. fileGroups^.field ==. val True
+                   &&. groupMembers^.GroupMembersMember ==. val him )
+          return file
+  return $ not $ null ds
 
 
 
--- ------------------------ Permission API for programs  ------------------------
-lsRootOwnerReadable :: MonadIO m
-                                =>  UserAccountId -> SqlPersistT m [Entity Directory]
-lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
+-------------------------- Permission API   ------------------------
+isDirectoryOwnerReadableBy :: MonadIO m
+                              =>  DirectoryId -> UserAccountId -> SqlPersistT m Bool
+isDirectoryOwnerReadableBy dir him = dir `isDirectoryOwnerAccessibleBy` him $ DirectoryOwnerR
 
--- selectProgramOwnerWritable :: UserId -> PrologProgramId -> SqlPersistT Handler [Entity PrologProgram]
--- selectProgramOwnerWritable uid pid = selectProgramOwnerAccess uid pid  PrologProgramOwnerSecurityW
+isDirectoryOwnerWritableBy :: MonadIO m
+                              => DirectoryId -> UserAccountId ->  SqlPersistT m Bool
+isDirectoryOwnerWritableBy dir him = dir `isDirectoryOwnerAccessibleBy` him $ DirectoryOwnerW
 
--- selectProgramOwnerExecutable :: UserId -> PrologProgramId -> SqlPersistT Handler [Entity PrologProgram]
--- selectProgramOwnerExecutable uid pid = selectProgramOwnerAccess uid pid  PrologProgramOwnerSecurityX
-
--- selectProgramGroupReadable :: UserId -> PrologProgramId -> SqlPersistT Handler [Entity PrologProgram]
--- selectProgramGroupReadable uid pid = selectProgramGroupAccess uid pid  PrologProgramGroupSecurityR
-
--- selectProgramGroupWritable :: UserId -> PrologProgramId -> SqlPersistT Handler [Entity PrologProgram]
--- selectProgramGroupWritable uid pid = selectProgramGroupAccess uid pid  PrologProgramGroupSecurityW
-
--- selectProgramGroupExecutable :: UserId -> PrologProgramId -> SqlPersistT Handler [Entity PrologProgram]
--- selectProgramGroupExecutable uid pid = selectProgramGroupAccess uid pid  PrologProgramGroupSecurityX
-
--- selectProgramEveryoneReadable :: PrologProgramId -> SqlPersistT Handler [Entity PrologProgram]
--- selectProgramEveryoneReadable  pid = selectProgramEveryoneAccess pid PrologProgramEveryoneSecurityR
-
--- selectProgramEveryoneWritable ::  PrologProgramId -> SqlPersistT Handler [Entity PrologProgram]
--- selectProgramEveryoneWritable  pid = selectProgramEveryoneAccess pid PrologProgramEveryoneSecurityW
-
--- selectProgramEveryoneExecutable :: PrologProgramId -> SqlPersistT Handler [Entity PrologProgram]
--- selectProgramEveryoneExecutable  pid = selectProgramEveryoneAccess pid PrologProgramEveryoneSecurityX
+isDirectoryOwnerExecutableBy :: MonadIO m
+                                => DirectoryId -> UserAccountId -> SqlPersistT m Bool
+isDirectoryOwnerExecutableBy dir him = dir `isDirectoryOwnerAccessibleBy` him $  DirectoryOwnerX
 
 
--- programReadable :: UserId -> PrologProgramId -> SqlPersistT Handler Bool
--- programReadable uid pid = negateMaybe' $ runMaybeT $ do
---   _<- MaybeT $ negateMaybe $ selectProgramOwnerReadable uid pid
---   _<- MaybeT $ negateMaybe $ selectProgramEveryoneReadable pid
---   do  MaybeT $ negateMaybe $ selectProgramGroupReadable uid pid
+isDirectoryGroupReadableBy :: MonadIO m
+                              =>  DirectoryId -> UserAccountId -> SqlPersistT m Bool
+isDirectoryGroupReadableBy dir him = dir `isDirectoryGroupAccessibleBy` him $ DirectoryGroupsGroupR
 
--- programWritable :: UserId -> PrologProgramId -> SqlPersistT Handler Bool
--- programWritable uid pid = negateMaybe' $ runMaybeT $ do
---   _<- MaybeT $ negateMaybe $ selectProgramOwnerWritable uid pid
---   _<- MaybeT $ negateMaybe $ selectProgramEveryoneWritable pid
---   do  MaybeT $ negateMaybe $ selectProgramGroupWritable uid pid
+isDirectoryGroupWritableBy :: MonadIO m
+                              => DirectoryId -> UserAccountId -> SqlPersistT m Bool
+isDirectoryGroupWritableBy dir him = dir `isDirectoryGroupAccessibleBy` him $ DirectoryGroupsGroupW
 
--- programExecutable :: UserId -> PrologProgramId -> SqlPersistT Handler Bool
--- programExecutable uid pid = negateMaybe' $ runMaybeT $ do
---   _<- MaybeT $ negateMaybe $ selectProgramOwnerExecutable uid pid
---   _<- MaybeT $ negateMaybe $ selectProgramEveryoneExecutable pid
---   do  MaybeT $ negateMaybe $ selectProgramGroupExecutable uid pid
+isDirectoryGroupExecutableBy :: MonadIO m
+                                => DirectoryId -> UserAccountId -> SqlPersistT m Bool
+isDirectoryGroupExecutableBy dir him = dir `isDirectoryGroupAccessibleBy` him $  DirectoryGroupsGroupX
 
 
--- ------------------------ Permission Api for Goals  ------------------------
+isDirectoryEveryoneReadableBy :: MonadIO m
+                              =>  DirectoryId -> UserAccountId -> SqlPersistT m Bool
+isDirectoryEveryoneReadableBy dir him = dir `isDirectoryEveryoneAccessibleBy` him $ DirectoryEveryoneR
 
--- selectGoalOwnerReadable :: UserId -> PrologGoalId -> SqlPersistT Handler [Entity PrologGoal]
--- selectGoalOwnerReadable uid pid = selectGoalOwnerAccess uid pid  PrologGoalOwnerSecurityR
+isDirectoryEveryoneWritableBy :: MonadIO m
+                              => DirectoryId -> UserAccountId -> SqlPersistT m Bool
+isDirectoryEveryoneWritableBy dir him = dir `isDirectoryEveryoneAccessibleBy` him $ DirectoryEveryoneW
 
--- selectGoalOwnerWritable :: UserId -> PrologGoalId -> SqlPersistT Handler [Entity PrologGoal]
--- selectGoalOwnerWritable uid pid = selectGoalOwnerAccess uid pid  PrologGoalOwnerSecurityW
-
--- selectGoalOwnerExecutable :: UserId -> PrologGoalId -> SqlPersistT Handler [Entity PrologGoal]
--- selectGoalOwnerExecutable uid pid = selectGoalOwnerAccess uid pid  PrologGoalOwnerSecurityX
-
--- selectGoalGroupReadable :: UserId -> PrologGoalId -> SqlPersistT Handler [Entity PrologGoal]
--- selectGoalGroupReadable uid pid = selectGoalGroupAccess uid pid  PrologGoalGroupSecurityR
-
--- selectGoalGroupWritable :: UserId -> PrologGoalId -> SqlPersistT Handler [Entity PrologGoal]
--- selectGoalGroupWritable uid pid = selectGoalGroupAccess uid pid  PrologGoalGroupSecurityW
-
--- selectGoalGroupExecutable :: UserId -> PrologGoalId -> SqlPersistT Handler [Entity PrologGoal]
--- selectGoalGroupExecutable uid pid = selectGoalGroupAccess uid pid  PrologGoalGroupSecurityX
-
--- selectGoalEveryoneReadable ::  PrologGoalId -> SqlPersistT Handler [Entity PrologGoal]
--- selectGoalEveryoneReadable  pid = selectGoalEveryoneAccess pid PrologGoalEveryoneSecurityR
-
--- selectGoalEveryoneWritable :: PrologGoalId -> SqlPersistT Handler [Entity PrologGoal]
--- selectGoalEveryoneWritable  pid = selectGoalEveryoneAccess pid PrologGoalEveryoneSecurityW
-
--- selectGoalEveryoneExecutable :: PrologGoalId -> SqlPersistT Handler [Entity PrologGoal]
--- selectGoalEveryoneExecutable  pid = selectGoalEveryoneAccess pid PrologGoalEveryoneSecurityX
+isDirectoryEveryoneExecutableBy :: MonadIO m
+                                => DirectoryId -> UserAccountId -> SqlPersistT m Bool
+isDirectoryEveryoneExecutableBy dir him = dir `isDirectoryEveryoneAccessibleBy` him $  DirectoryEveryoneX
 
 
--- goalReadable :: UserId -> PrologGoalId -> SqlPersistT Handler Bool
--- goalReadable uid pid = negateMaybe' $ runMaybeT $ do
---   _ <- MaybeT $ negateMaybe $ selectGoalOwnerReadable uid pid
---   _ <- MaybeT $ negateMaybe $ selectGoalEveryoneReadable pid
---   do   MaybeT $ negateMaybe $ selectGoalGroupReadable uid pid
 
--- goalWritable :: UserId -> PrologGoalId -> SqlPersistT Handler Bool
--- goalWritable uid pid = negateMaybe' $ runMaybeT $ do
---   _ <- MaybeT $ negateMaybe $ selectGoalOwnerWritable uid pid
---   _ <- MaybeT $ negateMaybe $ selectGoalEveryoneWritable pid
---   do   MaybeT $ negateMaybe $ selectGoalGroupWritable uid pid
 
--- goalExecutable :: UserId -> PrologGoalId -> SqlPersistT Handler Bool
--- goalExecutable uid pid = negateMaybe' $ runMaybeT $ do
---   _ <- MaybeT $ negateMaybe $ selectGoalOwnerExecutable uid pid
---   _ <- MaybeT $ negateMaybe $ selectGoalEveryoneExecutable pid
---   do   MaybeT $ negateMaybe $ selectGoalGroupExecutable uid pid
+isDirectoryReadableBy :: MonadIO m =>  DirectoryId -> UserAccountId -> SqlPersistT m Bool
+isDirectoryReadableBy dir him = orM [ dir `isDirectoryOwnerReadableBy`  him
+                                    , dir `isDirectoryEveryoneReadableBy` him
+                                    , dir `isDirectoryGroupReadableBy`  him
+                                    ]
+
+isDirectoryWritableBy :: MonadIO m =>  DirectoryId -> UserAccountId -> SqlPersistT m Bool
+isDirectoryWritableBy dir him = orM [ dir `isDirectoryOwnerWritableBy`  him
+                                    , dir `isDirectoryEveryoneWritableBy` him
+                                    , dir `isDirectoryGroupWritableBy`  him
+                                    ]
+
+isDirectoryExecutableBy :: MonadIO m => DirectoryId -> UserAccountId -> SqlPersistT m Bool
+isDirectoryExecutableBy dir him = orM [ dir `isDirectoryOwnerExecutableBy`  him
+                                      , dir `isDirectoryEveryoneExecutableBy` him
+                                      , dir `isDirectoryGroupExecutableBy`  him
+                                      ]
+
+
+
+
+
+isFileOwnerReadableBy :: MonadIO m
+                              =>  FileId -> UserAccountId -> SqlPersistT m Bool
+isFileOwnerReadableBy dir him = dir `isFileOwnerAccessibleBy` him $ FileOwnerR
+
+isFileOwnerWritableBy :: MonadIO m
+                              => FileId -> UserAccountId ->  SqlPersistT m Bool
+isFileOwnerWritableBy dir him = dir `isFileOwnerAccessibleBy` him $ FileOwnerW
+
+isFileOwnerExecutableBy :: MonadIO m
+                                => FileId -> UserAccountId -> SqlPersistT m Bool
+isFileOwnerExecutableBy dir him = dir `isFileOwnerAccessibleBy` him $  FileOwnerX
+
+
+isFileGroupReadableBy :: MonadIO m
+                              =>  FileId -> UserAccountId -> SqlPersistT m Bool
+isFileGroupReadableBy dir him = dir `isFileGroupAccessibleBy` him $ FileGroupsGroupR
+
+isFileGroupWritableBy :: MonadIO m
+                              => FileId -> UserAccountId -> SqlPersistT m Bool
+isFileGroupWritableBy dir him = dir `isFileGroupAccessibleBy` him $ FileGroupsGroupW
+
+isFileGroupExecutableBy :: MonadIO m
+                                => FileId -> UserAccountId -> SqlPersistT m Bool
+isFileGroupExecutableBy dir him = dir `isFileGroupAccessibleBy` him $  FileGroupsGroupX
+
+
+isFileEveryoneReadableBy :: MonadIO m
+                              =>  FileId -> UserAccountId -> SqlPersistT m Bool
+isFileEveryoneReadableBy dir him = dir `isFileEveryoneAccessibleBy` him $ FileEveryoneR
+
+isFileEveryoneWritableBy :: MonadIO m
+                              => FileId -> UserAccountId -> SqlPersistT m Bool
+isFileEveryoneWritableBy dir him = dir `isFileEveryoneAccessibleBy` him $ FileEveryoneW
+
+isFileEveryoneExecutableBy :: MonadIO m
+                                => FileId -> UserAccountId -> SqlPersistT m Bool
+isFileEveryoneExecutableBy dir him = dir `isFileEveryoneAccessibleBy` him $  FileEveryoneX
+
+
+
+
+isFileReadableBy :: MonadIO m =>  FileId -> UserAccountId -> SqlPersistT m Bool
+isFileReadableBy dir him = orM [ dir `isFileOwnerReadableBy`  him
+                                    , dir `isFileEveryoneReadableBy` him
+                                    , dir `isFileGroupReadableBy`  him
+                                    ]
+
+isFileWritableBy :: MonadIO m =>  FileId -> UserAccountId -> SqlPersistT m Bool
+isFileWritableBy dir him = orM [ dir `isFileOwnerWritableBy`  him
+                                    , dir `isFileEveryoneWritableBy` him
+                                    , dir `isFileGroupWritableBy`  him
+                                    ]
+
+isFileExecutableBy :: MonadIO m => FileId -> UserAccountId -> SqlPersistT m Bool
+isFileExecutableBy dir him = orM [ dir `isFileOwnerExecutableBy`  him
+                                      , dir `isFileEveryoneExecutableBy` him
+                                      , dir `isFileGroupExecutableBy`  him
+                                      ]
+
 
 
 
 
 -- --------------------  lsHeadPrograms  --------------------
 
--- lsHeadPrograms :: Int64 -> Int64 -> UserId ->  SqlPersistT Handler [Entity PrologProgram]
+-- lsHeadPrograms :: Int64 -> Int64 -> UserId ->  SqlPersistT m [Entity Directory]
 -- lsHeadPrograms lim offs uid  =
 --       select $
 --       from $ \(program
@@ -315,10 +404,10 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 --                `FullOuterJoin` everyoneFlags
 --                `FullOuterJoin` groupFlags
 --                `FullOuterJoin` userGroups )  -> do
---                on (groupFlags^.PrologProgramGroupSecurityGroupId ==. userGroups^.GroupMemberGroupId)
---                on (program^.PrologProgramId ==. groupFlags^.PrologProgramGroupSecurityPrologProgramId)
---                on (program^.PrologProgramId ==. everyoneFlags^.PrologProgramEveryoneSecurityPrologProgramId)
---                on (program^.PrologProgramId ==. ownerFlags^.PrologProgramOwnerSecurityPrologProgramId)
+--                on (groupFlags^.DirectoryGroupSecurityGroupId ==. userGroups^.GroupMemberGroupId)
+--                on (program^.DirectoryId ==. groupFlags^.DirectoryGroupSecurityDirectoryId)
+--                on (program^.DirectoryId ==. everyoneFlags^.DirectoryEveryoneSecurityDirectoryId)
+--                on (program^.DirectoryId ==. ownerFlags^.DirectoryOwnerSecurityDirectoryId)
 
 --                where_ ( programOwnerReadableCond uid program ownerFlags
 --                         ||. programGroupReadableCond uid groupFlags userGroups
@@ -329,26 +418,26 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 
 
 -- programOwnerReadableCond :: UserId
---                             -> SqlExpr (Entity PrologProgram)
---                             -> SqlExpr (Entity PrologProgramOwnerSecurity)
+--                             -> SqlExpr (Entity Directory)
+--                             -> SqlExpr (Entity DirectoryOwnerSecurity)
 --                             -> SqlExpr (Value Bool)
--- programOwnerReadableCond uid prog ownerFlags = prog^.PrologProgramUserId ==. val uid
---                                             &&. ownerFlags^.PrologProgramOwnerSecurityR ==. val True
+-- programOwnerReadableCond uid prog ownerFlags = prog^.DirectoryUserId ==. val uid
+--                                             &&. ownerFlags^.DirectoryOwnerSecurityR ==. val True
 
 -- programGroupReadableCond :: UserId
---                             -> SqlExpr (Entity PrologProgramGroupSecurity)
+--                             -> SqlExpr (Entity DirectoryGroupSecurity)
 --                             -> SqlExpr (Entity GroupMember)
 --                             -> SqlExpr (Value Bool)
 -- programGroupReadableCond uid groupFlags userGroups = userGroups^.GroupMemberMember ==. val uid
---                                                      &&. groupFlags^.PrologProgramGroupSecurityR ==. val True
+--                                                      &&. groupFlags^.DirectoryGroupSecurityR ==. val True
 
--- programEveryoneReadableCond :: SqlExpr (Entity PrologProgramEveryoneSecurity) -> SqlExpr (Value Bool)
--- programEveryoneReadableCond everyOneFlags = everyOneFlags^.PrologProgramEveryoneSecurityR ==. val True
+-- programEveryoneReadableCond :: SqlExpr (Entity DirectoryEveryoneSecurity) -> SqlExpr (Value Bool)
+-- programEveryoneReadableCond everyOneFlags = everyOneFlags^.DirectoryEveryoneSecurityR ==. val True
 
 
 -- -------------------------------- lsHeadGoals ---------------------------------
 
--- lsHeadGoals :: Int64 -> Int64 -> UserId -> PrologProgramId -> SqlPersistT Handler [Entity PrologGoal]
+-- lsHeadGoals :: Int64 -> Int64 -> UserId -> DirectoryId -> SqlPersistT m [Entity File]
 -- lsHeadGoals lim offs uid pid = do
 --   x <- programExecutable uid pid
 --   if x then callSelect else throwM (GoalAccessError "Program goal not listable")
@@ -361,10 +450,10 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 --                `FullOuterJoin` everyoneFlags
 --                `FullOuterJoin` groupFlags
 --                `FullOuterJoin` userGroups )  -> do
---                on (groupFlags^.PrologGoalGroupSecurityGroupId ==. userGroups^.GroupMemberGroupId)
---                on (goal^.PrologGoalId ==. groupFlags^.PrologGoalGroupSecurityPrologGoalId)
---                on (goal^.PrologGoalId ==. everyoneFlags^.PrologGoalEveryoneSecurityPrologGoalId)
---                on (goal^.PrologGoalId ==. ownerFlags^.PrologGoalOwnerSecurityPrologGoalId)
+--                on (groupFlags^.FileGroupSecurityGroupId ==. userGroups^.GroupMemberGroupId)
+--                on (goal^.FileId ==. groupFlags^.FileGroupSecurityFileId)
+--                on (goal^.FileId ==. everyoneFlags^.FileEveryoneSecurityFileId)
+--                on (goal^.FileId ==. ownerFlags^.FileOwnerSecurityFileId)
 
 --                where_ ( goalOwnerReadableCond uid goal ownerFlags
 --                         ||. goalGroupReadableCond uid groupFlags userGroups
@@ -373,27 +462,27 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 --                offset offs
 --                return goal
 
--- goalOwnerReadableCond :: UserId -> SqlExpr (Entity PrologGoal) -> SqlExpr (Entity PrologGoalOwnerSecurity)
+-- goalOwnerReadableCond :: UserId -> SqlExpr (Entity File) -> SqlExpr (Entity FileOwnerSecurity)
 --                          -> SqlExpr (Value Bool)
--- goalOwnerReadableCond uid goal ownerFlags = goal^.PrologGoalUserId ==. val uid
---                                             &&. ownerFlags^.PrologGoalOwnerSecurityR ==. val True
+-- goalOwnerReadableCond uid goal ownerFlags = goal^.FileUserId ==. val uid
+--                                             &&. ownerFlags^.FileOwnerSecurityR ==. val True
 
--- goalGroupReadableCond :: UserId -> SqlExpr (Entity PrologGoalGroupSecurity) -> SqlExpr (Entity GroupMember)
+-- goalGroupReadableCond :: UserId -> SqlExpr (Entity FileGroupSecurity) -> SqlExpr (Entity GroupMember)
 --                          -> SqlExpr (Value Bool)
 -- goalGroupReadableCond uid groupFlags userGroups = userGroups^.GroupMemberMember ==. val uid
---                                                   &&. groupFlags^.PrologGoalGroupSecurityR ==. val True
+--                                                   &&. groupFlags^.FileGroupSecurityR ==. val True
 
--- goalEveryoneReadableCond :: SqlExpr (Entity PrologGoalEveryoneSecurity)
+-- goalEveryoneReadableCond :: SqlExpr (Entity FileEveryoneSecurity)
 --                             -> SqlExpr (Value Bool)
--- goalEveryoneReadableCond everyOneFlags = everyOneFlags^.PrologGoalEveryoneSecurityR ==. val True
+-- goalEveryoneReadableCond everyOneFlags = everyOneFlags^.FileEveryoneSecurityR ==. val True
 
 
 -- ---------------------------- FindPrograms ----------------------------
 
 -- findPrograms :: UserId
---           ->  (SqlExpr (Entity PrologProgram) -> SqlExpr (Value Bool))
+--           ->  (SqlExpr (Entity Directory) -> SqlExpr (Value Bool))
 --           ->  SqlQuery ()
---           ->  SqlPersistT Handler [Entity PrologProgram]
+--           ->  SqlPersistT m [Entity Directory]
 -- findPrograms  uid programFilter query =
 --   select $
 --   from $ \((program
@@ -402,10 +491,10 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 --             `FullOuterJoin` programGroupFlags
 --             `FullOuterJoin` programUserGroups)
 --           )  -> do
---            on (programUserGroups^.GroupMemberGroupId ==. programGroupFlags^.PrologProgramGroupSecurityGroupId)
---            on (program^.PrologProgramId ==. programGroupFlags^.PrologProgramGroupSecurityPrologProgramId)
---            on (program^.PrologProgramId ==. programEveryoneFlags^.PrologProgramEveryoneSecurityPrologProgramId)
---            on (program^.PrologProgramId ==. programOwnerFlags^.PrologProgramOwnerSecurityPrologProgramId)
+--            on (programUserGroups^.GroupMemberGroupId ==. programGroupFlags^.DirectoryGroupSecurityGroupId)
+--            on (program^.DirectoryId ==. programGroupFlags^.DirectoryGroupSecurityDirectoryId)
+--            on (program^.DirectoryId ==. programEveryoneFlags^.DirectoryEveryoneSecurityDirectoryId)
+--            on (program^.DirectoryId ==. programOwnerFlags^.DirectoryOwnerSecurityDirectoryId)
 
 --            where_ (( programOwnerReadableCond uid program programOwnerFlags
 --                      ||. programGroupReadableCond uid programGroupFlags programUserGroups
@@ -418,10 +507,10 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 
 
 -- findGoals :: UserId
---           ->  (SqlExpr (Entity PrologProgram) -> SqlExpr (Value Bool))
---           ->  (SqlExpr (Entity PrologGoal)    -> SqlExpr (Value Bool))
+--           ->  (SqlExpr (Entity Directory) -> SqlExpr (Value Bool))
+--           ->  (SqlExpr (Entity File)    -> SqlExpr (Value Bool))
 --           ->  SqlQuery ()
---           ->  SqlPersistT Handler [(Entity PrologProgram, Entity PrologGoal)]
+--           ->  SqlPersistT m [(Entity Directory, Entity File)]
 -- findGoals  uid programFilter goalFilter query =
 --   select $
 --   from $ \((program
@@ -436,17 +525,17 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 --             `FullOuterJoin` goalGroupFlags
 --             `FullOuterJoin` goalUserGroups
 --            ))  -> do
---            on (goalUserGroups^.GroupMemberGroupId ==. goalGroupFlags^.PrologGoalGroupSecurityGroupId)
---            on (goal^.PrologGoalId ==. goalGroupFlags^.PrologGoalGroupSecurityPrologGoalId)
---            on (goal^.PrologGoalId ==. goalEveryoneFlags^.PrologGoalEveryoneSecurityPrologGoalId)
---            on (goal^.PrologGoalId ==. goalOwnerFlags^.PrologGoalOwnerSecurityPrologGoalId)
+--            on (goalUserGroups^.GroupMemberGroupId ==. goalGroupFlags^.FileGroupSecurityGroupId)
+--            on (goal^.FileId ==. goalGroupFlags^.FileGroupSecurityFileId)
+--            on (goal^.FileId ==. goalEveryoneFlags^.FileEveryoneSecurityFileId)
+--            on (goal^.FileId ==. goalOwnerFlags^.FileOwnerSecurityFileId)
 
---            on (goal^.PrologGoalPrologProgramId ==. program^.PrologProgramId)
+--            on (goal^.FileDirectoryId ==. program^.DirectoryId)
 
---            on (programUserGroups^.GroupMemberGroupId ==. programGroupFlags^.PrologProgramGroupSecurityGroupId)
---            on (program^.PrologProgramId ==. programGroupFlags^.PrologProgramGroupSecurityPrologProgramId)
---            on (program^.PrologProgramId ==. programEveryoneFlags^.PrologProgramEveryoneSecurityPrologProgramId)
---            on (program^.PrologProgramId ==. programOwnerFlags^.PrologProgramOwnerSecurityPrologProgramId)
+--            on (programUserGroups^.GroupMemberGroupId ==. programGroupFlags^.DirectoryGroupSecurityGroupId)
+--            on (program^.DirectoryId ==. programGroupFlags^.DirectoryGroupSecurityDirectoryId)
+--            on (program^.DirectoryId ==. programEveryoneFlags^.DirectoryEveryoneSecurityDirectoryId)
+--            on (program^.DirectoryId ==. programOwnerFlags^.DirectoryOwnerSecurityDirectoryId)
 
 
 --            where_ (( goalOwnerReadableCond uid goal goalOwnerFlags
@@ -464,13 +553,13 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 
 -- ---------------------------- ReadProgram  ----------------------------
 
--- readProgram :: UserId -> PrologProgramId -> SqlPersistT Handler (Maybe (Entity PrologProgram))
+-- readProgram :: UserId -> DirectoryId -> SqlPersistT m (Maybe (Entity Directory))
 -- readProgram uid pid = do
 --   readable <- programReadable uid pid
 --   if readable
 --     then do ps <- select $
 --                   from $ \program -> do
---                     where_ (program^.PrologProgramId ==. val pid)
+--                     where_ (program^.DirectoryId ==. val pid)
 --                     return program
 --             case ps of
 --               [p] -> return (Just p)
@@ -479,13 +568,13 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 
 -- ---------------------------- ReadGoal  ----------------------------
 
--- readGoal :: UserId -> PrologGoalId -> SqlPersistT Handler (Maybe (Entity PrologGoal))
+-- readGoal :: UserId -> FileId -> SqlPersistT m (Maybe (Entity File))
 -- readGoal uid gid = do
 --   readable <- goalReadable uid gid
 --   if readable
 --     then do gs <- select $
 --                   from $ \goal -> do
---                     where_ (goal^.PrologGoalId ==. val gid)
+--                     where_ (goal^.FileId ==. val gid)
 --                     return goal
 --             case gs of
 --               [g] -> return (Just g)
@@ -494,35 +583,35 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 
 -- ----------------------------  Write ------------------------------
 
--- writeProgram :: UserId -> Entity PrologProgram -> SqlPersistT Handler (Maybe (Entity PrologProgram))
--- writeProgram uid prog@(Entity pid (PrologProgram uid' name expl code)) = do
+-- writeProgram :: UserId -> Entity Directory -> SqlPersistT m (Maybe (Entity Directory))
+-- writeProgram uid prog@(Entity pid (Directory uid' name expl code)) = do
 --   writable <- programWritable uid pid
 --   if writable
 --     then do update $ \p -> do
---               set p [ PrologProgramUserId      =. val uid'
---                     , PrologProgramName        =. val name
---                     , PrologProgramExplanation =. val expl
---                     , PrologProgramCode        =. val code
+--               set p [ DirectoryUserId      =. val uid'
+--                     , DirectoryName        =. val name
+--                     , DirectoryExplanation =. val expl
+--                     , DirectoryCode        =. val code
 --                     ]
---               where_ (p^.PrologProgramId ==. val pid)
+--               where_ (p^.DirectoryId ==. val pid)
 --             return (Just prog)
 --     else
 --     return Nothing
 
 
 
--- writeGoal :: UserId -> Entity PrologGoal -> SqlPersistT Handler (Maybe (Entity PrologGoal))
--- writeGoal uid goal@(Entity gid (PrologGoal uid' pid name expl code)) = do
+-- writeGoal :: UserId -> Entity File -> SqlPersistT m (Maybe (Entity File))
+-- writeGoal uid goal@(Entity gid (File uid' pid name expl code)) = do
 --   writable <- goalWritable uid gid
 --   if writable
 --     then do update $ \p -> do
---               set p [ PrologGoalUserId      =. val uid'
---                     , PrologGoalPrologProgramId   =. val pid
---                     , PrologGoalName        =. val name
---                     , PrologGoalExplanation =. val expl
---                     , PrologGoalCode        =. val code
+--               set p [ FileUserId      =. val uid'
+--                     , FileDirectoryId   =. val pid
+--                     , FileName        =. val name
+--                     , FileExplanation =. val expl
+--                     , FileCode        =. val code
 --                     ]
---               where_ (p^.PrologGoalId ==. val gid)
+--               where_ (p^.FileId ==. val gid)
 --             return (Just goal)
 --     else
 --     return Nothing
@@ -530,14 +619,14 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 
 -- ------------------------------  Create  ------------------------------
 -- createProgram ::  UserId -> Text -> Text -> Text
---                   -> SqlPersistT Handler (Maybe PrologProgramId)
+--                   -> SqlPersistT m (Maybe DirectoryId)
 -- createProgram  uid name expl code = do
 --   exists <- userExists uid
 --   if not exists
 --     then return Nothing
 --     else do
 --     umask <- userUmask uid
---     pid <- insert $ PrologProgram uid name expl code
+--     pid <- insert $ Directory uid name expl code
 --            (not (umaskOwnerR umask))
 --            (not (umaskOwnerW umask))
 --            (not (umaskOwnerX umask))
@@ -546,8 +635,8 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 --            (not (umaskEveryoneX umask))
 --     return $ Just pid
 
--- createGoal ::  UserId -> PrologProgramId -> Text -> Text -> Text
---            -> SqlPersistT Handler (Maybe PrologProgramId)
+-- createGoal ::  UserId -> DirectoryId -> Text -> Text -> Text
+--            -> SqlPersistT m (Maybe DirectoryId)
 -- createGoal  uid pid name expl code = do
 --   exists <- userExists uid
 --   x      <- programExecutable uid pid
@@ -556,7 +645,7 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 --     then return Nothing
 --     else do
 --       umask <- userUmask uid
---       pid <- insert $ PrologGoal uid pid name expl code
+--       pid <- insert $ File uid pid name expl code
 --              (not (umaskOwnerR umask))
 --              (not (umaskOwnerW umask))
 --              (not (umaskOwnerX umask))
@@ -567,7 +656,7 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 
 
 -- ---------------------------- rmdir/unlink ----------------------------
--- rmdirProgram :: UserId -> PrologProgramId -> SqlPersistT Handler (Maybe PrologProgramId)
+-- rmdirProgram :: UserId -> DirectoryId -> SqlPersistT m (Maybe DirectoryId)
 -- rmdirProgram uid pid = do
 --   writable <- programWritable uid pid
 --   goals    <- lsGoals uid pid
@@ -578,15 +667,15 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 --   where
 --     rm pid = do delete $
 --                   from $ \p -> do
---                     where_ (p^.ProgramGroupsPrologProgramId ==. val pid)
+--                     where_ (p^.ProgramGroupsDirectoryId ==. val pid)
 --                 delete $
 --                   from $ \p -> do
---                     where_ (p^.PrologProgramsTagsPrologProgramId ==. val pid)
+--                     where_ (p^.DirectorysTagsDirectoryId ==. val pid)
 --                 delete $
 --                   from $ \p -> do
---                     where_ (p^.PrologProgramId ==. val pid)
+--                     where_ (p^.DirectoryId ==. val pid)
 
--- unlinkGoal :: UserId -> PrologGoalId -> SqlPersistT Handler (Maybe PrologGoalId)
+-- unlinkGoal :: UserId -> FileId -> SqlPersistT m (Maybe FileId)
 -- unlinkGoal uid pid = do
 --   writable <- programWritable uid pid
 --   if writable
@@ -596,22 +685,22 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 --   where
 --     unlink' pid = do delete $
 --                        from $ \p -> do
---                          where_ (p^.GoalGroupsPrologGoalId ==. val pid)
+--                          where_ (p^.GoalGroupsFileId ==. val pid)
 
 --                      delete $
 --                        from $ \p -> do
---                          where_ (p^.PrologGoalsTagsPrologGoalId ==. val pid)
+--                          where_ (p^.FilesTagsFileId ==. val pid)
 
 --                      delete $
 --                        from $ \p -> do
---                          where_ (p^.PrologGoalId ==. val pid)
+--                          where_ (p^.FileId ==. val pid)
 
 
 
 -- ------------------------------  chown --------------------------------
 
--- chownProgram :: UserId -> Maybe UserId -> [GroupId] -> PrologProgramId
---                 -> SqlPersistT Handler (Maybe PrologProgramId)
+-- chownProgram :: UserId -> Maybe UserId -> [GroupId] -> DirectoryId
+--                 -> SqlPersistT m (Maybe DirectoryId)
 -- chownProgram uid muid gids pid = do
 --   prv <- privileged uid
 --   own <- isOwner uid pid
@@ -631,13 +720,13 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 
 --   where
 --     changeOwner uid pid = do update $ \p -> do
---                               set p [ PrologProgramUserId =. val uid
+--                               set p [ DirectoryUserId =. val uid
 --                                     ]
---                               where_ (p^.PrologProgramId ==. val pid)
+--                               where_ (p^.DirectoryId ==. val pid)
 --                             return (Just pid)
 
 --     changeGroup  gids pid umask = do delete $ \p -> do
---                                        where_ (p^.ProgramGroupsPrologProgramId ==. pid)
+--                                        where_ (p^.ProgramGroupsDirectoryId ==. pid)
 --                                      forM_ gids (\gid -> insert (ProgramGroups pid gid
 --                                                                  (not (umaskGroupR umask))
 --                                                                  (not (umaskGroupW umask))
@@ -645,8 +734,8 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 --                                      return (Just pid)
 
 
--- chownGoal :: UserId -> Maybe UserId -> [GroupId] -> PrologGoalId
---              -> SqlPersistT Handler (Maybe PrologGoalId)
+-- chownGoal :: UserId -> Maybe UserId -> [GroupId] -> FileId
+--              -> SqlPersistT m (Maybe FileId)
 -- chownGoal uid muid gids goalid = do
 --   prv <- privileged uid
 --   own <- isOwner uid goalid
@@ -666,13 +755,13 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 
 --   where
 --     changeUser uid goalid = do update $ \p -> do
---                               set p [ PrologGoalUserId =. val uid
+--                               set p [ FileUserId =. val uid
 --                                     ]
---                               where_ (p^.PrologGoalId ==. val goalid)
+--                               where_ (p^.FileId ==. val goalid)
 --                             return (Just goalid)
 
 --     changeGroup  gids goalid umask = do delete $ \p -> do
---                                           where_ (p^.GoalGroupsPrologGoalId ==. goalid)
+--                                           where_ (p^.GoalGroupsFileId ==. goalid)
 --                                         forM_ gids (\gid -> insert (GoalGroups goalid gid
 --                                                                     (not (umaskGroupR umask))
 --                                                                     (not (umaskGroupW umask))
@@ -680,11 +769,75 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 --                                         return (Just goalid)
 
 
--- ------------------------------  chmod --------------------------------
--- chmodProgram :: UserId ->  Maybe Perm -> [(GroupId,Perm)] -> Maybe Perm -> PrologProgramId
---                 -> SqlPersistT Handler (Maybe PrologProgramId)
--- chmodProgram uid muperm gperms maperm pid = do
---   own      <- isOwner uid pid
+isOwnerOfDirectory :: MonadIO m => UserAccountId -> DirectoryId -> SqlPersistT m Bool
+isOwnerOfDirectory he dir = do
+  mdir <- get dir
+  case mdir of
+    Just d -> return $ directoryUserId d == he
+    _      -> return False
+
+
+------------------------------  chmod --------------------------------
+chmodDirectory :: MonadIO m
+                  => UserAccountId -> DirectoryId -> Maybe Perm -> [(GroupId,Perm)] -> Maybe Perm
+                  -> SqlPersistT m (Result DirectoryId)
+chmodDirectory he dir ownerPerm groupPerms everyonePerm  = do
+  own      <- he `isOwnerOfDirectory` dir
+  prv      <- isPrivileged he
+
+  if (prv || own)
+    then
+    do chmodU ownerPerm
+       mapM_  chmodG groupPerms
+       chmodA  everyonePerm
+       return $ Right $ dir
+    else
+    return $ Left $ PermissionError $ T.pack $ show he ++ " needs to be the owner or root"
+
+    where
+      chmodU (Just (Perm r w x))  = do update $ \directory -> do
+                                         set directory [ DirectoryOwnerR =. val r
+                                                       , DirectoryOwnerW =. val w
+                                                       , DirectoryOwnerX =. val x
+                                                       ]
+                                         where_ (directory^.DirectoryId ==. val dir)
+                                       return ()
+      chmodU Nothing = return ()
+
+      chmodA (Just (Perm r w x)) = do update $ \directory -> do
+                                        set directory [ DirectoryEveryoneR =. val r
+                                                      , DirectoryEveryoneW =. val w
+                                                      , DirectoryEveryoneX =. val x
+                                                      ]
+                                        where_ (directory^.DirectoryId ==. val dir)
+                                      liftIO $ putStrLn $ T.pack $ show $ Perm r w x
+                                      return ()
+      chmodA Nothing = return ()
+
+
+  -- Can set any group permission even if he is not the owner of the group
+      chmodG (gid, Perm r w x) = do
+        liftIO $ putStrLn $ T.pack $ "chmodG:" ++ show (dir,gid, Perm r w x)
+        _dirgrp <- upsert (makeDirectoryGroupsWithPerm dir gid (Perm r w x))
+          [ (I.=.) DirectoryGroupsGroupR   r
+          , (I.=.) DirectoryGroupsGroupW   w
+          , (I.=.) DirectoryGroupsGroupX   x
+          ]
+        return ()
+        -- update $ \directoryGroups -> do
+        --   set directoryGroups [ DirectoryGroupsGroupR =. val r
+        --                       , DirectoryGroupsGroupW =. val w
+        --                       , DirectoryGroupsGroupX =. val x
+        --                       ]
+        --   where_ (directoryGroups^.DirectoryGroupsDirectoryId ==. val dir
+        --           &&. directoryGroups^.DirectoryGroupsGroupId ==. val gid)
+
+
+
+-- chmodDirectory :: UserAccountId ->  Maybe Perm -> [(GroupId,Perm)] -> Maybe Perm -> FileId
+--                 -> SqlPersistT m (Maybe FileId)
+-- chmodDirectory he ownerPerm groupPerms everyonePerm pid = do
+--   own      <- he `isOwner`
 --   prv      <- privileged uid
 
 --   if (prv || own)
@@ -697,62 +850,19 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 
 --     where
 --       chmodU uid (Just (Perm r w x)) pid = do update $ \p -> do
---                                           set p [ PrologProgramOwnerR =. val r
---                                                 , PrologProgramOwnerW =. val w
---                                                 , PrologProgramOwnerX =. val x
+--                                           set p [ FileOwnerR =. val r
+--                                                 , FileOwnerW =. val w
+--                                                 , FileOwnerX =. val x
 --                                                 ]
---                                           where_ (p^.PrologProgramId ==. val pid)
+--                                           where_ (p^.FileId ==. val pid)
 --       chmodU uid Nothing pid = return Nothing
 
 --       chmodA uid (Just (Perm r w x)) pid = do update $ \p -> do
---                                           set p [ PrologProgramEveryoneR =. val r
---                                                 , PrologProgramEveryoneW =. val w
---                                                 , PrologProgramEveryoneX =. val x
+--                                           set p [ FileEveryoneR =. val r
+--                                                 , FileEveryoneW =. val w
+--                                                 , FileEveryoneX =. val x
 --                                                 ]
---                                           where_ (p^.PrologProgramId ==. val pid)
---       chmodA uid Nothing pid = return Nothing
-
---       chmodG uid gids pid = mapM_ chmodG'each gids
---         where
---           chmodG'each (gid, Perm r w x) = do update $ \p -> do
---                                                set p [ ProgramGroupsGroupR =. val r
---                                                      , ProgramGroupsGroupW =. val w
---                                                      , ProgramGroupsGroupX =. val x
---                                                      ]
---                                                where_ (p^.ProgramGroupsPrologProgramId ==. val pid
---                                                        &&. p^.ProgramGroupsGroupId ==. gid)
-
-
-
--- chmodProgram :: UserId ->  Maybe Perm -> [(GroupId,Perm)] -> Maybe Perm -> PrologGoalId
---                 -> SqlPersistT Handler (Maybe PrologGoalId)
--- chmodProgram uid muperm gperms maperm pid = do
---   own      <- isOwner uid pid
---   prv      <- privileged uid
-
---   if (prv || own)
---     then
---     do chmodU uid umperm pid
---        chmodG uid gids  pid
---        chmodA uid amperm pid
---     else
---     return Nothing
-
---     where
---       chmodU uid (Just (Perm r w x)) pid = do update $ \p -> do
---                                           set p [ PrologGoalOwnerR =. val r
---                                                 , PrologGoalOwnerW =. val w
---                                                 , PrologGoalOwnerX =. val x
---                                                 ]
---                                           where_ (p^.PrologGoalId ==. val pid)
---       chmodU uid Nothing pid = return Nothing
-
---       chmodA uid (Just (Perm r w x)) pid = do update $ \p -> do
---                                           set p [ PrologGoalEveryoneR =. val r
---                                                 , PrologGoalEveryoneW =. val w
---                                                 , PrologGoalEveryoneX =. val x
---                                                 ]
---                                           where_ (p^.PrologGoalId ==. val pid)
+--                                           where_ (p^.FileId ==. val pid)
 --       chmodA uid Nothing pid = return Nothing
 
 --       chmodG uid gids pid = mapM_ chmodG'each gids
@@ -762,7 +872,7 @@ lsRootOwnerReadable uid = lsRootByOwnerAccess uid  DirectoryOwnerR
 --                                                      , GoalGroupsGroupW =. val w
 --                                                      , GaolGroupsGroupX =. val x
 --                                                      ]
---                                                where_ (p^.GoalGroupsPrologGoalId ==. val pid
+--                                                where_ (p^.GoalGroupsFileId ==. val pid
 --                                                        &&. p^.GoalGroupsGroupId ==. gid)
 
 
@@ -875,7 +985,7 @@ groupadd he groupName = do
    --   Just gid ->
    --   Nothing  -> return $ Left  $ GroupAlreadyExists $ T.concat ["group " , show groupName , "already exists" ]
 
--- groupmod :: UserId -> GroupId -> Text -> Maybe Text -> SqlPersistT Handler (Result GroupId)
+-- groupmod :: UserId -> GroupId -> Text -> Maybe Text -> SqlPersistT m (Result GroupId)
 -- groupmod uid gid groupName explanation = do
 --   prv   <- privileged uid
 --   owner <- groupOwner gid
@@ -919,30 +1029,26 @@ groupdel he gid = do
 
 -- ------------------------  Database Invariants  ------------------------
 
--- valid :: SqlPersistT Handler Bool
--- valid = allM [ mapM (\g -> validPid (prologGoalPrologProgramId g)) =<< allGoals
+-- valid :: SqlPersistT m Bool
+-- valid = allM [ mapM (\g -> validPid (prologGoalDirectoryId g)) =<< allGoals
 --              ,  mapM (\g -> validGid (groupMembersGroupId g)) =<< allGroupMember
 --              ,  mapM (\g -> validUid (groupMembersMember g)) =<< allGroupMember
---              ,  mapM (\g -> validPid (programGroupsPrologProgramId g)) =<< allProgramGroups
+--              ,  mapM (\g -> validPid (programGroupsDirectoryId g)) =<< allProgramGroups
 --              ,  mapM (\g -> validGid (programGroupsGroupId g)) =<<  allProgramGroups
---              ,  mapM (\g -> validGoalId (goalGroupsPrologGoalId g)) =<< allGoalGroups
+--              ,  mapM (\g -> validGoalId (goalGroupsFileId g)) =<< allGoalGroups
 --              ,  mapM (\g -> validGid (goalGroupsGroupId g)) =<< allGoalGroups
---              ,  mapM (\g -> validPid (prologProgramTagsPrologProgramId g)) =<< allPrologProgramsTags
---              ,  mapM (\g -> validTagId (prologProgramTagsTagId g)) =<< allPrologProgramsTags
---              ,  mapM (\g -> validGoalid (prologGoalTagsPrologGoalId g)) =<< allPrologGoalTags
---              ,  mapM (\g -> validTagId (prologGoalTagsTagId g)) =<< allPrologGoalTags
+--              ,  mapM (\g -> validPid (prologProgramTagsDirectoryId g)) =<< allDirectorysTags
+--              ,  mapM (\g -> validTagId (prologProgramTagsTagId g)) =<< allDirectoryTags
+--              ,  mapM (\g -> validGoalid (prologGoalTagsFileId g)) =<< allFileTags
+--              ,  mapM (\g -> validTagId (prologGoalTagsTagId g)) =<< allFileTags
 --              ]
 
 
 ------------------------ Auxillary functions  ------------------------
-_negateMaybe :: Monad m => m [a] -> m (Maybe Bool)
-_negateMaybe m  = do x <- m
-                     case x of
-                       []  -> return (Just True)
-                       _   -> return Nothing
 
-_negateMaybe' :: Monad m => m (Maybe Bool) -> m Bool
-_negateMaybe' m = do x <- m
-                     case x of
-                       Just _ -> return False
-                       Nothing -> return True
+orM :: Monad m => [m Bool] -> m Bool
+orM [] = return False
+orM (m:ms) = do x <- m
+                if x
+                  then return True
+                  else orM ms

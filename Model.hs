@@ -20,6 +20,12 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"]
 -- TODO Rewrite this using lenses
 
 
+data Perm = Perm { permR :: Bool
+                 , permW :: Bool
+                 , permX :: Bool
+                 }
+            deriving (Eq,Show,Ord)
+
 data UMask = UMask
              { umaskOwnerR  :: Bool
              , umaskOwnerW  :: Bool
@@ -189,6 +195,17 @@ makeDirectoryGroups dir gid umask =
   , directoryGroupsGroupX      = permissionGroupX directoryDefaultPermission && not (umaskGroupX umask)
   }
 
+makeDirectoryGroupsWithPerm :: DirectoryId -> GroupId -> Perm -> DirectoryGroups
+makeDirectoryGroupsWithPerm dir gid perm =
+  DirectoryGroups
+  { directoryGroupsDirectoryId = dir
+  , directoryGroupsGroupId     = gid
+  , directoryGroupsGroupR      = permR perm
+  , directoryGroupsGroupW      = permW perm
+  , directoryGroupsGroupX      = permX perm
+  }
+
+
 makeFileGroups :: FileId -> GroupId -> UMask -> FileGroups
 makeFileGroups file gid umask =
   FileGroups
@@ -197,6 +214,16 @@ makeFileGroups file gid umask =
   , fileGroupsGroupR      = permissionGroupR fileDefaultPermission && not (umaskGroupR umask)
   , fileGroupsGroupW      = permissionGroupW fileDefaultPermission && not (umaskGroupW umask)
   , fileGroupsGroupX      = permissionGroupX fileDefaultPermission && not (umaskGroupX umask)
+  }
+
+makeFileGroupsWithPerm :: FileId -> GroupId -> Perm -> FileGroups
+makeFileGroupsWithPerm file gid perm =
+  FileGroups
+  { fileGroupsFileId      = file
+  , fileGroupsGroupId     = gid
+  , fileGroupsGroupR      = permR perm
+  , fileGroupsGroupW      = permW perm
+  , fileGroupsGroupX      = permX perm
   }
 
 
