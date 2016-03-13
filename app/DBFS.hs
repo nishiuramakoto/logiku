@@ -80,6 +80,7 @@ data DbfsError = DirectoryDoesNotExist Text
 type Result a = Either DbfsError a
 
 data UserModOptions = AddToGroup GroupId
+                    | DelFromGroup GroupId
                     | SetDisplayName Text
                     deriving (Eq,Show)
 
@@ -785,15 +786,27 @@ usermod :: MonadIO m
 usermod he him opts = foldlM (>>>) (Right him) opts
   where
     Left  a   >>> _   = return $ Left a
+
     Right _ >>> AddToGroup gid = do
       prv <- isPrivileged he
       own <- he `isGroupOwnerOf`  gid
-
       if (prv || own)
         then do _<- insert $ makeGroupMembers gid him
                 return $ Right him
         else do return $ Left $ PermissionError $
                   T.concat [ T.pack $  show he , "is neither root nor the group owner" ]
+
+    Right _ >>> DelFromGroup gid = do
+      prv <- isPrivileged he
+      own <- he `isGroupOwnerOf`  gid
+      if (prv || own)
+        then do delete $
+                  from $ \groupMembers -> do
+                    where_ (groupMembers^.GroupMembersGroupId ==. val gid
+                            &&. groupMembers^.GroupMembersMember ==. val him)
+                return $ Right him
+        else do return $ Left $ PermissionError $
+                  T.concat [ T.pack $  show he , " is neither root nor the group owner" ]
 
     Right _ >>> SetDisplayName newName = do
       prv <- isPrivileged he
@@ -803,7 +816,6 @@ usermod he him opts = foldlM (>>>) (Right him) opts
         then do update $ \user -> do
                   set user [ UserAccountDisplayName =. val (Just newName) ]
                   where_   (user^.UserAccountId ==. val him)
-
                 return $ Right him
         else do return $ Left $ PermissionError $
                   T.concat [ T.pack $ show he
@@ -855,8 +867,9 @@ userdel he him = do
 --------------------------------  Group --------------------------------
 groupadd :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result GroupId)
 groupadd he groupName = do
-   mgid <- insert (makeGroup groupName he)
-   return $ Right mgid
+  -- Anyone can make a group (TODO:should this be changed?)
+  gid <- insert (makeGroup groupName he)
+  return $ Right gid
 
    -- case mgid of
    --   Just gid ->
