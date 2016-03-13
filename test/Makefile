@@ -1,0 +1,3 @@
+
+test:
+	cd .. && cabal test
