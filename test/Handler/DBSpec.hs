@@ -5,11 +5,13 @@ module Handler.DBSpec (spec) where
 
 
 import DBFS
-import TestImport hiding((==.), on , shouldBe , shouldReturn , get)
+import TestImport hiding((==.), on , shouldBe , shouldReturn , get, shouldThrow)
 import qualified TestImport as I
 import Database.Esqueleto
 
+import qualified Test.HUnit
 import qualified Data.Text as T
+import Data.Typeable
 
 import Yesod.Persist.Core(YesodDB)
 import Control.Monad.Logger(NoLoggingT)
@@ -333,8 +335,114 @@ spec = withApp $ do
     (dir2 `isDirectoryEveryoneExecutableBy` user1) `shouldReturn` True
 
 
+  it "creates files with appropriate permissions" $ do
+    (root,user1,user2,user3,dir0,dir1,dir2,dir3,file0,file1,file2,file3) <- runDB $ do
+      root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+      Right user1 <- root `useradd` "user1"
+      Right user2 <- root `useradd` "user2"
+      Right user3 <- root `useradd` "user3"
+
+      Right group1 <- user1 `groupadd` "group1"
+      Right group2 <- user2 `groupadd` "group2"
+      Right group3 <- user3 `groupadd` "group3"
+
+      Right u  <- user1 `usermod` user1 $ [ AddToGroup group1 ]
+      Right u  <- user1 `usermod` user2 $ [ AddToGroup group1 ]
+      Right u  <- user2 `usermod` user2 $ [ AddToGroup group2 ]
+      Right u  <- user3 `usermod` user3 $ [ AddToGroup group3 ]
+
+      Right dir0 <- root  `mkdir` "dir0"
+      Right dir1 <- user1 `mkdir` "dir1"
+      Right dir2 <- user2 `mkdir` "dir2"
+      Right dir3 <- user3 `mkdir` "dir3"
+
+      Right file0 <- root  `touchAt` dir0 $ "file"
+      Right file1 <- user1 `touchAt` dir1 $ "file"
+      Right file2 <- user2 `touchAt` dir2 $ "file"
+      Right file3 <- user3 `touchAt` dir3 $ "file"
+
+      Right _ <- (user1 `chmodDirectory` dir1)
+        (Just $ Perm True True True)
+        [(group2, Perm False False True)]
+        (Just $ Perm False False False)
+
+      Right _ <- (user1 `chmodFile` file1)
+        (Just $ Perm True True True)
+        [(group2, Perm True True True)]
+        (Just $ Perm True True True)
+
+      Right _ <- (user2 `chmodFile`  file2)
+        (Just $ Perm True False False)
+        [ (group1, Perm False True False)
+        , (group2, Perm False True False)
+        , (group3, Perm False True False) ]
+        (Just $ Perm False False True)
+
+      return (root,user1,user2,user3,dir0,dir1,dir2,dir3,file0,file1,file2,file3)
+
+    (user1 `touchAt` dir1 $ "file") `shouldThrow` anyException
 
 
+    (dir0 `isDirectoryReadableBy` root) `shouldReturn` True
+
+    -- Specify the reason for truth, and use catch-all for falsity
+
+    -- test default umask (with permission bits 755) and access tests
+    (file0 `isFileOwnerReadableBy`   root) `shouldReturn` True
+    (file0 `isFileOwnerWritableBy`   root) `shouldReturn` True
+    (file0 `isFileOwnerExecutableBy` root) `shouldReturn` True
+
+    (file0 `isFileEveryoneReadableBy`   user1) `shouldReturn` True
+    (file0 `isFileWritableBy`           user1) `shouldReturn` False
+    (file0 `isFileEveryoneExecutableBy` user1) `shouldReturn` True
+
+    -- test chmod and access tests
+    (file1 `isFileOwnerReadableBy`   user1) `shouldReturn` True
+    (file1 `isFileOwnerWritableBy`   user1) `shouldReturn` True
+    (file1 `isFileOwnerExecutableBy` user1) `shouldReturn` True
+
+    (file1 `isFileGroupReadableBy`   user2) `shouldReturn` True
+    (file1 `isFileGroupWritableBy`   user2) `shouldReturn` True
+    (file1 `isFileGroupExecutableBy` user2) `shouldReturn` True
+
+    (file1 `isFileEveryoneReadableBy`   user3) `shouldReturn` True
+    (file1 `isFileEveryoneWritableBy`   user3) `shouldReturn` True
+    (file1 `isFileEveryoneExecutableBy` user3) `shouldReturn` True
+
+    -- test chmod and access tests
+    (file2 `isFileOwnerReadableBy`   user2) `shouldReturn` True
+    (file2 `isFileOwnerWritableBy`   user2) `shouldReturn` False
+    (file2 `isFileOwnerExecutableBy` user2) `shouldReturn` False
+    (file2 `isFileGroupExecutableBy` user2) `shouldReturn` False
+    (file2 `isFileEveryoneExecutableBy` user2) `shouldReturn` True
+
+    (file2 `isFileReadableBy`        user3) `shouldReturn` False
+    (file2 `isFileGroupWritableBy`   user3) `shouldReturn` True
+    (file2 `isFileGroupExecutableBy` user3) `shouldReturn` False
+
+    (file2 `isFileReadableBy`           user1) `shouldReturn` False
+    (file2 `isFileGroupWritableBy`      user1) `shouldReturn` True
+    (file2 `isFileEveryoneExecutableBy` user1) `shouldReturn` True
+
+
+
+shouldThrow :: (?loc :: CallStack) => Exception e
+                =>  SqlPersistM a -> Selector e -> StateT (YesodExampleData App) IO ()
+shouldThrow m catcher = do
+  r <- try (runDB m)
+  case r of
+    Right _ ->
+      liftIO $ expectationFailure $
+      "did not get expected exception: " ++ exceptionType
+    Left e ->
+      (\m -> liftIO $ m `expectTrue` catcher e) $
+      "predicate failed on expected exception: " ++ exceptionType ++ " (" ++ show e ++ ")"
+  where
+    -- a string repsentation of the expected exception's type
+    exceptionType = (show . typeOf . instanceOf) catcher
+      where
+        instanceOf :: Selector a -> a
+        instanceOf _ = error "Test.Hspec.Expectations.shouldThrow: broken Typeable instance"
 
 shouldReturn :: (?loc :: CallStack) => (Show a, Eq a)
                   =>  SqlPersistM a -> a -> StateT (YesodExampleData App) IO ()
@@ -344,3 +452,10 @@ shouldReturn m a =
 
 
 shouldBe a b = liftIO $ a `I.shouldBe` b
+
+expectTrue :: (?loc :: CallStack) =>  String -> Bool -> Expectation
+expectTrue msg b = unless b (expectationFailure msg)
+
+
+--expectationFailure :: (?loc :: CallStack) =>  String -> Expectation
+--expectationFailure = Test.HUnit.assertFailure

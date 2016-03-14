@@ -27,6 +27,19 @@ module DBFS
        , isDirectoryWritableBy
        , isDirectoryExecutableBy
 
+
+       , isFileOwnerReadableBy
+       , isFileOwnerWritableBy
+       , isFileOwnerExecutableBy
+
+       , isFileGroupReadableBy
+       , isFileGroupWritableBy
+       , isFileGroupExecutableBy
+
+       , isFileEveryoneReadableBy
+       , isFileEveryoneWritableBy
+       , isFileEveryoneExecutableBy
+
        , isFileReadableBy
        , isFileWritableBy
        , isFileExecutableBy
@@ -61,7 +74,7 @@ module DBFS
          -- , chownGoal
 
        , chmodDirectory
-         -- , chmodGoal
+       , chmodFile
 
        , useradd
        , usermod
@@ -142,21 +155,24 @@ mkdir he name = do
 
 
 
--- Unlike a unix filesystem creating files is allowed iff the directory is executable, not writable
+
 touch :: MonadIO m => UserAccountId -> DirectoryId -> Text -> SqlPersistT m (Result FileId)
 touch he dir name = do
   muser <- get he
   mdir  <- get dir
+-- Unlike a unix filesystem, creating files is allowed iff the directory is executable, not writable
   x     <- dir `isDirectoryExecutableBy` he
   case (muser, mdir, x) of
     (Just user, Just _ , True) ->  do
-      file <- insert (makeFile he dir name (umaskFromUserAccount user))
+      let umask =  umaskFromUserAccount user
+      file <- insert (makeFile he dir name umask)
       groups <- belongs he -- should not throw
+
       case groups of
         Right gs -> do
           forM_  gs $  \g -> do
-            liftIO $ putStrLn $ T.pack $ show (dir,g)
-            insert (makeDirectoryGroups dir g (umaskFromUserAccount user))
+            -- liftIO $ putStrLn $ T.pack $ show (dir,g)
+            insert (makeFileGroups file g umask)
           return $ Right file
         Left err -> return $ Left err
 
@@ -769,6 +785,10 @@ isFileExecutableBy dir him = orM [ dir `isFileOwnerExecutableBy`  him
 --                                         return (Just goalid)
 
 
+
+
+------------------------------  chmod --------------------------------
+
 isOwnerOfDirectory :: MonadIO m => UserAccountId -> DirectoryId -> SqlPersistT m Bool
 isOwnerOfDirectory he dir = do
   mdir <- get dir
@@ -776,8 +796,6 @@ isOwnerOfDirectory he dir = do
     Just d -> return $ directoryUserId d == he
     _      -> return False
 
-
-------------------------------  chmod --------------------------------
 chmodDirectory :: MonadIO m
                   => UserAccountId -> DirectoryId -> Maybe Perm -> [(GroupId,Perm)] -> Maybe Perm
                   -> SqlPersistT m (Result DirectoryId)
@@ -834,46 +852,67 @@ chmodDirectory he dir ownerPerm groupPerms everyonePerm  = do
 
 
 
--- chmodDirectory :: UserAccountId ->  Maybe Perm -> [(GroupId,Perm)] -> Maybe Perm -> FileId
---                 -> SqlPersistT m (Maybe FileId)
--- chmodDirectory he ownerPerm groupPerms everyonePerm pid = do
---   own      <- he `isOwner`
---   prv      <- privileged uid
+isOwnerOfFile :: MonadIO m => UserAccountId -> FileId -> SqlPersistT m Bool
+isOwnerOfFile he file = do
+  mfile <- get file
+  case mfile of
+    Just f -> return $ fileUserId f == he
+    _      -> return False
 
---   if (prv || own)
---     then
---     do chmodU uid umperm pid
---        chmodG uid gids  pid
---        chmodA uid amperm pid
---     else
---     return Nothing
 
---     where
---       chmodU uid (Just (Perm r w x)) pid = do update $ \p -> do
---                                           set p [ FileOwnerR =. val r
---                                                 , FileOwnerW =. val w
---                                                 , FileOwnerX =. val x
---                                                 ]
---                                           where_ (p^.FileId ==. val pid)
---       chmodU uid Nothing pid = return Nothing
+chmodFile :: MonadIO m
+                  => UserAccountId -> FileId -> Maybe Perm -> [(GroupId,Perm)] -> Maybe Perm
+                  -> SqlPersistT m (Result FileId)
+chmodFile he file ownerPerm groupPerms everyonePerm  = do
+  own      <- he `isOwnerOfFile` file
+  prv      <- isPrivileged he
 
---       chmodA uid (Just (Perm r w x)) pid = do update $ \p -> do
---                                           set p [ FileEveryoneR =. val r
---                                                 , FileEveryoneW =. val w
---                                                 , FileEveryoneX =. val x
---                                                 ]
---                                           where_ (p^.FileId ==. val pid)
---       chmodA uid Nothing pid = return Nothing
+  if (prv || own)
+    then
+    do chmodU ownerPerm
+       mapM_  chmodG groupPerms
+       chmodA  everyonePerm
+       return $ Right $ file
+    else
+    return $ Left $ PermissionError $ T.pack $ show he ++ " must be the owner or root"
 
---       chmodG uid gids pid = mapM_ chmodG'each gids
---         where
---           chmodG'each (gid, Perm r w x) = do update $ \p -> do
---                                                set p [ GoalGroupsGroupR =. val r
---                                                      , GoalGroupsGroupW =. val w
---                                                      , GaolGroupsGroupX =. val x
---                                                      ]
---                                                where_ (p^.GoalGroupsFileId ==. val pid
---                                                        &&. p^.GoalGroupsGroupId ==. gid)
+    where
+      chmodU (Just (Perm r w x))  = do update $ \f -> do
+                                         set f [ FileOwnerR =. val r
+                                               , FileOwnerW =. val w
+                                               , FileOwnerX =. val x
+                                               ]
+                                         where_ (f^.FileId ==. val file)
+                                       return ()
+      chmodU Nothing = return ()
+
+      chmodA (Just (Perm r w x)) = do update $ \f -> do
+                                        set f [ FileEveryoneR =. val r
+                                              , FileEveryoneW =. val w
+                                              , FileEveryoneX =. val x
+                                              ]
+                                        where_ (f^.FileId ==. val file)
+                                      liftIO $ putStrLn $ T.pack $ show $ Perm r w x
+                                      return ()
+      chmodA Nothing = return ()
+
+
+  -- Can set any group permission even if he is not the owner of the group
+      chmodG (gid, Perm r w x) = do
+        liftIO $ putStrLn $ T.pack $ "chmodG:" ++ show (file,gid, Perm r w x)
+        _filegrp <- upsert (makeFileGroupsWithPerm file gid (Perm r w x))
+          [ (I.=.) FileGroupsGroupR   r
+          , (I.=.) FileGroupsGroupW   w
+          , (I.=.) FileGroupsGroupX   x
+          ]
+        return ()
+        -- update $ \directoryGroups -> do
+        --   set directoryGroups [ DirectoryGroupsGroupR =. val r
+        --                       , DirectoryGroupsGroupW =. val w
+        --                       , DirectoryGroupsGroupX =. val x
+        --                       ]
+        --   where_ (directoryGroups^.DirectoryGroupsDirectoryId ==. val dir
+        --           &&. directoryGroups^.DirectoryGroupsGroupId ==. val gid)
 
 
 
