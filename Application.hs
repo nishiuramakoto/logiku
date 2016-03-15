@@ -31,8 +31,7 @@ import Network.Wai.Middleware.RequestLogger (Destination (Logger),
 import System.Log.FastLogger                (defaultBufSize, newStdoutLoggerSet,
                                              toLogStr)
 
-import Network.Wai.Handler.WarpTLS          (TLSSettings, defaultTlsSettings,
-                                             tlsSettings, runTLS)
+import Network.Wai.Handler.WarpTLS          (tlsSettings, runTLS)
 
 
 -- Import all relevant handler modules here.
