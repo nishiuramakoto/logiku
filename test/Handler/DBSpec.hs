@@ -5,10 +5,12 @@ module Handler.DBSpec (spec) where
 
 
 import DBFS
-import TestImport hiding((==.), on , shouldBe , shouldReturn , get, shouldThrow)
+import TestImport hiding((==.), on ,get)
 import qualified TestImport as I
 import Database.Esqueleto
 
+import qualified Test.QuickCheck.Monadic as QC
+import qualified Test.QuickCheck as QC
 import qualified Test.HUnit
 import qualified Data.Text as T
 import Data.Typeable
@@ -18,6 +20,9 @@ import Control.Monad.Logger(NoLoggingT)
 import Control.Monad.Trans.Resource(ResourceT)
 import Control.Monad.State hiding (get)
 import GHC.Stack
+import Network.Wai
+
+
 
 sqlTest1 :: MonadIO m => SqlPersistT m [Entity UserAccount]
 sqlTest1 = do people <- select $
@@ -152,6 +157,21 @@ spec = withApp $ do
   -- TRUNCATE TABLE is Very slow. Consequently,
   -- we regreatably comment out all non-focused tests for each invocation.
   -- Using DELETE instead of TRUNCATE might be the cure of the problem.
+
+  -- it "checks the type of a test" $ \x -> runYesodProperty x $  do
+  it "checks the type of a test" $  runYesodProperty $  do
+      n1 <- QC.pick (QC.listOf (QC.arbitrary :: QC.Gen Char))
+      QC.pre (n1 /= "root")
+
+      xs <- QC.run $ do
+        runDB $ do
+          root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+          Right user1 <- root `useradd` (T.pack n1)
+          return ()
+        xs <- selectAll
+        return (xs :: [Entity  UserAccount])
+
+      QC.assert (length xs == 2)
 
   -- it "leaves the user table empty" $ do
   --   users <- runDB $ selectList ([] :: [Filter UserAccount]) []
@@ -426,35 +446,6 @@ spec = withApp $ do
 
 
 
-shouldThrow :: (?loc :: CallStack) => Exception e
-                =>  SqlPersistM a -> Selector e -> StateT (YesodExampleData App) IO ()
-shouldThrow m catcher = do
-  r <- try (runDB m)
-  case r of
-    Right _ ->
-      liftIO $ expectationFailure $
-      "did not get expected exception: " ++ exceptionType
-    Left e ->
-      (\m -> liftIO $ m `expectTrue` catcher e) $
-      "predicate failed on expected exception: " ++ exceptionType ++ " (" ++ show e ++ ")"
-  where
-    -- a string repsentation of the expected exception's type
-    exceptionType = (show . typeOf . instanceOf) catcher
-      where
-        instanceOf :: Selector a -> a
-        instanceOf _ = error "Test.Hspec.Expectations.shouldThrow: broken Typeable instance"
-
-shouldReturn :: (?loc :: CallStack) => (Show a, Eq a)
-                  =>  SqlPersistM a -> a -> StateT (YesodExampleData App) IO ()
-shouldReturn m a =
-  do x <- runDB m
-     liftIO $ x `I.shouldBe` a
-
-
-shouldBe a b = liftIO $ a `I.shouldBe` b
-
-expectTrue :: (?loc :: CallStack) =>  String -> Bool -> Expectation
-expectTrue msg b = unless b (expectationFailure msg)
 
 
 --expectationFailure :: (?loc :: CallStack) =>  String -> Expectation
