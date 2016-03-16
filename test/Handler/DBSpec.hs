@@ -216,7 +216,7 @@ spec = withApp $ do
 
   it "adds and deletes users appropriately" $ do
     -- setupTestDB2
-    runDB $ do
+    (root,user1,user2,user3,group1,group2,group3) <- runDB $ do
       root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
       Right user1 <- root `useradd` "user1"
       Right user2 <- root `useradd` "user2"
@@ -232,10 +232,12 @@ spec = withApp $ do
       Right u  <- user3 `usermod` user3 $ [ AddToGroup group3 ]
       Right u' <- user2 `usermod` user2 $ [ SetDisplayName "me" ]
 
-      return ()
+      return (root,user1,user2,user3,group1,group2,group3)
 
-    user2 <- selectUser "user2"
-    userAccountDisplayName user2 `shouldBe` Just "me"
+    belongs root  `shouldReturn` Right []
+
+    user2' <- selectUser "user2"
+    userAccountDisplayName user2' `shouldBe` Just "me"
 
     roots <- selectPrivilegedUsers
     length roots `shouldBe` 1
@@ -246,7 +248,9 @@ spec = withApp $ do
     groups <- selectAll :: Test [Entity Group]
     length groups `shouldBe` 3
 
+    belongs user2 `shouldReturn` Right [group1, group2]
     deleteGroup "group1"
+    belongs user2 `shouldReturn` Right [group2]
 
     groups <- selectAll :: Test [Entity Group]
     length groups `shouldBe` 2
@@ -262,6 +266,7 @@ spec = withApp $ do
     deleteUser "user1"
     users <- selectAll :: Test [Entity UserAccount]
     length users  `shouldBe` 3
+    belongs user1 `shouldReturnLeft` Something
 
     deleteUser "user2"
     deleteUser "user3"
