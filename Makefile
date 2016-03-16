@@ -22,7 +22,8 @@ password="2OXOZp&<ld?~-G"
 all : challenge-password  cp-to-s3
 
 %.git.gpg : %.git
-	gpg-encrypt.py $^  $(password)
+	gpg  -c --passphrase $(password)  $^
+#	gpg-encrypt.py $^  $(password)
 
 $(bundle) :
 	git bundle create $(bundle) --all
@@ -65,4 +66,4 @@ test:
 	(cd prolog-fd && cabal test) ; \
 	cabal test
 
-.PHONY: challenge-password cp-to-s3 change-ip run test
+.PHONY: $(bundle) $(subbundle) challenge-password cp-to-s3 change-ip run test
