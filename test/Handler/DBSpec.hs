@@ -5,12 +5,12 @@ module Handler.DBSpec (spec) where
 
 
 import DBFS
-import TestImport hiding((==.), on ,get)
+import TestImport hiding((==.), on ,get, assert)
 import qualified TestImport as I
 import Database.Esqueleto
 
-import qualified Test.QuickCheck.Monadic as QC
-import qualified Test.QuickCheck as QC
+import Test.QuickCheck.Monadic
+import Test.QuickCheck
 import qualified Test.HUnit
 import qualified Data.Text as T
 import Data.Typeable
@@ -150,132 +150,129 @@ selectUser user = runDB $ do Just u <- getBy $ UniqueUserAccount user
 spec :: Spec
 spec = withApp $ do
 
-  -- This is a simple example of using a database access in a test.  The
-  -- test will succeed for a fresh scaffolded site with an empty database,
-  -- but will fail on an existing database with a non-empty user table.
-
   -- TRUNCATE TABLE is Very slow. Consequently,
-  -- we regreatably comment out all non-focused tests for each invocation.
+  -- I regreatably comment out all non-focused tests for each invocation.
   -- Using DELETE instead of TRUNCATE might be the cure of the problem.
 
-  -- it "checks the type of a test" $ \x -> runYesodProperty x $  do
-  it "checks the type of a test" $  runYesodProperty $  do
-      n1 <- QC.pick (QC.listOf (QC.arbitrary :: QC.Gen Char))
-      QC.pre (n1 /= "root")
+  -- NOTE: DELETE is indeed faster but not fast enough.
 
-      xs <- QC.run $ do
-        runDB $ do
-          root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
-          Right user1 <- root `useradd` (T.pack n1)
-          return ()
-        xs <- selectAll
-        return (xs :: [Entity  UserAccount])
+  -- it "checks the type of a test" $ monadicYE $ do
+  --   n1 <- pick (listOf (arbitrary :: Gen Char))
+  --   pre (n1 /= "root")
 
-      QC.assert (length xs == 2)
+  --   xs <- run $ do
+  --       runDB $ do
+  --         root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+  --         Right user1 <- root `useradd` (T.pack n1)
+  --         return ()
+  --       xs <- selectAll
+  --       return (xs :: [Entity  UserAccount])
 
-  -- it "leaves the user table empty" $ do
-  --   users <- runDB $ selectList ([] :: [Filter UserAccount]) []
-  --   assertEqual "user table empty" 0 $ length users
+  --   assert (length xs == 2)
 
-  -- it "retains entries after insertions" $ do
-  --   setupTestDB1
+  it "leaves the user table empty" $ do
+    users <- runDB $ selectList ([] :: [Filter UserAccount]) []
+    assertEqual "user table empty" 0 $ length users
 
-  --   users <- runDB $ do
-  --     selectList ([] :: [Filter UserAccount]) []
-  --   length users `shouldBe` 3
-  --   -- assertEqual "two users" 2 $ length users
+  it "retains entries after insertions" $ do
+    setupTestDB1
 
-  -- it "sets up a database with users" $ do
-  --   setupTestDB1
-  --   users <- runDB $ sqlTest1
-  --   length users `shouldBe` 3
+    users <- runDB $ do
+      selectList ([] :: [Filter UserAccount]) []
+    length users `shouldBe` 3
+    -- assertEqual "two users" 2 $ length users
 
-  -- it "contains users with default everyone write umask bit set to True" $ do
-  --   setupTestDB1
-  --   users <- runDB $ sqlTest2
-  --   length users `shouldBe` 3
+  it "sets up a database with users" $ do
+    setupTestDB1
+    users <- runDB $ sqlTest1
+    length users `shouldBe` 3
 
-
-  -- it "contains a group with explanation=abc" $ do
-  --   setupTestDB1
-  --   groups <- runDB $ sqlTest3
-  --   length groups `shouldBe` 1
-
-  -- it "joins two tables based on the same user id" $ do
-  --   setupTestDB1
-  --   joined <- runDB $ sqlTest4
-  --   length joined `shouldBe` 8
-
-  -- it "left-outer-joins and gives three rows" $ do
-  --   setupTestDB1
-  --   joined <- runDB $ sqlTest5
-  --   length joined `shouldBe` 10
-
-  -- it "joins three tables in reverse order" $ do
-  --   setupTestDB1
-  --   joined <- runDB $ sqlTest6
-  --   length joined `shouldBe` 8
+  it "contains users with default everyone write umask bit set to True" $ do
+    setupTestDB1
+    users <- runDB $ sqlTest2
+    length users `shouldBe` 3
 
 
-  -- it "adds and deletes users appropriately" $ do
-  --   -- setupTestDB2
-  --   runDB $ do
-  --     root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
-  --     Right user1 <- root `useradd` "user1"
-  --     Right user2 <- root `useradd` "user2"
-  --     Right user3 <- root `useradd` "user3"
+  it "contains a group with explanation=abc" $ do
+    setupTestDB1
+    groups <- runDB $ sqlTest3
+    length groups `shouldBe` 1
 
-  --     Right group1 <- user1 `groupadd` "group1"
-  --     Right group2 <- user2 `groupadd` "group2"
-  --     Right group3 <- user3 `groupadd` "group3"
+  it "joins two tables based on the same user id" $ do
+    setupTestDB1
+    joined <- runDB $ sqlTest4
+    length joined `shouldBe` 8
 
-  --     Right u  <- user1 `usermod` user1 $ [ AddToGroup group1 ]
-  --     Right u  <- user1 `usermod` user2 $ [ AddToGroup group1 ]
-  --     Right u  <- user2 `usermod` user2 $ [ AddToGroup group2 ]
-  --     Right u  <- user3 `usermod` user3 $ [ AddToGroup group3 ]
-  --     Right u' <- user2 `usermod` user2 $ [ SetDisplayName "me" ]
+  it "left-outer-joins and gives three rows" $ do
+    setupTestDB1
+    joined <- runDB $ sqlTest5
+    length joined `shouldBe` 10
 
-  --     return ()
+  it "joins three tables in reverse order" $ do
+    setupTestDB1
+    joined <- runDB $ sqlTest6
+    length joined `shouldBe` 8
 
-  --   user2 <- selectUser "user2"
-  --   userAccountDisplayName user2 `shouldBe` Just "me"
 
-  --   roots <- selectPrivilegedUsers
-  --   length roots `shouldBe` 1
+  it "adds and deletes users appropriately" $ do
+    -- setupTestDB2
+    runDB $ do
+      root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+      Right user1 <- root `useradd` "user1"
+      Right user2 <- root `useradd` "user2"
+      Right user3 <- root `useradd` "user3"
 
-  --   groupMembers <- selectAll :: Test [Entity GroupMembers]
-  --   length groupMembers `shouldBe` 4
+      Right group1 <- user1 `groupadd` "group1"
+      Right group2 <- user2 `groupadd` "group2"
+      Right group3 <- user3 `groupadd` "group3"
 
-  --   groups <- selectAll :: Test [Entity Group]
-  --   length groups `shouldBe` 3
+      Right u  <- user1 `usermod` user1 $ [ AddToGroup group1 ]
+      Right u  <- user1 `usermod` user2 $ [ AddToGroup group1 ]
+      Right u  <- user2 `usermod` user2 $ [ AddToGroup group2 ]
+      Right u  <- user3 `usermod` user3 $ [ AddToGroup group3 ]
+      Right u' <- user2 `usermod` user2 $ [ SetDisplayName "me" ]
 
-  --   deleteGroup "group1"
+      return ()
 
-  --   groups <- selectAll :: Test [Entity Group]
-  --   length groups `shouldBe` 2
+    user2 <- selectUser "user2"
+    userAccountDisplayName user2 `shouldBe` Just "me"
 
-  --   groupMembers <- selectAll :: Test [Entity GroupMembers]
-  --   length groupMembers `shouldBe` 2
+    roots <- selectPrivilegedUsers
+    length roots `shouldBe` 1
 
-  --   deleteFromGroup "user3" "group3"
+    groupMembers <- selectAll :: Test [Entity GroupMembers]
+    length groupMembers `shouldBe` 4
 
-  --   groupMembers <- selectAll :: Test [Entity GroupMembers]
-  --   length groupMembers `shouldBe` 1
+    groups <- selectAll :: Test [Entity Group]
+    length groups `shouldBe` 3
 
-  --   deleteUser "user1"
-  --   users <- selectAll :: Test [Entity UserAccount]
-  --   length users  `shouldBe` 3
+    deleteGroup "group1"
 
-  --   deleteUser "user2"
-  --   deleteUser "user3"
-  --   users <- selectAll :: Test [Entity UserAccount]
-  --   length users  `shouldBe` 1
+    groups <- selectAll :: Test [Entity Group]
+    length groups `shouldBe` 2
 
-  --   groups <- selectAll :: Test [Entity Group]
-  --   length groups `shouldBe` 0
+    groupMembers <- selectAll :: Test [Entity GroupMembers]
+    length groupMembers `shouldBe` 2
 
-  --   groupMembers <- selectAll :: Test [Entity GroupMembers]
-  --   length groupMembers `shouldBe` 0
+    deleteFromGroup "user3" "group3"
+
+    groupMembers <- selectAll :: Test [Entity GroupMembers]
+    length groupMembers `shouldBe` 1
+
+    deleteUser "user1"
+    users <- selectAll :: Test [Entity UserAccount]
+    length users  `shouldBe` 3
+
+    deleteUser "user2"
+    deleteUser "user3"
+    users <- selectAll :: Test [Entity UserAccount]
+    length users  `shouldBe` 1
+
+    groups <- selectAll :: Test [Entity Group]
+    length groups `shouldBe` 0
+
+    groupMembers <- selectAll :: Test [Entity GroupMembers]
+    length groupMembers `shouldBe` 0
 
 
   it "creates directories with appropriate permissions" $ do
@@ -354,6 +351,50 @@ spec = withApp $ do
     (dir2 `isDirectoryGroupWritableBy`   user1) `shouldReturn` True
     (dir2 `isDirectoryEveryoneExecutableBy` user1) `shouldReturn` True
 
+  -- it "creates directories and randomly associates permissions" $ monadicYESkip $ do
+  --   (or,ow,ox) <- pick arbitrary
+  --   (gr,gw,gx) <- pick arbitrary
+  --   (ar,aw,ax) <- pick arbitrary
+
+  --   (dir1,dir2,dir3,user1,user2,user3) <-  run $ runDB $ do
+  --     root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+  --     Right user1 <- root `useradd` "user1"
+  --     Right user2 <- root `useradd` "user2"
+  --     Right user3 <- root `useradd` "user3"
+
+  --     Right group1 <- user1 `groupadd` "group1"
+  --     Right group2 <- user2 `groupadd` "group2"
+  --     Right group3 <- user3 `groupadd` "group3"
+
+  --     Right u  <- user1 `usermod` user1 $ [ AddToGroup group1 ]
+  --     Right u  <- user1 `usermod` user2 $ [ AddToGroup group1 ]
+  --     Right u  <- user2 `usermod` user2 $ [ AddToGroup group2 ]
+  --     Right u  <- user3 `usermod` user3 $ [ AddToGroup group3 ]
+
+  --     Right dir0 <- root  `mkdir` "dir0"
+  --     Right dir1 <- user1 `mkdir` "dir1"
+  --     Right dir2 <- user2 `mkdir` "dir2"
+  --     Right dir3 <- user3 `mkdir` "dir3"
+
+  --     Right _ <- (user1 `chmodDirectory` dir1)
+  --       (Just $ Perm or ow ox)
+  --       [(group1, Perm gr gw gx)
+  --       ,(group2, Perm gr gw gx)]
+  --       (Just $ Perm ar aw ax)
+
+  --     return (dir1,dir2,dir3,user1,user2,user3)
+
+  --   (runDB $ dir1 `isDirectoryOwnerReadableBy` user1) `shouldBeM` or
+  --   (runDB $ dir1 `isDirectoryOwnerWritableBy` user1) `shouldBeM` ow
+  --   (runDB $ dir1 `isDirectoryOwnerExecutableBy` user1) `shouldBeM` ox
+  --   (runDB $ dir1 `isDirectoryGroupReadableBy`   user2) `shouldBeM` gr
+  --   (runDB $ dir1 `isDirectoryGroupWritableBy`   user2) `shouldBeM` gw
+  --   (runDB $ dir1 `isDirectoryGroupExecutableBy`  user2) `shouldBeM` gx
+  --   (runDB $ dir1 `isDirectoryEveryoneReadableBy` user3) `shouldBeM` ar
+  --   (runDB $ dir1 `isDirectoryEveryoneWritableBy` user3) `shouldBeM` aw
+  --   (runDB $ dir1 `isDirectoryEveryoneExecutableBy` user3) `shouldBeM` ax
+
+
 
   it "creates files with appropriate permissions" $ do
     (root,user1,user2,user3,dir0,dir1,dir2,dir3,file0,file1,file2,file3) <- runDB $ do
@@ -398,10 +439,17 @@ spec = withApp $ do
         , (group3, Perm False True False) ]
         (Just $ Perm False False True)
 
+      Right _ <- (user2 `chmodDirectory` dir2)
+        (Just $ Perm True True True)
+        [(group2, Perm True True True)]
+        (Just $ Perm True True False)
+
+
       return (root,user1,user2,user3,dir0,dir1,dir2,dir3,file0,file1,file2,file3)
 
-    (user1 `touchAt` dir1 $ "file") `shouldThrow` anyException
-
+    (user1 `touchAt` dir1 $ "file" ) `shouldThrow` anyException
+    (user3 `touchAt` dir1 $ "file3") `shouldReturnLeft` Something
+    (user3 `touchAt` dir2 $ "file3") `shouldReturnLeft` Something
 
     (dir0 `isDirectoryReadableBy` root) `shouldReturn` True
 
@@ -446,7 +494,56 @@ spec = withApp $ do
 
 
 
+  -- it "creates files and randomly associates permissions" $ monadicYESkip $ do
+  --   (or,ow,ox) <- pick arbitrary
+  --   (gr,gw,gx) <- pick arbitrary
+  --   (ar,aw,ax) <- pick arbitrary
+
+  --   (root,user1,user2,user3,dir0,dir1,dir2,dir3,file0,file1,file2,file3) <- run $ runDB $ do
+  --     root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+  --     Right user1 <- root `useradd` "user1"
+  --     Right user2 <- root `useradd` "user2"
+  --     Right user3 <- root `useradd` "user3"
+
+  --     Right group1 <- user1 `groupadd` "group1"
+  --     Right group2 <- user2 `groupadd` "group2"
+  --     Right group3 <- user3 `groupadd` "group3"
+
+  --     Right u  <- user1 `usermod` user1 $ [ AddToGroup group1 ]
+  --     Right u  <- user1 `usermod` user2 $ [ AddToGroup group1 ]
+  --     Right u  <- user2 `usermod` user2 $ [ AddToGroup group2 ]
+  --     Right u  <- user3 `usermod` user3 $ [ AddToGroup group3 ]
+
+  --     Right dir0 <- root  `mkdir` "dir0"
+  --     Right dir1 <- user1 `mkdir` "dir1"
+  --     Right dir2 <- user2 `mkdir` "dir2"
+  --     Right dir3 <- user3 `mkdir` "dir3"
+
+  --     Right file0 <- root  `touchAt` dir0 $ "file"
+  --     Right file1 <- user1 `touchAt` dir1 $ "file"
+  --     Right file2 <- user2 `touchAt` dir2 $ "file"
+  --     Right file3 <- user3 `touchAt` dir3 $ "file"
+
+  --     Right _ <- (user1 `chmodDirectory` dir1)
+  --       (Just $ Perm True True True)
+  --       [(group2, Perm False False False)]
+  --       (Just $ Perm False False False)
+
+  --     Right _ <- (user1 `chmodFile` file1)
+  --       (Just $ Perm or ow ox )
+  --       [(group1, Perm gr gw gx)
+  --       ,(group2, Perm gr gw gx)]
+  --       (Just $ Perm ar aw ax)
+
+  --     return (root,user1,user2,user3,dir0,dir1,dir2,dir3,file0,file1,file2,file3)
 
 
---expectationFailure :: (?loc :: CallStack) =>  String -> Expectation
---expectationFailure = Test.HUnit.assertFailure
+  --   (runDB $ file1 `isFileOwnerReadableBy` user1) `shouldBeM` or
+  --   (runDB $ file1 `isFileOwnerWritableBy` user1) `shouldBeM` ow
+  --   (runDB $ file1 `isFileOwnerExecutableBy` user1) `shouldBeM` ox
+  --   (runDB $ file1 `isFileGroupReadableBy`   user2) `shouldBeM` gr
+  --   (runDB $ file1 `isFileGroupWritableBy`   user2) `shouldBeM` gw
+  --   (runDB $ file1 `isFileGroupExecutableBy`  user2) `shouldBeM` gx
+  --   (runDB $ file1 `isFileEveryoneReadableBy` user3) `shouldBeM` ar
+  --   (runDB $ file1 `isFileEveryoneWritableBy` user3) `shouldBeM` aw
+  --   (runDB $ file1 `isFileEveryoneExecutableBy` user3) `shouldBeM` ax

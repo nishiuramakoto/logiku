@@ -1,4 +1,6 @@
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module TestImport
     ( module TestImport
@@ -14,7 +16,7 @@ import Model                 as X
 import Test.QuickCheck.Monadic as X hiding (assert)
 import Test.QuickCheck  as X
 import Test.Hspec            as X hiding(shouldBe,shouldReturn,shouldThrow)
-import qualified Test.Hspec.Core.Spec  as Hspec
+-- import qualified Test.Hspec.Core.Spec  as Hspec
 import qualified Test.Hspec  as H
 
 
@@ -28,6 +30,7 @@ import qualified Data.Text as T
 import Data.Typeable
 import Data.Time.LocalTime
 import qualified Data.Map as M
+import qualified Data.List as L
 import GHC.Stack
 import Network.Wai
 
@@ -43,30 +46,36 @@ runDBWithApp app query = runSqlPersistMPool query (appConnPool app)
 
 
 withApp :: SpecWith (TestApp App) -> Spec
-withApp = before $ do
+withApp spec = beforeEachAndAll $ do
   settings <- loadAppSettings
               ["config/test-settings.yml", "config/settings.yml"]
               []
               ignoreEnv
   foundation <- makeFoundation settings
-  wipeDB foundation
+  wipeDB'  foundation
   logWare <- liftIO $ makeLogWare foundation
   return (foundation, logWare)
+    where
+      beforeEachAndAll eachIO = before eachIO (beforeAll_ initDB spec)
+
+
+-- This gets run before all the specs exactly once
+initDB :: IO ()
+initDB = do
+  return ()
+
 
 -- This function will truncate all of the tables in your database.
 -- 'withApp' calls it before each test, creating a clean environment for each
 -- spec to run in.
 wipeDB :: App -> IO ()
 wipeDB app = runDBWithApp app $ do
-  --trace "a"
   tables <- getTables
-  --trace "b"
   sqlBackend <- ask
-  --trace "c"
   let escapedTables = map (connEscapeName sqlBackend . DBName) tables
       query = "TRUNCATE TABLE " ++ intercalate ", " escapedTables
   rawExecute query []
-  -- trace "d"
+
 
 getTables :: MonadIO m => ReaderT SqlBackend m [Text]
 getTables = do
@@ -78,33 +87,66 @@ getTables = do
 
     return $ map unSingle tables
 
+-- Using DELETE FROM might be faster
+wipeDB' :: App -> IO ()
+wipeDB' app = runDBWithApp app $ do
+  tables' <- getTables' -- manually topologically sorted
+  tables  <- getTables
+  sqlBackend <- ask
+  let escapedTables = map (connEscapeName sqlBackend . DBName) (L.nub $ tables' ++ tables)
+      queries = map (\t -> "DELETE FROM " ++ t) escapedTables
 
--- run monadic Quickcheck on Yesod sites
+  forM_ queries (\query ->  rawExecute query [])
 
+-- TODO: Should alter the tables to add CASCADE property for DELETEs to work flawlessly
+--       without manual topological sorting. But that seems complex enough to need another
+--       testing. For now I am reasonably content by the fact
+--       that the breaking the order also breaks the execution and causes the test to fail.
+getTables' :: MonadIO m => ReaderT SqlBackend m [Text]
+getTables' = do
+    return $ [ "blog"
+             , "comment"
+             , "email"
+             , "file_json"
+             , "file_tags"
+             , "directory_tags"
+             , "tag"
+             , "file_groups"
+             , "directory_groups"
+             , "group_members"
+             , "group"
+             , "file"
+             , "directory"
+             , "user_account"
+             ]
 
-newtype PropertyYesod site a =
-  PropertyYesod {unPropertyYesod :: PropertyM (ST.StateT (YesodExampleData site) IO) a }
-  deriving (Functor, Applicative, Monad)
+--------------  run monadic Quickcheck on Yesod sites ----------------
 
-
-
-runYesodProperty :: YesodDispatch site
-                    => PropertyM (ST.StateT (YesodExampleData site) IO) a
-                    -> (site,  Middleware)
-                    -> Property
-runYesodProperty prop (site, middleware)  = monadic yesodProperty prop
+monadicYE :: forall site a. YesodDispatch site
+             => PropertyM (ST.StateT (YesodExampleData site) IO) a
+             -> (site,  Middleware)
+             -> Property
+monadicYE prop (site, middleware)  = monadic yesodProperty prop
   where
---    yesodProperty :: YesodDispatch site => ST.StateT (YesodExampleData site) IO Property -> Property
-    yesodProperty = (ioProperty :: IO Property -> Property) . run
---    run :: YesodDispatch site => ST.StateT (YesodExampleData site) IO Property -> IO Property
-    run example = do
+    yesodProperty ::  ST.StateT (YesodExampleData site) IO Property -> Property
+    yesodProperty = ioProperty . runYE
+    runYE :: ST.StateT (YesodExampleData site) IO Property -> IO Property
+    runYE ex = do
       app <- toWaiAppPlain site
-      ST.evalStateT example YesodExampleData
+      ST.evalStateT ex YesodExampleData
         { yedApp  = middleware app
         , yedSite = site
         , yedCookies = M.empty
         , yedResponse = Nothing
         }
+
+monadicYESkip :: forall site a. YesodDispatch site
+             => PropertyM (ST.StateT (YesodExampleData site) IO) a
+             -> (site,  Middleware)
+             -> Property
+monadicYESkip prop _  = monadic m prop
+  where
+    m = ioProperty . const (return True)
 
 
 shouldThrow :: (?loc :: CallStack , Exception e)
@@ -131,6 +173,20 @@ shouldReturn m a =
   do x <- runDB m
      liftIO $ x `H.shouldBe` a
 
+
+shouldReturnLeft :: (?loc :: CallStack )
+                    => SqlPersistM (Either a b) -> Something -> ST.StateT (YesodExampleData App) IO ()
+shouldReturnLeft m _ = do
+  e <- runDB  m
+  case e of
+    Left _ -> return ()
+    Right _ -> liftIO $ False `H.shouldBe` True
+
+data Something = Something
+                 deriving (Eq,Show)
+
+
+
 shouldBe :: (?loc :: CallStack , Eq a, Show a, MonadIO m)
             => a -> a -> m()
 shouldBe a b = liftIO $ a `H.shouldBe` b
@@ -144,3 +200,21 @@ trace :: MonadIO m => Text -> m ()
 trace a = do
   ZonedTime localTime _zone  <- liftIO getZonedTime
   liftIO $ putStrLn $ T.concat [T.pack $ show localTime , ":" , a ]
+
+--expectationFailure :: (?loc :: CallStack) =>  String -> Expectation
+--expectationFailure = Test.HUnit.assertFailure
+
+andM :: Monad m => [m Bool] -> m Bool
+andM [] = return True
+andM (m:ms) = do x <- m
+                 y <- andM ms
+                 return $ x && y
+
+shouldBeM :: (?loc :: CallStack,  Monad m, Eq a, Show a) => m a -> a -> PropertyM m ()
+shouldBeM m a = do
+  x <- run m
+  assert' (x == a)
+
+assert' :: (?loc :: CallStack,  Monad m) => Bool -> PropertyM m ()
+assert' True = return ()
+assert' False = fail $ "Assertion falied at:" ++ showCallStack ?loc
