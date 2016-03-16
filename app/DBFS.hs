@@ -9,7 +9,7 @@ module DBFS
        , touch , touchAt
        , isPrivileged
        , isGroupOwnerOf
-
+       , belongs
 
        , isDirectoryOwnerReadableBy
        , isDirectoryOwnerWritableBy
