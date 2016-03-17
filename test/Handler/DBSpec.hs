@@ -119,16 +119,19 @@ sqlTest7 = do privileged <- select $
               return privileged
 
 
-type Test a = YesodExample App a
+type TestDB a = SqlPersistM a
 
-selectPrivilegedUsers = runDB  $ do  select $
-                                       from $ \users -> do
-                                         where_ (users^.UserAccountPrivileged ==. val True)
-                                         return users
+selectPrivilegedUsers =  select $
+                         from $ \users -> do
+                           where_ (users^.UserAccountPrivileged ==. val True)
+                           return users
 
-selectAll = runDB $ do select $
-                         from $ \groupMembers -> do
-                           return groupMembers
+selectAll = do select $
+                 from $ \groupMembers -> do
+                   return groupMembers
+
+selectUsers :: MonadIO m => SqlPersistT m [Entity UserAccount]
+selectUsers = selectAll
 
 
 deleteUser user = runDB $ do  Just root <- getBy $ UniqueUserAccount "root"
@@ -146,6 +149,21 @@ deleteFromGroup user grp = runDB $ do Just root <- getBy $ UniqueUserAccount "ro
 
 selectUser user = runDB $ do Just u <- getBy $ UniqueUserAccount user
                              return $ entityVal u
+
+dbIsEmpty :: SqlPersistM Bool
+dbIsEmpty = do
+  [] <- selectAll :: TestDB [Entity UserAccount]
+  [] <- selectAll :: TestDB [Entity Directory]
+  [] <- selectAll :: TestDB [Entity File]
+  [] <- selectAll :: TestDB [Entity Group]
+  [] <- selectAll :: TestDB [Entity GroupMembers]
+  [] <- selectAll :: TestDB [Entity DirectoryGroups]
+  [] <- selectAll :: TestDB [Entity FileGroups]
+  [] <- selectAll :: TestDB [Entity Tag]
+  [] <- selectAll :: TestDB [Entity DirectoryTags]
+  [] <- selectAll :: TestDB [Entity FileTags]
+  return True
+
 
 spec :: Spec
 spec = withApp $ do
@@ -214,119 +232,144 @@ spec = withApp $ do
     length joined `shouldBe` 8
 
 
-  it "adds and deletes users appropriately" $ do
-    -- setupTestDB2
-    (root,user1,user2,user3,group1,group2,group3) <- runDB $ do
-      root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
-      Right user1 <- root `useradd` "user1"
-      Right user2 <- root `useradd` "user2"
-      Right user3 <- root `useradd` "user3"
+  it "tests useradd and userdel" $ runDB $ do
+    root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+    Right user1 <- root `useradd` "user1"
+    Right user2 <- root `useradd` "user2"
+    Right user3 <- root `useradd` "user3"
+    Left (UserAlreadyExists _)  <- root  `useradd` "user3"
+    Left (PermissionError _  )  <- user1 `useradd` "user4"
 
-      Right group1 <- user1 `groupadd` "group1"
-      Right group2 <- user2 `groupadd` "group2"
-      Right group3 <- user3 `groupadd` "group3"
+    (length <$> selectPrivilegedUsers) `shouldReturn` 1
 
-      Right u  <- user1 `usermod` user1 $ [ AddToGroup group1 ]
-      Right u  <- user1 `usermod` user2 $ [ AddToGroup group1 ]
-      Right u  <- user2 `usermod` user2 $ [ AddToGroup group2 ]
-      Right u  <- user3 `usermod` user3 $ [ AddToGroup group3 ]
-      Right u' <- user2 `usermod` user2 $ [ SetDisplayName "me" ]
+    Right _ <- root `userdel` user1
+    (length <$> selectUsers) `shouldReturn` 3
+    Left (PermissionError _  )  <- user1 `userdel` user2
 
-      return (root,user1,user2,user3,group1,group2,group3)
+    Right _ <- user2 `userdel` user2
+    Right _ <- root  `userdel` user3
 
-    belongs root  `shouldReturn` Right []
+    Left (UserDoesNotExist _) <- root `userdel` user3
 
-    user2' <- selectUser "user2"
-    userAccountDisplayName user2' `shouldBe` Just "me"
+    Right _ <- root `userdel` root
 
-    roots <- selectPrivilegedUsers
-    length roots `shouldBe` 1
+    dbIsEmpty
 
-    groupMembers <- selectAll :: Test [Entity GroupMembers]
-    length groupMembers `shouldBe` 4
 
-    groups <- selectAll :: Test [Entity Group]
-    length groups `shouldBe` 3
+  it "tests usermod" $ runDB $ do
+    root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+    Right user1 <- root `useradd` "user1"
+    Right user2 <- root `useradd` "user2"
+    Right user3 <- root `useradd` "user3"
 
-    belongs user2 `shouldReturn` Right [group1, group2]
-    deleteGroup "group1"
-    belongs user2 `shouldReturn` Right [group2]
+    Right group1 <- user1 `groupadd` "group1"
 
-    groups <- selectAll :: Test [Entity Group]
-    length groups `shouldBe` 2
+    Right _  <- user1 `usermod` user1 $ [ AddToGroup group1 , SetDisplayName "name"]
+    Right _  <- user1 `usermod` user2 $ [ AddToGroup group1 ]
+    Left (PermissionError _)  <- user1 `usermod` user2 $ [ SetDisplayName "new name" ]
+    (getUserDisplayName user1) `shouldReturn` Just "name"
+    (getUserDisplayName user2) `shouldReturn` Nothing
 
-    groupMembers <- selectAll :: Test [Entity GroupMembers]
+    groupMembers <- selectAll :: TestDB [Entity GroupMembers]
     length groupMembers `shouldBe` 2
 
-    deleteFromGroup "user3" "group3"
+    Left (NotAGroupMember _)   <- user1 `usermod` user2 $ [ DelFromGroup group1 , DelFromGroup group1]
 
-    groupMembers <- selectAll :: Test [Entity GroupMembers]
+    Right _ <- user1 `userdel` user1
+    Right _ <- user2 `userdel` user2
+    Right _ <- user3 `userdel` user3
+    Right _ <- root  `userdel` root
+    dbIsEmpty
+    return ()
+
+  it "tests groupadd and groupdel" $ runDB $ do
+    root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+    Right user1 <- root `useradd` "user1"
+    Right user2 <- root `useradd` "user2"
+    Right user3 <- root `useradd` "user3"
+
+    Right group1 <- user1 `groupadd` "group1"
+    Right group2 <- user2 `groupadd` "group2"
+    Right group3 <- user3 `groupadd` "group3"
+
+    Right _  <- user1 `usermod` user1 $ [ AddToGroup group1 ]
+    Right _  <- user1 `usermod` user2 $ [ AddToGroup group1 ]
+    Right _  <- user2 `usermod` user2 $ [ AddToGroup group2 ]
+    Right _  <- user3 `usermod` user3 $ [ AddToGroup group3 ]
+
+    groupMembers <- selectAll :: TestDB [Entity GroupMembers]
+    length groupMembers `shouldBe` 4
+
+    groups <- selectAll :: TestDB [Entity Group]
+    length groups `shouldBe` 3
+
+    root `groupdel` group1
+
+    groups <- selectAll :: TestDB [Entity Group]
+    length groups `shouldBe` 2
+
+    groupMembers <- selectAll :: TestDB [Entity GroupMembers]
+    length groupMembers `shouldBe` 2
+
+    root `usermod` user3 $ [DelFromGroup group3]
+
+    groupMembers <- selectAll :: TestDB [Entity GroupMembers]
     length groupMembers `shouldBe` 1
 
-    deleteUser "user1"
-    users <- selectAll :: Test [Entity UserAccount]
-    length users  `shouldBe` 3
-    belongs user1 `shouldReturnLeft` Something
+    root `userdel` user1
+    root `userdel` user2
+    root `userdel` user3
 
-    deleteUser "user2"
-    deleteUser "user3"
-    users <- selectAll :: Test [Entity UserAccount]
-    length users  `shouldBe` 1
-
-    groups <- selectAll :: Test [Entity Group]
+    groups <- selectAll :: TestDB [Entity Group]
     length groups `shouldBe` 0
 
-    groupMembers <- selectAll :: Test [Entity GroupMembers]
+    groupMembers <- selectAll :: TestDB [Entity GroupMembers]
     length groupMembers `shouldBe` 0
 
+  it "creates directories with appropriate permissions" $ runDB $ do
+    root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+    Right user1 <- root `useradd` "user1"
+    Right user2 <- root `useradd` "user2"
+    Right user3 <- root `useradd` "user3"
 
-  it "creates directories with appropriate permissions" $ do
-    (root,user1,user2,user3,dir0,dir1,dir2,dir3) <- runDB $ do
-      root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
-      Right user1 <- root `useradd` "user1"
-      Right user2 <- root `useradd` "user2"
-      Right user3 <- root `useradd` "user3"
+    Right group1 <- user1 `groupadd` "group1"
+    Right group2 <- user2 `groupadd` "group2"
+    Right group3 <- user3 `groupadd` "group3"
 
-      Right group1 <- user1 `groupadd` "group1"
-      Right group2 <- user2 `groupadd` "group2"
-      Right group3 <- user3 `groupadd` "group3"
+    Right u  <- user1 `usermod` user1 $ [ AddToGroup group1 ]
+    Right u  <- user1 `usermod` user2 $ [ AddToGroup group1 ]
+    Right u  <- user2 `usermod` user2 $ [ AddToGroup group2 ]
+    Right u  <- user3 `usermod` user3 $ [ AddToGroup group3 ]
 
-      Right u  <- user1 `usermod` user1 $ [ AddToGroup group1 ]
-      Right u  <- user1 `usermod` user2 $ [ AddToGroup group1 ]
-      Right u  <- user2 `usermod` user2 $ [ AddToGroup group2 ]
-      Right u  <- user3 `usermod` user3 $ [ AddToGroup group3 ]
+    Right dir0 <- root  `mkdir` "dir0"
+    Right dir1 <- user1 `mkdir` "dir1"
+    Right dir2 <- user2 `mkdir` "dir2"
+    Right dir3 <- user3 `mkdir` "dir3"
 
-      Right dir0 <- root  `mkdir` "dir0"
-      Right dir1 <- user1 `mkdir` "dir1"
-      Right dir2 <- user2 `mkdir` "dir2"
-      Right dir3 <- user3 `mkdir` "dir3"
+    Right _ <- (user1 `chmodDirectory` dir1)
+               (Just $ Perm True True True)
+               [(group2, Perm True True True)]
+               (Just $ Perm True True True)
 
-      Right _ <- (user1 `chmodDirectory` dir1)
-        (Just $ Perm True True True)
-        [(group2, Perm True True True)]
-        (Just $ Perm True True True)
-
-      Right _ <- (user2 `chmodDirectory`  dir2)
-        (Just $ Perm True False False)
-        [ (group1, Perm False True False)
-        , (group2, Perm False True False)
-        , (group3, Perm False True False) ]
-        (Just $ Perm False False True)
-
-      return (root,user1,user2,user3,dir0,dir1,dir2,dir3)
+    Right _ <- (user2 `chmodDirectory`  dir2)
+               (Just $ Perm True False False)
+               [ (group1, Perm False True False)
+               , (group2, Perm False True False)
+               , (group3, Perm False True False) ]
+               (Just $ Perm False False True)
 
     (dir0 `isDirectoryReadableBy` root) `shouldReturn` True
 
     -- Specify the reason for truth, and use catch-all for falsity
 
     -- test default umask (with permission bits 755) and access tests
-    -- (dir0 `isDirectoryOwnerReadableBy`   root) `shouldReturn` True
-    -- (dir0 `isDirectoryOwnerWritableBy`   root) `shouldReturn` True
-    -- (dir0 `isDirectoryOwnerExecutableBy` root) `shouldReturn` True
+    (dir0 `isDirectoryOwnerReadableBy`   root) `shouldReturn` True
+    (dir0 `isDirectoryOwnerWritableBy`   root) `shouldReturn` True
+    (dir0 `isDirectoryOwnerExecutableBy` root) `shouldReturn` True
 
-    -- (dir0 `isDirectoryEveryoneReadableBy`   user1) `shouldReturn` True
-    -- (dir0 `isDirectoryWritableBy`           user1) `shouldReturn` False
-    -- (dir0 `isDirectoryEveryoneExecutableBy` user1) `shouldReturn` True
+    (dir0 `isDirectoryEveryoneReadableBy`   user1) `shouldReturn` True
+    (dir0 `isDirectoryWritableBy`           user1) `shouldReturn` False
+    (dir0 `isDirectoryEveryoneExecutableBy` user1) `shouldReturn` True
 
     -- test chmod and access tests
     (dir1 `isDirectoryOwnerReadableBy`   user1) `shouldReturn` True
@@ -356,53 +399,9 @@ spec = withApp $ do
     (dir2 `isDirectoryGroupWritableBy`   user1) `shouldReturn` True
     (dir2 `isDirectoryEveryoneExecutableBy` user1) `shouldReturn` True
 
-  -- it "creates directories and randomly associates permissions" $ monadicYESkip $ do
-  --   (or,ow,ox) <- pick arbitrary
-  --   (gr,gw,gx) <- pick arbitrary
-  --   (ar,aw,ax) <- pick arbitrary
-
-  --   (dir1,dir2,dir3,user1,user2,user3) <-  run $ runDB $ do
-  --     root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
-  --     Right user1 <- root `useradd` "user1"
-  --     Right user2 <- root `useradd` "user2"
-  --     Right user3 <- root `useradd` "user3"
-
-  --     Right group1 <- user1 `groupadd` "group1"
-  --     Right group2 <- user2 `groupadd` "group2"
-  --     Right group3 <- user3 `groupadd` "group3"
-
-  --     Right u  <- user1 `usermod` user1 $ [ AddToGroup group1 ]
-  --     Right u  <- user1 `usermod` user2 $ [ AddToGroup group1 ]
-  --     Right u  <- user2 `usermod` user2 $ [ AddToGroup group2 ]
-  --     Right u  <- user3 `usermod` user3 $ [ AddToGroup group3 ]
-
-  --     Right dir0 <- root  `mkdir` "dir0"
-  --     Right dir1 <- user1 `mkdir` "dir1"
-  --     Right dir2 <- user2 `mkdir` "dir2"
-  --     Right dir3 <- user3 `mkdir` "dir3"
-
-  --     Right _ <- (user1 `chmodDirectory` dir1)
-  --       (Just $ Perm or ow ox)
-  --       [(group1, Perm gr gw gx)
-  --       ,(group2, Perm gr gw gx)]
-  --       (Just $ Perm ar aw ax)
-
-  --     return (dir1,dir2,dir3,user1,user2,user3)
-
-  --   (runDB $ dir1 `isDirectoryOwnerReadableBy` user1) `shouldBeM` or
-  --   (runDB $ dir1 `isDirectoryOwnerWritableBy` user1) `shouldBeM` ow
-  --   (runDB $ dir1 `isDirectoryOwnerExecutableBy` user1) `shouldBeM` ox
-  --   (runDB $ dir1 `isDirectoryGroupReadableBy`   user2) `shouldBeM` gr
-  --   (runDB $ dir1 `isDirectoryGroupWritableBy`   user2) `shouldBeM` gw
-  --   (runDB $ dir1 `isDirectoryGroupExecutableBy`  user2) `shouldBeM` gx
-  --   (runDB $ dir1 `isDirectoryEveryoneReadableBy` user3) `shouldBeM` ar
-  --   (runDB $ dir1 `isDirectoryEveryoneWritableBy` user3) `shouldBeM` aw
-  --   (runDB $ dir1 `isDirectoryEveryoneExecutableBy` user3) `shouldBeM` ax
-
-
 
   it "creates files with appropriate permissions" $ do
-    (root,user1,user2,user3,dir0,dir1,dir2,dir3,file0,file1,file2,file3) <- runDB $ do
+    (root,user1,user2,user3,group1,group2,group3,dir0,dir1,dir2,dir3,file0,file1,file2,file3) <- runDB $ do
       root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
       Right user1 <- root `useradd` "user1"
       Right user2 <- root `useradd` "user2"
@@ -428,127 +427,69 @@ spec = withApp $ do
       Right file3 <- user3 `touchAt` dir3 $ "file"
 
       Right _ <- (user1 `chmodDirectory` dir1)
-        (Just $ Perm True True True)
-        [(group2, Perm False False True)]
-        (Just $ Perm False False False)
+                 (Just $ Perm True True True)
+                 [(group2, Perm False False True)]
+                 (Just $ Perm False False False)
 
       Right _ <- (user1 `chmodFile` file1)
-        (Just $ Perm True True True)
-        [(group2, Perm True True True)]
-        (Just $ Perm True True True)
+                 (Just $ Perm True True True)
+                 [(group2, Perm True True True)]
+                 (Just $ Perm True True True)
 
       Right _ <- (user2 `chmodFile`  file2)
-        (Just $ Perm True False False)
-        [ (group1, Perm False True False)
-        , (group2, Perm False True False)
-        , (group3, Perm False True False) ]
-        (Just $ Perm False False True)
+                 (Just $ Perm True False False)
+                 [ (group1, Perm False True False)
+                 , (group2, Perm False True False)
+                 , (group3, Perm False True False) ]
+                 (Just $ Perm False False True)
 
       Right _ <- (user2 `chmodDirectory` dir2)
-        (Just $ Perm True True True)
-        [(group2, Perm True True True)]
-        (Just $ Perm True True False)
+                 (Just $ Perm True True True)
+                 [(group2, Perm True True True)]
+                 (Just $ Perm True True False)
+      return (root, user1,user2,user3,group1,group2,group3,dir0,dir1,dir2,dir3,file0,file1,file2,file3)
 
+    Left (FileAlreadyExists _) <- runDB $ user1 `touchAt` dir1 $ "file"
+    Left (PermissionError _  ) <- runDB $ user3 `touchAt` dir1 $ "file3"
+    Left (PermissionError _  ) <- runDB $ user3 `touchAt` dir2 $ "file3"
 
-      return (root,user1,user2,user3,dir0,dir1,dir2,dir3,file0,file1,file2,file3)
-
-    (user1 `touchAt` dir1 $ "file" ) `shouldThrow` anyException
-    (user3 `touchAt` dir1 $ "file3") `shouldReturnLeft` Something
-    (user3 `touchAt` dir2 $ "file3") `shouldReturnLeft` Something
-
-    (dir0 `isDirectoryReadableBy` root) `shouldReturn` True
+    (runDB $ dir0 `isDirectoryReadableBy` root) `shouldReturn` True
 
     -- Specify the reason for truth, and use catch-all for falsity
 
     -- test default umask (with permission bits 755) and access tests
-    (file0 `isFileOwnerReadableBy`   root) `shouldReturn` True
-    (file0 `isFileOwnerWritableBy`   root) `shouldReturn` True
-    (file0 `isFileOwnerExecutableBy` root) `shouldReturn` True
+    (runDB $ file0 `isFileOwnerReadableBy`   root) `shouldReturn` True
+    (runDB $ file0 `isFileOwnerWritableBy`   root) `shouldReturn` True
+    (runDB $ file0 `isFileOwnerExecutableBy` root) `shouldReturn` True
 
-    (file0 `isFileEveryoneReadableBy`   user1) `shouldReturn` True
-    (file0 `isFileWritableBy`           user1) `shouldReturn` False
-    (file0 `isFileEveryoneExecutableBy` user1) `shouldReturn` True
-
-    -- test chmod and access tests
-    (file1 `isFileOwnerReadableBy`   user1) `shouldReturn` True
-    (file1 `isFileOwnerWritableBy`   user1) `shouldReturn` True
-    (file1 `isFileOwnerExecutableBy` user1) `shouldReturn` True
-
-    (file1 `isFileGroupReadableBy`   user2) `shouldReturn` True
-    (file1 `isFileGroupWritableBy`   user2) `shouldReturn` True
-    (file1 `isFileGroupExecutableBy` user2) `shouldReturn` True
-
-    (file1 `isFileEveryoneReadableBy`   user3) `shouldReturn` True
-    (file1 `isFileEveryoneWritableBy`   user3) `shouldReturn` True
-    (file1 `isFileEveryoneExecutableBy` user3) `shouldReturn` True
+    (runDB $ file0 `isFileEveryoneReadableBy`   user1) `shouldReturn` True
+    (runDB $ file0 `isFileWritableBy`           user1) `shouldReturn` False
+    (runDB $ file0 `isFileEveryoneExecutableBy` user1) `shouldReturn` True
 
     -- test chmod and access tests
-    (file2 `isFileOwnerReadableBy`   user2) `shouldReturn` True
-    (file2 `isFileOwnerWritableBy`   user2) `shouldReturn` False
-    (file2 `isFileOwnerExecutableBy` user2) `shouldReturn` False
-    (file2 `isFileGroupExecutableBy` user2) `shouldReturn` False
-    (file2 `isFileEveryoneExecutableBy` user2) `shouldReturn` True
+    (runDB $ file1 `isFileOwnerReadableBy`   user1) `shouldReturn` True
+    (runDB $ file1 `isFileOwnerWritableBy`   user1) `shouldReturn` True
+    (runDB $ file1 `isFileOwnerExecutableBy` user1) `shouldReturn` True
 
-    (file2 `isFileReadableBy`        user3) `shouldReturn` False
-    (file2 `isFileGroupWritableBy`   user3) `shouldReturn` True
-    (file2 `isFileGroupExecutableBy` user3) `shouldReturn` False
+    (runDB $ file1 `isFileGroupReadableBy`   user2) `shouldReturn` True
+    (runDB $ file1 `isFileGroupWritableBy`   user2) `shouldReturn` True
+    (runDB $ file1 `isFileGroupExecutableBy` user2) `shouldReturn` True
 
-    (file2 `isFileReadableBy`           user1) `shouldReturn` False
-    (file2 `isFileGroupWritableBy`      user1) `shouldReturn` True
-    (file2 `isFileEveryoneExecutableBy` user1) `shouldReturn` True
+    (runDB $ file1 `isFileEveryoneReadableBy`   user3) `shouldReturn` True
+    (runDB $ file1 `isFileEveryoneWritableBy`   user3) `shouldReturn` True
+    (runDB $ file1 `isFileEveryoneExecutableBy` user3) `shouldReturn` True
 
+    -- test chmod and access tests
+    (runDB $ file2 `isFileOwnerReadableBy`   user2) `shouldReturn` True
+    (runDB $ file2 `isFileOwnerWritableBy`   user2) `shouldReturn` False
+    (runDB $ file2 `isFileOwnerExecutableBy` user2) `shouldReturn` False
+    (runDB $ file2 `isFileGroupExecutableBy` user2) `shouldReturn` False
+    (runDB $ file2 `isFileEveryoneExecutableBy` user2) `shouldReturn` True
 
+    (runDB $ file2 `isFileReadableBy`        user3) `shouldReturn` False
+    (runDB $ file2 `isFileGroupWritableBy`   user3) `shouldReturn` True
+    (runDB $ file2 `isFileGroupExecutableBy` user3) `shouldReturn` False
 
-  -- it "creates files and randomly associates permissions" $ monadicYESkip $ do
-  --   (or,ow,ox) <- pick arbitrary
-  --   (gr,gw,gx) <- pick arbitrary
-  --   (ar,aw,ax) <- pick arbitrary
-
-  --   (root,user1,user2,user3,dir0,dir1,dir2,dir3,file0,file1,file2,file3) <- run $ runDB $ do
-  --     root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
-  --     Right user1 <- root `useradd` "user1"
-  --     Right user2 <- root `useradd` "user2"
-  --     Right user3 <- root `useradd` "user3"
-
-  --     Right group1 <- user1 `groupadd` "group1"
-  --     Right group2 <- user2 `groupadd` "group2"
-  --     Right group3 <- user3 `groupadd` "group3"
-
-  --     Right u  <- user1 `usermod` user1 $ [ AddToGroup group1 ]
-  --     Right u  <- user1 `usermod` user2 $ [ AddToGroup group1 ]
-  --     Right u  <- user2 `usermod` user2 $ [ AddToGroup group2 ]
-  --     Right u  <- user3 `usermod` user3 $ [ AddToGroup group3 ]
-
-  --     Right dir0 <- root  `mkdir` "dir0"
-  --     Right dir1 <- user1 `mkdir` "dir1"
-  --     Right dir2 <- user2 `mkdir` "dir2"
-  --     Right dir3 <- user3 `mkdir` "dir3"
-
-  --     Right file0 <- root  `touchAt` dir0 $ "file"
-  --     Right file1 <- user1 `touchAt` dir1 $ "file"
-  --     Right file2 <- user2 `touchAt` dir2 $ "file"
-  --     Right file3 <- user3 `touchAt` dir3 $ "file"
-
-  --     Right _ <- (user1 `chmodDirectory` dir1)
-  --       (Just $ Perm True True True)
-  --       [(group2, Perm False False False)]
-  --       (Just $ Perm False False False)
-
-  --     Right _ <- (user1 `chmodFile` file1)
-  --       (Just $ Perm or ow ox )
-  --       [(group1, Perm gr gw gx)
-  --       ,(group2, Perm gr gw gx)]
-  --       (Just $ Perm ar aw ax)
-
-  --     return (root,user1,user2,user3,dir0,dir1,dir2,dir3,file0,file1,file2,file3)
-
-
-  --   (runDB $ file1 `isFileOwnerReadableBy` user1) `shouldBeM` or
-  --   (runDB $ file1 `isFileOwnerWritableBy` user1) `shouldBeM` ow
-  --   (runDB $ file1 `isFileOwnerExecutableBy` user1) `shouldBeM` ox
-  --   (runDB $ file1 `isFileGroupReadableBy`   user2) `shouldBeM` gr
-  --   (runDB $ file1 `isFileGroupWritableBy`   user2) `shouldBeM` gw
-  --   (runDB $ file1 `isFileGroupExecutableBy`  user2) `shouldBeM` gx
-  --   (runDB $ file1 `isFileEveryoneReadableBy` user3) `shouldBeM` ar
-  --   (runDB $ file1 `isFileEveryoneWritableBy` user3) `shouldBeM` aw
-  --   (runDB $ file1 `isFileEveryoneExecutableBy` user3) `shouldBeM` ax
+    (runDB $ file2 `isFileReadableBy`           user1) `shouldReturn` False
+    (runDB $ file2 `isFileGroupWritableBy`      user1) `shouldReturn` True
+    (runDB $ file2 `isFileEveryoneExecutableBy` user1) `shouldReturn` True

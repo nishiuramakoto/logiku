@@ -149,10 +149,10 @@ monadicYESkip prop _  = monadic m prop
     m = ioProperty . const (return True)
 
 
-shouldThrow :: (?loc :: CallStack , Exception e)
-                =>  SqlPersistM a -> Selector e -> ST.StateT (YesodExampleData App) IO ()
+shouldThrow :: (?loc :: CallStack , Exception e , MonadIO m , MonadBaseControl IO m)
+                =>  m a -> Selector e -> m ()
 shouldThrow m catcher = do
-  r <- try (runDB m)
+  r <- try m
   case r of
     Right _ ->
       liftIO $ expectationFailure $
@@ -167,24 +167,23 @@ shouldThrow m catcher = do
         instanceOf :: Selector a -> a
         instanceOf _ = error "Test.Hspec.Expectations.shouldThrow: broken Typeable instance"
 
-shouldReturn :: (?loc :: CallStack , Show a, Eq a)
-                  =>  SqlPersistM a -> a -> ST.StateT (YesodExampleData App) IO ()
+shouldReturn :: (?loc :: CallStack , Show a, Eq a, MonadIO m)
+                  =>  m a -> a -> m ()
 shouldReturn m a =
-  do x <- runDB m
+  do x <- m
      liftIO $ x `H.shouldBe` a
 
 
-shouldReturnLeft :: (?loc :: CallStack )
-                    => SqlPersistM (Either a b) -> Something -> ST.StateT (YesodExampleData App) IO ()
+shouldReturnLeft :: (?loc :: CallStack , MonadIO m)
+                    => m (Either a b) -> Something -> m  ()
 shouldReturnLeft m _ = do
-  e <- runDB  m
+  e <- m
   case e of
     Left _ -> return ()
     Right _ -> liftIO $ False `H.shouldBe` True
 
 data Something = Something
                  deriving (Eq,Show)
-
 
 
 shouldBe :: (?loc :: CallStack , Eq a, Show a, MonadIO m)

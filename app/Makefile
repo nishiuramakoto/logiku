@@ -1,3 +1,3 @@
 
 test:
-	cd .. && cabal test
+	cd .. && make test

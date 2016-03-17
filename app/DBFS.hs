@@ -1,5 +1,8 @@
 {-# LANGUAGE OverloadedStrings,
-             ScopedTypeVariables
+             ScopedTypeVariables,
+             GADTs,
+             TypeFamilies
+
   #-}
 
 module DBFS
@@ -10,6 +13,8 @@ module DBFS
        , isPrivileged
        , isGroupOwnerOf
        , belongs
+       , userExistsBy
+       , getUserDisplayName
 
        , isDirectoryOwnerReadableBy
        , isDirectoryOwnerWritableBy
@@ -43,14 +48,6 @@ module DBFS
        , isFileReadableBy
        , isFileWritableBy
        , isFileExecutableBy
-
-         -- programReadable
---         , programWritable
---         , programExecutable
-
-         -- , goalReadable
-         -- , goalWritable
-         -- , goalExecutable
 
          -- , lsPrograms
          -- , lsGoals
@@ -99,15 +96,23 @@ module DBFS
 
 import             Import hiding ((==.), (>=.) ,(||.)  , on , Value , update , (=.) , forM_ , delete)
 import  qualified  Import as I
-import             Database.Esqueleto
+import             Database.Esqueleto hiding(insert)
+import  qualified  Database.Persist as P
 import  qualified  Data.Text as T
 import             Data.Foldable hiding(null, mapM_)
 
 
 data DbfsError = DirectoryDoesNotExist Text
                | UserDoesNotExist   Text
+               | UserAlreadyExists Text
                | GroupAlreadyExists Text
+               | AlreadyGroupMember Text
+               | NotAGroupMember  Text
+               | DirectoryAlreadyExists Text
+               | FileAlreadyExists Text
                | PermissionError  Text
+               | DuplicateDirectoryGroups Text
+               | DuplicateFileGroups Text
                deriving (Eq,Show)
 
 type Result a = Either DbfsError a
@@ -116,6 +121,193 @@ data UserModOptions = AddToGroup GroupId
                     | DelFromGroup GroupId
                     | SetDisplayName Text
                     deriving (Eq,Show)
+
+
+
+insertDbfs :: (MonadIO m, PersistEntity val , PersistUnique (PersistEntityBackend val) )
+              => DbfsError -> val -> ReaderT (PersistEntityBackend val) m (Result (Key val))
+insertDbfs err v = do mkey <- insertUnique v
+                      case mkey of
+                        Just key -> return $ Right key
+                        Nothing  -> return $ Left  err
+
+deleteDbfs :: (MonadIO m, PersistEntity val, PersistUnique (PersistEntityBackend val) )
+              => DbfsError -> Unique val -> ReaderT (PersistEntityBackend val) m (Result ())
+deleteDbfs err v = do mval <- getBy v
+                      case mval of
+                        Just _   -> do deleteBy v
+                                       return $ Right ()
+                        Nothing  -> return $ Left  err
+
+getUserDisplayName :: MonadIO m => UserAccountId -> SqlPersistT m (Maybe Text)
+getUserDisplayName uid =
+  do mu <- get uid
+     case mu of
+       Just u -> return $ userAccountDisplayName u
+       Nothing -> return Nothing
+
+-- Rule: SHOULD NEVER THROW FROM THE FUNCTIONS IN THIS MODULE.
+--       Always test the validity of insert/delete etc.
+
+------------------------------ User ------------------------------
+
+isPrivileged :: MonadIO m => UserAccountId -> SqlPersistT m Bool
+isPrivileged he = maybe False userAccountPrivileged <$> get he
+
+userExistsBy :: MonadIO m => Text -> SqlPersistT m Bool
+userExistsBy ident =  do existing <- P.getBy $ UniqueUserAccount ident
+                         return $ maybe False (const True) existing
+
+userExists :: MonadIO m => UserAccountId -> SqlPersistT m Bool
+userExists uid =  do existing <- P.get $ uid
+                     return $ maybe False (const True) existing
+
+
+
+useradd :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result UserAccountId)
+useradd he ident = do
+  prv <- isPrivileged he
+  if prv
+    then  insertDbfs (UserAlreadyExists ident) $ makeUserAccount ident
+    else  return $ Left  $ PermissionError "needs to be root to create a user"
+
+userdel :: MonadIO m => UserAccountId -> UserAccountId -> SqlPersistT m (Result UserAccountId)
+userdel he him = do
+  prv <- isPrivileged he
+  uidExists <- userExists him
+
+  if (prv || he == him) && uidExists
+    then do ownedGroups <- select $
+                           from $ \grp -> do
+                             where_ (grp^.GroupOwner ==. val him)
+                             return grp
+
+            forM_ (map entityKey ownedGroups) (he `groupdel`)
+
+            delete $
+              from $ \groupMembers -> do
+                where_ (groupMembers^.GroupMembersMember ==. val him)
+
+            delete $
+              from $ \directory -> do
+                where_ (directory^.DirectoryUserId ==. val him)
+
+            delete $
+              from $ \file -> do
+                where_ (file^.FileUserId ==. val him)
+
+            delete $
+              from $ \userAccount -> do
+                where_ (userAccount^.UserAccountId ==. val him)
+
+            return $ Right he
+
+    else if not uidExists
+         then return $ Left $ UserDoesNotExist (T.pack $ show him)
+         else return $ Left $ PermissionError (T.pack (show he ++ " needs to be root to delete " ++ show him))
+
+
+usermod :: MonadIO m
+           => UserAccountId -> UserAccountId -> [UserModOptions] -> SqlPersistT m (Result UserAccountId)
+usermod he him opts =  foldlM (>>>) (Right him) opts
+  where
+    (Left  a) >>> _  = return $ Left a
+
+    (Right _) >>> (AddToGroup gid) = do
+      prv <- isPrivileged he
+      own <- he `isGroupOwnerOf`  gid
+      if (prv || own)
+        then do fmap (const him) <$>
+                  insertDbfs (AlreadyGroupMember $ T.pack $ show him ) (makeGroupMembers gid him)
+
+        else return $ Left $ PermissionError $
+                  T.concat [ T.pack $  show he , "is neither root nor the group owner" ]
+
+    Right _ >>> DelFromGroup gid = do
+      prv <- isPrivileged he
+      own <- he `isGroupOwnerOf`  gid
+      if (prv || own)
+        then fmap (const him) <$>
+             (deleteDbfs (NotAGroupMember (T.pack $ show (gid,him))) $ UniqueGroupMember gid him)
+
+        else return $ Left $ PermissionError $
+             T.concat [ T.pack $  show he , " is neither root nor the group owner" ]
+
+    Right _ >>> SetDisplayName newName = do
+      prv <- isPrivileged he
+      let himself = he == him
+
+      if (prv || himself)
+        then do update $ \user -> do
+                  set user [ UserAccountDisplayName =. val (Just newName) ]
+                  where_   (user^.UserAccountId ==. val him)
+                return $ Right him
+        else do return $ Left $ PermissionError $
+                  T.concat [ T.pack $ show he
+                           , "is neither root nor the person he is trying to change the display name" ]
+
+
+isGroupOwnerOf :: MonadIO m => UserAccountId -> GroupId -> SqlPersistT m Bool
+isGroupOwnerOf he gid =  do
+  mgroup <- get gid
+  case mgroup of
+    Just grp  -> return (groupOwner grp == he)
+    Nothing     -> return False
+
+
+
+--------------------------------  Group --------------------------------
+groupadd :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result GroupId)
+groupadd he groupName = do
+  -- Anyone can make a group (TODO:should this be changed?)
+  insertDbfs (GroupAlreadyExists groupName) (makeGroup groupName he)
+
+
+   -- case mgid of
+   --   Just gid ->
+   --   Nothing  -> return $ Left  $ GroupAlreadyExists $ T.concat ["group " , show groupName , "already exists" ]
+
+-- groupmod :: UserId -> GroupId -> Text -> Maybe Text -> SqlPersistT m (Result GroupId)
+-- groupmod uid gid groupName explanation = do
+--   prv   <- privileged uid
+--   owner <- groupOwner gid
+--   if (prv || owner == uid)
+--     then do update $ \p -> do
+--             set [ p^.GroupGroup =. groupName
+--                 , p^.GroupExplanation =. explanation
+--                 ]
+--             return $ Right gid
+--     else
+--     return $ Left $ PermissionError "only root or the owner can modify the group"
+
+groupdel :: MonadIO m => UserAccountId -> GroupId -> SqlPersistT m (Result UserAccountId)
+groupdel he gid = do
+  prv   <- isPrivileged he
+  own   <- he `isGroupOwnerOf` gid
+  if  prv || own
+    then do delete $
+              from $ \directoryGroups -> do
+                where_ (directoryGroups^.DirectoryGroupsGroupId ==. val gid)
+
+            delete $
+              from $ \fileGroups -> do
+                where_ (fileGroups^.FileGroupsGroupId ==. val gid)
+
+            delete $
+              from $ \groupMembers -> do
+                where_ (groupMembers^.GroupMembersGroupId  ==. val gid)
+
+            delete $
+              from $ \grp -> do
+                where_ (grp^.GroupId ==. val gid)
+
+            return $ Right he
+
+    else
+    return $ Left $ PermissionError
+    (T.pack $ show he ++ " needs to be root or the group owner to delete the group")
+
+
 
 
 belongs :: MonadIO m => UserAccountId -> SqlPersistT m (Result [GroupId])
@@ -130,6 +322,8 @@ belongs he = do
 
     Nothing -> return $ Left $ UserDoesNotExist $ T.pack $ show he
 
+
+
 -------------------------- Entity creation  --------------------------
 -- In our system, everyone is allowed to create a directory (which is really a prolog program)
 mkdir :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result DirectoryId)
@@ -139,20 +333,21 @@ mkdir he name = do
   case muser of
     Just user -> do
       let umask = umaskFromUserAccount user
-      dir <- insert (makeDirectory he name umask)
-      groups <- belongs he -- should not throw
+      edir <- insertDbfs (DirectoryAlreadyExists name) (makeDirectory he name umask)
+      case edir of
+        Left err  -> return $ Left err
+        Right dir -> do
+          groups <- belongs he -- should not throw
 
-      case groups of
-        Right gs -> do
-          forM_  gs $ \g -> do
-            liftIO $ putStrLn $ T.pack $ show (dir,g)
-            insert $ makeDirectoryGroups dir g umask
-          return $ Right dir
+          case groups of
+            Right gs -> do
+              forM_  gs $ \g -> do
+                insertDbfs (DuplicateDirectoryGroups (T.pack $ show dir)) $ makeDirectoryGroups dir g umask
+              return $ Right dir
 
-        Left err -> return $ Left err
+            Left err -> return $ Left err
 
     Nothing   -> return $ Left $ UserDoesNotExist $ T.pack $  "user does not exist:" ++ show he
-
 
 
 
@@ -165,16 +360,18 @@ touch he dir name = do
   case (muser, mdir, x) of
     (Just user, Just _ , True) ->  do
       let umask =  umaskFromUserAccount user
-      file <- insert (makeFile he dir name umask)
-      groups <- belongs he -- should not throw
+      efile <- insertDbfs (FileAlreadyExists name) (makeFile he dir name umask)
+      case efile of
+        Left  err -> return $ Left err
+        Right file -> do
+          groups <- belongs he -- should not throw
 
-      case groups of
-        Right gs -> do
-          forM_  gs $  \g -> do
-            -- liftIO $ putStrLn $ T.pack $ show (dir,g)
-            insert (makeFileGroups file g umask)
-          return $ Right file
-        Left err -> return $ Left err
+          case groups of
+            Right gs -> do
+              forM_  gs $  \g ->
+                insertDbfs (DuplicateFileGroups (T.pack $ show file)) (makeFileGroups file g umask)
+              return $ Right file
+            Left err -> return $ Left err
 
     (Nothing, _      , _  )  -> return $ Left $ UserDoesNotExist      $ T.pack (show he)
     (_      , Nothing , _ )  -> return $ Left $ DirectoryDoesNotExist $ T.pack (show dir)
@@ -914,155 +1111,6 @@ chmodFile he file ownerPerm groupPerms everyonePerm  = do
         --   where_ (directoryGroups^.DirectoryGroupsDirectoryId ==. val dir
         --           &&. directoryGroups^.DirectoryGroupsGroupId ==. val gid)
 
-
-
- ------------------------------ User ------------------------------
-
-
-isPrivileged :: MonadIO m => UserAccountId -> SqlPersistT m Bool
-isPrivileged he = maybe False userAccountPrivileged <$> get he
-
-useradd :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result UserAccountId)
-useradd he ident = do
-  prv <- isPrivileged he
-  if prv
-    then  Right <$>  (insert $ makeUserAccount ident)
-    else  return $ Left  $ PermissionError "needs to be root to create a user"
-
-
-usermod :: MonadIO m
-           => UserAccountId -> UserAccountId -> [UserModOptions] -> SqlPersistT m (Result UserAccountId)
-usermod he him opts = foldlM (>>>) (Right him) opts
-  where
-    Left  a   >>> _   = return $ Left a
-
-    Right _ >>> AddToGroup gid = do
-      prv <- isPrivileged he
-      own <- he `isGroupOwnerOf`  gid
-      if (prv || own)
-        then do _<- insert $ makeGroupMembers gid him
-                return $ Right him
-        else do return $ Left $ PermissionError $
-                  T.concat [ T.pack $  show he , "is neither root nor the group owner" ]
-
-    Right _ >>> DelFromGroup gid = do
-      prv <- isPrivileged he
-      own <- he `isGroupOwnerOf`  gid
-      if (prv || own)
-        then do delete $
-                  from $ \groupMembers -> do
-                    where_ (groupMembers^.GroupMembersGroupId ==. val gid
-                            &&. groupMembers^.GroupMembersMember ==. val him)
-                return $ Right him
-        else do return $ Left $ PermissionError $
-                  T.concat [ T.pack $  show he , " is neither root nor the group owner" ]
-
-    Right _ >>> SetDisplayName newName = do
-      prv <- isPrivileged he
-      let himself = he == him
-
-      if (prv || himself)
-        then do update $ \user -> do
-                  set user [ UserAccountDisplayName =. val (Just newName) ]
-                  where_   (user^.UserAccountId ==. val him)
-                return $ Right him
-        else do return $ Left $ PermissionError $
-                  T.concat [ T.pack $ show he
-                           , "is neither root nor the person he is trying to change the display name" ]
-
-
-isGroupOwnerOf :: MonadIO m => UserAccountId -> GroupId -> SqlPersistT m Bool
-isGroupOwnerOf he gid =  do
-  mgroup <- get gid
-  case mgroup of
-    Just grp  -> return (groupOwner grp == he)
-    Nothing     -> return False
-
-
--- Doesn't delete the programs by default
-userdel :: MonadIO m => UserAccountId -> UserAccountId -> SqlPersistT m (Result UserAccountId)
-userdel he him = do
-  prv <- isPrivileged he
-
-  if prv || he == him
-    then do ownedGroups <- select $
-                           from $ \grp -> do
-                             where_ (grp^.GroupOwner ==. val him)
-                             return grp
-
-            forM_ (map entityKey ownedGroups) (he `groupdel`)
-
-            delete $
-              from $ \groupMembers -> do
-                where_ (groupMembers^.GroupMembersMember ==. val him)
-
-            delete $
-              from $ \directory -> do
-                where_ (directory^.DirectoryUserId ==. val him)
-
-            delete $
-              from $ \file -> do
-                where_ (file^.FileUserId ==. val him)
-
-            delete $
-              from $ \userAccount -> do
-                where_ (userAccount^.UserAccountId ==. val him)
-
-            return $ Right he
-
-    else do
-    return $ Left $ PermissionError (T.pack (show he ++ " needs to be root to delete " ++ show him))
-
---------------------------------  Group --------------------------------
-groupadd :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result GroupId)
-groupadd he groupName = do
-  -- Anyone can make a group (TODO:should this be changed?)
-  gid <- insert (makeGroup groupName he)
-  return $ Right gid
-
-   -- case mgid of
-   --   Just gid ->
-   --   Nothing  -> return $ Left  $ GroupAlreadyExists $ T.concat ["group " , show groupName , "already exists" ]
-
--- groupmod :: UserId -> GroupId -> Text -> Maybe Text -> SqlPersistT m (Result GroupId)
--- groupmod uid gid groupName explanation = do
---   prv   <- privileged uid
---   owner <- groupOwner gid
---   if (prv || owner == uid)
---     then do update $ \p -> do
---             set [ p^.GroupGroup =. groupName
---                 , p^.GroupExplanation =. explanation
---                 ]
---             return $ Right gid
---     else
---     return $ Left $ PermissionError "only root or the owner can modify the group"
-
-groupdel :: MonadIO m => UserAccountId -> GroupId -> SqlPersistT m (Result UserAccountId)
-groupdel he gid = do
-  prv   <- isPrivileged he
-  own   <- he `isGroupOwnerOf` gid
-  if  prv || own
-    then do delete $
-              from $ \directoryGroups -> do
-                where_ (directoryGroups^.DirectoryGroupsGroupId ==. val gid)
-
-            delete $
-              from $ \fileGroups -> do
-                where_ (fileGroups^.FileGroupsGroupId ==. val gid)
-
-            delete $
-              from $ \groupMembers -> do
-                where_ (groupMembers^.GroupMembersGroupId  ==. val gid)
-
-            delete $
-              from $ \grp -> do
-                where_ (grp^.GroupId ==. val gid)
-
-            return $ Right he
-
-    else
-    return $ Left $ PermissionError
-    (T.pack $ show he ++ " needs to be root or the group owner to delete the group")
 
 
 
