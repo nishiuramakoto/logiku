@@ -6,8 +6,10 @@
   #-}
 
 module DBFS
-       ( DbfsError(..), UserModOptions(..)
+       ( DbfsError(..)
        , Perm(..)
+       , ChownOption(..)
+       , UserModOptions(..)
        , mkdir
        , touch , touchAt
        , isPrivileged
@@ -15,6 +17,21 @@ module DBFS
        , belongs
        , userExistsBy
        , getUserDisplayName
+       , getDirectoryUserId
+       , getDirectoryGroups
+
+       , chownDirectory
+--       , chownFile
+       , chmodDirectory
+       , chmodFile
+
+       , useradd
+       , usermod
+       , userdel
+
+       , groupadd
+         -- , groupmod
+       , groupdel
 
        , isDirectoryOwnerReadableBy
        , isDirectoryOwnerWritableBy
@@ -67,19 +84,6 @@ module DBFS
          -- , rmProgram
          -- , rmGoal
 
-         -- , chownProgram
-         -- , chownGoal
-
-       , chmodDirectory
-       , chmodFile
-
-       , useradd
-       , usermod
-       , userdel
-
-       , groupadd
-         -- , groupmod
-       , groupdel
 
          -- , programTagsAdd
          -- , programTagsDel
@@ -113,6 +117,8 @@ data DbfsError = DirectoryDoesNotExist Text
                | PermissionError  Text
                | DuplicateDirectoryGroups Text
                | DuplicateFileGroups Text
+               | AlreadyOwner Text
+               | NotAnOwner Text
                deriving (Eq,Show)
 
 type Result a = Either DbfsError a
@@ -122,7 +128,16 @@ data UserModOptions = AddToGroup GroupId
                     | SetDisplayName Text
                     deriving (Eq,Show)
 
+data ChownOption  = ChownOwner    UserAccountId
+                  | ChownAddGroup GroupId
+                  | ChownDelGroup GroupId
+                  deriving (Eq,Show)
 
+-- Rule: SHOULD NEVER THROW IN ANY WAY FROM THE FUNCTIONS IN THIS MODULE.
+--       ALWAYS test the validity of insert/update/delete etc.
+
+
+-------------------------- Helper functions --------------------------
 
 insertDbfs :: (MonadIO m, PersistEntity val , PersistUnique (PersistEntityBackend val) )
               => DbfsError -> val -> ReaderT (PersistEntityBackend val) m (Result (Key val))
@@ -131,25 +146,50 @@ insertDbfs err v = do mkey <- insertUnique v
                         Just key -> return $ Right key
                         Nothing  -> return $ Left  err
 
+deleteByDbfs :: (MonadIO m, PersistEntity val, PersistUnique (PersistEntityBackend val) )
+                => DbfsError -> Unique val -> ReaderT (PersistEntityBackend val) m (Result ())
+deleteByDbfs err v = do mval <- getBy v
+                        case mval of
+                          Just _   -> do deleteBy v
+                                         return $ Right ()
+                          Nothing  -> return $ Left  err
+
 deleteDbfs :: (MonadIO m, PersistEntity val, PersistUnique (PersistEntityBackend val) )
-              => DbfsError -> Unique val -> ReaderT (PersistEntityBackend val) m (Result ())
-deleteDbfs err v = do mval <- getBy v
+              => DbfsError -> Key val -> ReaderT (PersistEntityBackend val) m (Result ())
+deleteDbfs err v = do mval <- get v
                       case mval of
-                        Just _   -> do deleteBy v
+                        Just _   -> do P.delete v
                                        return $ Right ()
                         Nothing  -> return $ Left  err
 
-getUserDisplayName :: MonadIO m => UserAccountId -> SqlPersistT m (Maybe Text)
+
+
+-- | Replace if there is a conflicting key with this value; returns 'Left' otherwise.
+updateDbfs :: (MonadIO m, PersistEntity val, PersistUnique (PersistEntityBackend val) )
+              => DbfsError ->  val -> ReaderT (PersistEntityBackend val) m (Result (Entity val))
+updateDbfs err v = do mukey <- checkUnique v
+                      case mukey of
+                        Just _   -> Right <$> upsert v []
+                        Nothing  -> Left  <$> return err
+
+
+
+getUserDisplayName :: MonadIO m => UserAccountId -> SqlPersistT m (Result (Maybe Text))
 getUserDisplayName uid =
   do mu <- get uid
      case mu of
-       Just u -> return $ userAccountDisplayName u
-       Nothing -> return Nothing
+       Just u  -> Right <$> return (userAccountDisplayName u)
+       Nothing -> Left  <$> return (UserDoesNotExist $ T.pack $ show uid)
 
--- Rule: SHOULD NEVER THROW FROM THE FUNCTIONS IN THIS MODULE.
---       Always test the validity of insert/delete etc.
 
------------------------------- User ------------------------------
+getUserUmask :: MonadIO m => UserAccountId -> SqlPersistT m (Result UMask)
+getUserUmask uid =
+  do mu <- get uid
+     case mu of
+       Just u  -> Right <$> return (umaskFromUserAccount u)
+       Nothing -> Left  <$> return (UserDoesNotExist $ T.pack $ show uid)
+
+
 
 isPrivileged :: MonadIO m => UserAccountId -> SqlPersistT m Bool
 isPrivileged he = maybe False userAccountPrivileged <$> get he
@@ -161,6 +201,26 @@ userExistsBy ident =  do existing <- P.getBy $ UniqueUserAccount ident
 userExists :: MonadIO m => UserAccountId -> SqlPersistT m Bool
 userExists uid =  do existing <- P.get $ uid
                      return $ maybe False (const True) existing
+
+
+getDirectoryUserId :: MonadIO m => DirectoryId -> SqlPersistT m (Result UserAccountId)
+getDirectoryUserId dir =
+  do mu <- get dir
+     case mu of
+       Just u  -> Right <$> return (directoryUserId u)
+       Nothing -> Left  <$> return (DirectoryDoesNotExist $ T.pack $ show dir)
+
+getDirectoryGroups :: MonadIO m => DirectoryId -> SqlPersistT m (Result [GroupId])
+getDirectoryGroups dir =
+  do mu <- get dir
+     case mu of
+       Just _ -> do gs <- select $
+                            from $ \directoryGroups -> do
+                              where_ (directoryGroups^.DirectoryGroupsDirectoryId ==. val dir)
+                              return $ directoryGroups
+                    return $ Right (map (directoryGroupsGroupId . entityVal) gs)
+       Nothing -> Left  <$> return (DirectoryDoesNotExist $ T.pack $ show dir)
+------------------------------ User ------------------------------
 
 
 
@@ -228,7 +288,7 @@ usermod he him opts =  foldlM (>>>) (Right him) opts
       own <- he `isGroupOwnerOf`  gid
       if (prv || own)
         then fmap (const him) <$>
-             (deleteDbfs (NotAGroupMember (T.pack $ show (gid,him))) $ UniqueGroupMember gid him)
+             (deleteByDbfs (NotAGroupMember (T.pack $ show (gid,him))) $ UniqueGroupMember gid him)
 
         else return $ Left $ PermissionError $
              T.concat [ T.pack $  show he , " is neither root nor the group owner" ]
@@ -910,41 +970,62 @@ isFileExecutableBy dir him = orM [ dir `isFileOwnerExecutableBy`  him
 
 
 
--- ------------------------------  chown --------------------------------
+------------------------------  chown --------------------------------
 
--- chownProgram :: UserId -> Maybe UserId -> [GroupId] -> DirectoryId
---                 -> SqlPersistT m (Maybe DirectoryId)
--- chownProgram uid muid gids pid = do
---   prv <- privileged uid
---   own <- isOwner uid pid
---   umask <- userUmask uid
+chownDirectory :: MonadIO m =>
+                  UserAccountId -> DirectoryId -> [ChownOption] -> SqlPersistT m (Result DirectoryId)
+chownDirectory he it opts = do
+  mdir <- get it
+  case mdir of
+    Just _  -> foldlM (>>>) (Right it) opts
+    Nothing -> return $ Left $ DirectoryDoesNotExist $ T.pack $ show it
 
---   case (prv, own , muid ) of
---     ( True, _ , Just uid') -> do changeOwner uid' pid
---                                       changeGroup gids pid umask
+  where
+    (>>>) :: MonadIO m
+             => Result DirectoryId -> ChownOption -> SqlPersistT m (Result DirectoryId)
+    (Left err) >>> _ = return $ Left err
+    (Right _ ) >>> (ChownOwner uid) =
+      do
+        prv   <- isPrivileged he
+        if prv
+          then do update $ \directory -> do
+                    set directory [ DirectoryUserId =. val uid ]
+                    where_ (directory^.DirectoryId ==. val it)
+                  return $ Right it
 
---     ( True, _ , Nothing )  -> do changeGroup gids pid umask
+          else return $ Left $ PermissionError (T.concat [ "only root can change the owner"
+                                                         , T.pack $ show he ++ show it ] )
 
---     ( _, True, Just uid')  -> do return Nothing
+    (Right _ ) >>> (ChownAddGroup gid) =
+      do
+        prv   <- isPrivileged he
+        eumask <- getUserUmask he
+        eowner <- getDirectoryUserId it
 
---     ( _, True, Nothing  )  -> do changeGroup gids pid umask
+        case (eumask,eowner , prv || eowner == Right he) of
+          (Left err, _ , _ ) ->  return $ Left err
+          (_ , Left err , _ ) ->  return $ Left err
+          (_ , _   , False) ->  return $ Left $ PermissionError $
+                                       (T.concat ["only root or the owner can change the group ownership"])
+          (Right umask, Right _ , True ) ->
+            fmap (const it) <$>
+            insertDbfs (AlreadyOwner $ T.pack $ show gid) (makeDirectoryGroups it gid umask)
 
---     ( _, _ , _ )  -> return Nothing
+    (Right _ ) >>> (ChownDelGroup gid) =
+      do
+        prv   <- isPrivileged he
+        eumask <- getUserUmask he
+        eowner <- getDirectoryUserId it
 
---   where
---     changeOwner uid pid = do update $ \p -> do
---                               set p [ DirectoryUserId =. val uid
---                                     ]
---                               where_ (p^.DirectoryId ==. val pid)
---                             return (Just pid)
+        case (eumask,eowner , prv || eowner == Right he) of
+          (Left err, _ , _ ) ->  return $ Left err
+          (_ , Left err , _ ) ->  return $ Left err
+          (_ , _   , False) ->  return $ Left $ PermissionError $
+                                       (T.concat ["only root or the owner can change the group ownership"])
+          (Right _, Right _ , True ) ->
+            fmap (const it) <$>
+            (deleteByDbfs (NotAnOwner $ T.pack $ show gid) $ UniqueDirectoryGroups it gid)
 
---     changeGroup  gids pid umask = do delete $ \p -> do
---                                        where_ (p^.ProgramGroupsDirectoryId ==. pid)
---                                      forM_ gids (\gid -> insert (ProgramGroups pid gid
---                                                                  (not (umaskGroupR umask))
---                                                                  (not (umaskGroupW umask))
---                                                                  (not (umaskGroupX umask))))
---                                      return (Just pid)
 
 
 -- chownGoal :: UserId -> Maybe UserId -> [GroupId] -> FileId

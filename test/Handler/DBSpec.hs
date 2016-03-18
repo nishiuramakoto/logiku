@@ -239,12 +239,11 @@ spec = withApp $ do
     Right user3 <- root `useradd` "user3"
     Left (UserAlreadyExists _)  <- root  `useradd` "user3"
     Left (PermissionError _  )  <- user1 `useradd` "user4"
-
+    Left (PermissionError _  )  <- user1 `userdel` user2
     (length <$> selectPrivilegedUsers) `shouldReturn` 1
 
     Right _ <- root `userdel` user1
     (length <$> selectUsers) `shouldReturn` 3
-    Left (PermissionError _  )  <- user1 `userdel` user2
 
     Right _ <- user2 `userdel` user2
     Right _ <- root  `userdel` user3
@@ -267,8 +266,8 @@ spec = withApp $ do
     Right _  <- user1 `usermod` user1 $ [ AddToGroup group1 , SetDisplayName "name"]
     Right _  <- user1 `usermod` user2 $ [ AddToGroup group1 ]
     Left (PermissionError _)  <- user1 `usermod` user2 $ [ SetDisplayName "new name" ]
-    (getUserDisplayName user1) `shouldReturn` Just "name"
-    (getUserDisplayName user2) `shouldReturn` Nothing
+    (getUserDisplayName user1) `shouldReturn` Right (Just "name")
+    (getUserDisplayName user2) `shouldReturn` Right Nothing
 
     groupMembers <- selectAll :: TestDB [Entity GroupMembers]
     length groupMembers `shouldBe` 2
@@ -280,7 +279,7 @@ spec = withApp $ do
     Right _ <- user3 `userdel` user3
     Right _ <- root  `userdel` root
     dbIsEmpty
-    return ()
+
 
   it "tests groupadd and groupdel" $ runDB $ do
     root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
@@ -493,3 +492,62 @@ spec = withApp $ do
     (runDB $ file2 `isFileReadableBy`           user1) `shouldReturn` False
     (runDB $ file2 `isFileGroupWritableBy`      user1) `shouldReturn` True
     (runDB $ file2 `isFileEveryoneExecutableBy` user1) `shouldReturn` True
+
+  it "tests chown" $ do
+    (root,user1,user2,user3,group1,group2,group3,dir0,dir1,dir2,dir3) <- runDB $ do
+      root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+      Right user1 <- root `useradd` "user1"
+      Right user2 <- root `useradd` "user2"
+      Right user3 <- root `useradd` "user3"
+
+      Right group1 <- user1 `groupadd` "group1"
+      Right group2 <- user2 `groupadd` "group2"
+      Right group3 <- user3 `groupadd` "group3"
+
+      Right u  <- user1 `usermod` user1 $ [ AddToGroup group1 ]
+      Right u  <- user1 `usermod` user2 $ [ AddToGroup group1 ]
+      Right u  <- user2 `usermod` user2 $ [ AddToGroup group2 ]
+      Right u  <- user3 `usermod` user3 $ [ AddToGroup group3 ]
+
+      Right dir0 <- root  `mkdir` "dir0"
+      Right dir1 <- user1 `mkdir` "dir1"
+      Right dir2 <- user2 `mkdir` "dir2"
+      Right dir3 <- user3 `mkdir` "dir3"
+
+      return (root, user1,user2,user3,group1,group2,group3,dir0,dir1,dir2,dir3)
+
+    (runDB $ getDirectoryUserId dir0) `shouldReturn` Right root
+    (runDB $ getDirectoryUserId dir1) `shouldReturn` Right user1
+    (runDB $ getDirectoryUserId dir2) `shouldReturn` Right user2
+    (runDB $ getDirectoryUserId dir3) `shouldReturn` Right user3
+
+
+    Left (AlreadyOwner _)  <- runDB $ root `chownDirectory` dir1 $ [ ChownAddGroup group1 ]
+
+    runDB $ do
+      root `chownDirectory` dir1 $ [ ChownOwner user2
+                                   , ChownAddGroup group2
+                                   , ChownAddGroup group3
+                                   ]
+
+    (runDB $ getDirectoryUserId dir1) `shouldReturn` Right user2
+    Right gs <- runDB $ getDirectoryGroups dir1
+    gs `shouldMatchList` [group1,group2,group3]
+
+
+    Left (PermissionError _) <- runDB $
+      user1 `chownDirectory` dir2 $ [ ChownOwner user1 ]
+
+    Right _ <- runDB $
+      user2 `chownDirectory` dir2 $ [ ChownAddGroup group3 ]
+
+
+    runDB $ do
+      root `chownDirectory` dir1 $ [ ChownDelGroup group1
+                                   , ChownDelGroup group2
+                                   , ChownDelGroup group3
+                                   ]
+
+    Right [] <- runDB $ getDirectoryGroups dir1
+
+    return ()

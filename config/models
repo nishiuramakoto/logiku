@@ -1,6 +1,6 @@
 ------------------ Prolog Program Database Schema -------------------------------
 
--- What !? 'user' is a reserved name in postgres...
+-- 'user' is a reserved name in postgres...
 UserAccount
     ident       Text
     privileged  Bool

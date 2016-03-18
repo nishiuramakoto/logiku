@@ -15,7 +15,7 @@ import Foundation            as X
 import Model                 as X
 import Test.QuickCheck.Monadic as X hiding (assert)
 import Test.QuickCheck  as X
-import Test.Hspec            as X hiding(shouldBe,shouldReturn,shouldThrow)
+import Test.Hspec            as X hiding(shouldBe,shouldReturn,shouldThrow, shouldMatchList)
 -- import qualified Test.Hspec.Core.Spec  as Hspec
 import qualified Test.Hspec  as H
 
@@ -184,6 +184,17 @@ shouldReturnLeft m _ = do
 
 data Something = Something
                  deriving (Eq,Show)
+
+
+shouldMatchList :: (?loc :: CallStack , MonadIO m, Show a, Eq a)
+                   => [a] -> [a] -> m ()
+shouldMatchList as bs = liftIO $ as `H.shouldMatchList` bs
+
+shouldReturnAndMatchList :: (?loc :: CallStack , MonadIO m, Show a, Eq a)
+                            => m [a] -> [a] -> m ()
+shouldReturnAndMatchList m bs = do
+  as <- m
+  liftIO $ as `H.shouldMatchList` bs
 
 
 shouldBe :: (?loc :: CallStack , Eq a, Show a, MonadIO m)
