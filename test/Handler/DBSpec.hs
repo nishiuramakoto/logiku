@@ -535,6 +535,19 @@ spec = withApp $ do
     gs `shouldMatchList` [group1,group2,group3]
 
 
+    (runDB $ dir1 `isDirectoryOwnerReadableBy` user3) `shouldReturn` False
+    (runDB $ dir1 `isDirectoryOwnerWritableBy` user3) `shouldReturn` False
+    (runDB $ dir1 `isDirectoryOwnerReadableBy` user3) `shouldReturn` False
+
+    (runDB $ dir1 `isDirectoryGroupReadableBy` user3) `shouldReturn` True
+    (runDB $ dir1 `isDirectoryGroupWritableBy` user3) `shouldReturn` False
+    (runDB $ dir1 `isDirectoryGroupReadableBy` user3) `shouldReturn` True
+
+    (runDB $ dir1 `isDirectoryEveryoneReadableBy` user3) `shouldReturn` True
+    (runDB $ dir1 `isDirectoryEveryoneWritableBy` user3) `shouldReturn` False
+    (runDB $ dir1 `isDirectoryEveryoneReadableBy` user3) `shouldReturn` True
+
+
     Left (PermissionError _) <- runDB $
       user1 `chownDirectory` dir2 $ [ ChownOwner user1 ]
 
