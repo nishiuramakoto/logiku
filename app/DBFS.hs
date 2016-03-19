@@ -20,7 +20,7 @@ module DBFS
        , getUserDisplayName
        , getDirectoryUserId
        , getDirectoryGroups
-
+       , chown
        , chownDirectory
 --       , chownFile
        , chmodDirectory
@@ -141,6 +141,9 @@ data ChmodOption = ChmodOwner Perm
                  | ChmodGroup GroupId Perm
                  | ChmodEveryone Perm
                  deriving (Eq,Show)
+
+
+
 
 
 -- Rule: SHOULD NEVER THROW IN ANY WAY FROM THE FUNCTIONS IN THIS MODULE.
@@ -336,19 +339,19 @@ usermod he him opts =  foldlM (>>>) (Right him) opts
       prv <- isPrivileged he
 
       if prv || (he == him)
-        then do update $ \user -> do
-                  set user [ UserAccountUmaskOwnerR =. val (umaskOwnerR newUmask)
-                           , UserAccountUmaskOwnerW =. val (umaskOwnerW newUmask)
-                           , UserAccountUmaskOwnerX =. val (umaskOwnerX newUmask)
-                           , UserAccountUmaskGroupR =. val (umaskGroupR newUmask)
-                           , UserAccountUmaskGroupW =. val (umaskGroupW newUmask)
-                           , UserAccountUmaskGroupX =. val (umaskGroupX newUmask)
-                           , UserAccountUmaskEveryoneR =. val (umaskEveryoneR newUmask)
-                           , UserAccountUmaskEveryoneW =. val (umaskEveryoneW newUmask)
-                           , UserAccountUmaskEveryoneX =. val (umaskEveryoneX newUmask)
-                           ]
-                  where_   (user^.UserAccountId ==. val him)
-                return $ Right him
+        then do fmap (fmap (const him)) $ updateDbfs (UserDoesNotExist $ T.pack $ show he)
+                  him
+                  [ (I.=.) UserAccountUmaskOwnerR  (umaskOwnerR newUmask)
+                  , (I.=.) UserAccountUmaskOwnerW  (umaskOwnerW newUmask)
+                  , (I.=.) UserAccountUmaskOwnerX (umaskOwnerX newUmask)
+                  , (I.=.) UserAccountUmaskGroupR  (umaskGroupR newUmask)
+                  , (I.=.) UserAccountUmaskGroupW  (umaskGroupW newUmask)
+                  , (I.=.) UserAccountUmaskGroupX  (umaskGroupX newUmask)
+                  , (I.=.) UserAccountUmaskEveryoneR (umaskEveryoneR newUmask)
+                  , (I.=.) UserAccountUmaskEveryoneW (umaskEveryoneW newUmask)
+                  , (I.=.) UserAccountUmaskEveryoneX (umaskEveryoneX newUmask)
+                  ]
+
         else do return $ Left $ PermissionError $
                   T.concat [ T.pack $ show he , "is neither root nor the person he is trying to change " ]
 
@@ -1018,6 +1021,8 @@ isFileExecutableBy dir him = orM [ dir `isFileOwnerExecutableBy`  him
 
 ------------------------------  chown --------------------------------
 
+
+
 chownDirectory :: MonadIO m =>
                   UserAccountId -> DirectoryId -> [ChownOption] -> SqlPersistT m (Result DirectoryId)
 chownDirectory he it opts = do
@@ -1071,6 +1076,104 @@ chownDirectory he it opts = do
           (Right _, Right _ , True ) ->
             fmap (const it) <$>
             (deleteByDbfs (NotAnOwner $ T.pack $ show gid) $ UniqueDirectoryGroups it gid)
+
+
+
+class (PersistEntity record, PersistEntity (OwnerGroups record))  => PersistFileEntity record where
+  type OwnerGroups record :: *
+  makeOwnerGroups   :: Key record -> GroupId -> UMask -> OwnerGroups record
+  uniqueOwnerGroups :: Key record -> GroupId -> Unique (OwnerGroups record)
+
+  doesNotExistError  :: Key record -> DbfsError
+  alreadyExistsError :: Key record -> DbfsError
+  getFile :: (MonadIO m) => Key record -> SqlPersistT m (Maybe record)
+  ownerField :: Key record -> EntityField record (Key UserAccount)
+  ownerId      :: record -> (Key UserAccount)
+  getOwnerId :: MonadIO m => Key record -> SqlPersistT m (Result (Key UserAccount))
+  getOwnerId k =  do mu <- getFile k
+                     case mu of
+                       Just u  -> Right <$> return (ownerId u)
+                       Nothing -> Left  <$> return (doesNotExistError k)
+
+
+instance PersistFileEntity Directory where
+  type OwnerGroups Directory = DirectoryGroups
+  makeOwnerGroups = makeDirectoryGroups
+  uniqueOwnerGroups = UniqueDirectoryGroups
+
+  doesNotExistError  key = DirectoryDoesNotExist  (T.pack $ show key)
+  alreadyExistsError key = DirectoryAlreadyExists (T.pack $ show key)
+  getFile = get
+  ownerField _ = DirectoryUserId
+  ownerId = directoryUserId
+
+instance PersistFileEntity File where
+  type OwnerGroups File = FileGroups
+  makeOwnerGroups = makeFileGroups
+  uniqueOwnerGroups = UniqueFileGroups
+
+  doesNotExistError  key = FileDoesNotExist  (T.pack $ show key)
+  alreadyExistsError key = FileAlreadyExists (T.pack $ show key)
+  getFile = get
+  ownerField _ = FileUserId
+  ownerId = fileUserId
+
+chown :: (MonadIO m , PersistFileEntity val
+         , PersistEntityBackend val ~ SqlBackend, PersistEntityBackend (OwnerGroups val) ~ SqlBackend)
+         => UserAccountId -> Key val -> [ChownOption] -> SqlPersistT m (Result (Key val))
+chown he key opts = do
+  mit <- getFile key
+
+  case mit of
+    Just _  -> foldlM (>>>) (Right key) opts
+    Nothing -> return $ Left $ doesNotExistError key
+
+   where
+--     (>>>) :: (MonadIO m, PersistFileEntity val,  PersistEntityBackend val ~ SqlBackend)
+--              => Result (Key val) -> ChownOption -> SqlPersistT m (Result (Key val))
+     (Left err) >>> _ = return $ Left err
+
+     (Right k) >>> (ChownOwner uid) =
+       do
+         prv   <- isPrivileged he
+         if prv
+           then do e <- updateDbfs (doesNotExistError k)
+                        k
+                        [ (I.=.) (ownerField k) uid ]
+                   return $ fmap (const k) e
+
+           else return $ Left $ PermissionError (T.concat [ "only root can change the owner"
+                                                          , T.pack $ show he ++ show k ] )
+
+     (Right k) >>> (ChownAddGroup gid) =
+       do
+         prv   <- isPrivileged he
+         eumask <- getUserUmask he
+         eowner <- getOwnerId k
+
+         case (eumask,eowner , prv || eowner == Right he) of
+           (Left err, _ , _ )  ->  return $ Left err
+           (_ , Left err , _ ) ->  return $ Left err
+           (_ , _   , False)   ->  return $ Left $ PermissionError $
+                                       (T.concat ["only root or the owner can change the group ownership"])
+           (Right umask, Right _ , True ) ->
+             fmap (const k) <$>
+             insertDbfs (AlreadyOwner $ T.pack $ show gid) (makeOwnerGroups k gid umask)
+
+     (Right k) >>> (ChownDelGroup gid) =
+       do
+         prv   <- isPrivileged he
+         eumask <- getUserUmask he
+         eowner <- getOwnerId k
+
+         case (eumask,eowner , prv || eowner == Right he) of
+           (Left err, _ , _ )  ->  return $ Left err
+           (_ , Left err , _ ) ->  return $ Left err
+           (_ , _   , False)   ->  return $ Left $ PermissionError $
+                                   (T.concat ["only root or the owner can change the group ownership"])
+           (Right _, Right _ , True ) ->
+             fmap (const k) <$>
+             (deleteByDbfs (NotAnOwner $ T.pack $ show gid) $ uniqueOwnerGroups k gid)
 
 
 
