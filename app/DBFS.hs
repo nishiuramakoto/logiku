@@ -8,8 +8,9 @@
 module DBFS
        ( DbfsError(..)
        , Perm(..)
+       , UserModOption(..)
        , ChownOption(..)
-       , UserModOptions(..)
+       , ChmodOption(..)
        , mkdir
        , touch , touchAt
        , isPrivileged
@@ -107,6 +108,7 @@ import             Data.Foldable hiding(null, mapM_)
 
 
 data DbfsError = DirectoryDoesNotExist Text
+               | FileDoesNotExist Text
                | UserDoesNotExist   Text
                | UserAlreadyExists Text
                | GroupAlreadyExists Text
@@ -119,19 +121,27 @@ data DbfsError = DirectoryDoesNotExist Text
                | DuplicateFileGroups Text
                | AlreadyOwner Text
                | NotAnOwner Text
+               | SchemaError Text -- Code smell (should be handled earlier, not here)
                deriving (Eq,Show)
 
 type Result a = Either DbfsError a
 
-data UserModOptions = AddToGroup GroupId
+data UserModOption  = AddToGroup GroupId
                     | DelFromGroup GroupId
                     | SetDisplayName Text
+                    | SetUmask UMask
                     deriving (Eq,Show)
 
 data ChownOption  = ChownOwner    UserAccountId
                   | ChownAddGroup GroupId
                   | ChownDelGroup GroupId
                   deriving (Eq,Show)
+
+data ChmodOption = ChmodOwner Perm
+                 | ChmodGroup GroupId Perm
+                 | ChmodEveryone Perm
+                 deriving (Eq,Show)
+
 
 -- Rule: SHOULD NEVER THROW IN ANY WAY FROM THE FUNCTIONS IN THIS MODULE.
 --       ALWAYS test the validity of insert/update/delete etc.
@@ -163,14 +173,30 @@ deleteDbfs err v = do mval <- get v
                         Nothing  -> return $ Left  err
 
 
+updateDbfs :: (MonadIO m , PersistEntity val , PersistStore (PersistEntityBackend val) )
+              => DbfsError -> Key val -> [Update val] -> ReaderT (PersistEntityBackend val) m (Result ())
+updateDbfs err key updates = do
+  mval <- get key
+  case mval of
+    Just _   -> Right <$> P.update key updates
+    Nothing  -> Left  <$> return err
+
+-- | Returns schema error if there is more than 1 uniqueness constraint (does not throw)
+upsertDbfs :: (MonadIO m ,MonadBaseControl IO m , PersistEntity val, PersistUnique (PersistEntityBackend val))
+              => val -> [Update val]
+              -> ReaderT (PersistEntityBackend val) m (Result (Entity val))
+upsertDbfs v updates = do
+  (Right <$> upsert v updates)
+    `catch` (\e -> return $ Left $ SchemaError (T.pack $ show (e :: IOException)))
+
 
 -- | Replace if there is a conflicting key with this value; returns 'Left' otherwise.
-updateDbfs :: (MonadIO m, PersistEntity val, PersistUnique (PersistEntityBackend val) )
+replaceDbfs :: (MonadIO m, PersistEntity val, PersistUnique (PersistEntityBackend val) )
               => DbfsError ->  val -> ReaderT (PersistEntityBackend val) m (Result (Entity val))
-updateDbfs err v = do mukey <- checkUnique v
-                      case mukey of
-                        Just _   -> Right <$> upsert v []
-                        Nothing  -> Left  <$> return err
+replaceDbfs err v = do mukey <- checkUnique v
+                       case mukey of
+                         Just _   -> Right <$> upsert v []
+                         Nothing  -> Left  <$> return err
 
 
 
@@ -268,7 +294,7 @@ userdel he him = do
 
 
 usermod :: MonadIO m
-           => UserAccountId -> UserAccountId -> [UserModOptions] -> SqlPersistT m (Result UserAccountId)
+           => UserAccountId -> UserAccountId -> [UserModOption] -> SqlPersistT m (Result UserAccountId)
 usermod he him opts =  foldlM (>>>) (Right him) opts
   where
     (Left  a) >>> _  = return $ Left a
@@ -305,6 +331,26 @@ usermod he him opts =  foldlM (>>>) (Right him) opts
         else do return $ Left $ PermissionError $
                   T.concat [ T.pack $ show he
                            , "is neither root nor the person he is trying to change the display name" ]
+
+    Right _ >>> SetUmask newUmask = do
+      prv <- isPrivileged he
+
+      if prv || (he == him)
+        then do update $ \user -> do
+                  set user [ UserAccountUmaskOwnerR =. val (umaskOwnerR newUmask)
+                           , UserAccountUmaskOwnerW =. val (umaskOwnerW newUmask)
+                           , UserAccountUmaskOwnerX =. val (umaskOwnerX newUmask)
+                           , UserAccountUmaskGroupR =. val (umaskGroupR newUmask)
+                           , UserAccountUmaskGroupW =. val (umaskGroupW newUmask)
+                           , UserAccountUmaskGroupX =. val (umaskGroupX newUmask)
+                           , UserAccountUmaskEveryoneR =. val (umaskEveryoneR newUmask)
+                           , UserAccountUmaskEveryoneW =. val (umaskEveryoneW newUmask)
+                           , UserAccountUmaskEveryoneX =. val (umaskEveryoneX newUmask)
+                           ]
+                  where_   (user^.UserAccountId ==. val him)
+                return $ Right him
+        else do return $ Left $ PermissionError $
+                  T.concat [ T.pack $ show he , "is neither root nor the person he is trying to change " ]
 
 
 isGroupOwnerOf :: MonadIO m => UserAccountId -> GroupId -> SqlPersistT m Bool
@@ -1074,60 +1120,46 @@ isOwnerOfDirectory he dir = do
     Just d -> return $ directoryUserId d == he
     _      -> return False
 
-chmodDirectory :: MonadIO m
-                  => UserAccountId -> DirectoryId -> Maybe Perm -> [(GroupId,Perm)] -> Maybe Perm
+
+
+chmodDirectory :: (MonadIO m, MonadBaseControl IO m)
+                  => UserAccountId -> DirectoryId -> [ChmodOption]
                   -> SqlPersistT m (Result DirectoryId)
-chmodDirectory he dir ownerPerm groupPerms everyonePerm  = do
+chmodDirectory he dir opts  = do
   own      <- he `isOwnerOfDirectory` dir
   prv      <- isPrivileged he
 
   if (prv || own)
-    then
-    do chmodU ownerPerm
-       mapM_  chmodG groupPerms
-       chmodA  everyonePerm
-       return $ Right $ dir
-    else
-    return $ Left $ PermissionError $ T.pack $ show he ++ " needs to be the owner or root"
+    then do e <- foldlM (>>>) (Right ()) opts
+            return $ (fmap (const dir) e)
+    else return $ Left $ PermissionError $ T.pack $ show he ++ " needs to be the owner or root"
 
     where
-      chmodU (Just (Perm r w x))  = do update $ \directory -> do
-                                         set directory [ DirectoryOwnerR =. val r
-                                                       , DirectoryOwnerW =. val w
-                                                       , DirectoryOwnerX =. val x
-                                                       ]
-                                         where_ (directory^.DirectoryId ==. val dir)
-                                       return ()
-      chmodU Nothing = return ()
+      Left err >>> _ = return $ Left err
 
-      chmodA (Just (Perm r w x)) = do update $ \directory -> do
-                                        set directory [ DirectoryEveryoneR =. val r
-                                                      , DirectoryEveryoneW =. val w
-                                                      , DirectoryEveryoneX =. val x
-                                                      ]
-                                        where_ (directory^.DirectoryId ==. val dir)
-                                      liftIO $ putStrLn $ T.pack $ show $ Perm r w x
-                                      return ()
-      chmodA Nothing = return ()
+      Right _  >>> ChmodOwner (Perm r w x) =
+        updateDbfs (DirectoryDoesNotExist $ T.pack $ show dir)
+        dir
+        [ (I.=.) DirectoryOwnerR  r
+        , (I.=.) DirectoryOwnerW  w
+        , (I.=.) DirectoryOwnerX  x
+        ]
 
+      Right _  >>> ChmodEveryone (Perm r w x) =
+        updateDbfs (DirectoryDoesNotExist $ T.pack $ show dir)
+        dir
+        [ (I.=.) DirectoryEveryoneR  r
+        , (I.=.) DirectoryEveryoneW  w
+        , (I.=.) DirectoryEveryoneX  x
+        ]
 
-  -- Can set any group permission even if he is not the owner of the group
-      chmodG (gid, Perm r w x) = do
-        liftIO $ putStrLn $ T.pack $ "chmodG:" ++ show (dir,gid, Perm r w x)
-        _dirgrp <- upsert (makeDirectoryGroupsWithPerm dir gid (Perm r w x))
+      Right _ >>> ChmodGroup gid (Perm r w x) = do
+        e <- upsertDbfs (makeDirectoryGroupsWithPerm dir gid (Perm r w x))
           [ (I.=.) DirectoryGroupsGroupR   r
           , (I.=.) DirectoryGroupsGroupW   w
           , (I.=.) DirectoryGroupsGroupX   x
           ]
-        return ()
-        -- update $ \directoryGroups -> do
-        --   set directoryGroups [ DirectoryGroupsGroupR =. val r
-        --                       , DirectoryGroupsGroupW =. val w
-        --                       , DirectoryGroupsGroupX =. val x
-        --                       ]
-        --   where_ (directoryGroups^.DirectoryGroupsDirectoryId ==. val dir
-        --           &&. directoryGroups^.DirectoryGroupsGroupId ==. val gid)
-
+        return $ fmap (const () ) e
 
 
 isOwnerOfFile :: MonadIO m => UserAccountId -> FileId -> SqlPersistT m Bool
@@ -1138,60 +1170,44 @@ isOwnerOfFile he file = do
     _      -> return False
 
 
-chmodFile :: MonadIO m
-                  => UserAccountId -> FileId -> Maybe Perm -> [(GroupId,Perm)] -> Maybe Perm
-                  -> SqlPersistT m (Result FileId)
-chmodFile he file ownerPerm groupPerms everyonePerm  = do
+chmodFile :: (MonadIO m, MonadBaseControl IO m)
+             => UserAccountId -> FileId -> [ChmodOption]
+             -> SqlPersistT m (Result FileId)
+chmodFile he file opts  = do
   own      <- he `isOwnerOfFile` file
   prv      <- isPrivileged he
 
   if (prv || own)
-    then
-    do chmodU ownerPerm
-       mapM_  chmodG groupPerms
-       chmodA  everyonePerm
-       return $ Right $ file
-    else
-    return $ Left $ PermissionError $ T.pack $ show he ++ " must be the owner or root"
+    then do e <- foldlM (>>>) (Right ()) opts
+            return $ fmap (const file) e
+    else return $ Left $ PermissionError $ T.pack $ show he ++ " needs to be the owner or root"
 
     where
-      chmodU (Just (Perm r w x))  = do update $ \f -> do
-                                         set f [ FileOwnerR =. val r
-                                               , FileOwnerW =. val w
-                                               , FileOwnerX =. val x
-                                               ]
-                                         where_ (f^.FileId ==. val file)
-                                       return ()
-      chmodU Nothing = return ()
+      Left err >>> _ = return $ Left err
 
-      chmodA (Just (Perm r w x)) = do update $ \f -> do
-                                        set f [ FileEveryoneR =. val r
-                                              , FileEveryoneW =. val w
-                                              , FileEveryoneX =. val x
-                                              ]
-                                        where_ (f^.FileId ==. val file)
-                                      liftIO $ putStrLn $ T.pack $ show $ Perm r w x
-                                      return ()
-      chmodA Nothing = return ()
+      Right _  >>> ChmodOwner (Perm r w x) =
+        updateDbfs (FileDoesNotExist $ T.pack $ show file)
+        file
+        [ (I.=.) FileOwnerR  r
+        , (I.=.) FileOwnerW  w
+        , (I.=.) FileOwnerX  x
+        ]
 
+      Right _  >>> ChmodEveryone (Perm r w x) =
+        updateDbfs (FileDoesNotExist $ T.pack $ show file)
+        file
+        [ (I.=.) FileEveryoneR  r
+        , (I.=.) FileEveryoneW  w
+        , (I.=.) FileEveryoneX  x
+        ]
 
-  -- Can set any group permission even if he is not the owner of the group
-      chmodG (gid, Perm r w x) = do
-        liftIO $ putStrLn $ T.pack $ "chmodG:" ++ show (file,gid, Perm r w x)
-        _filegrp <- upsert (makeFileGroupsWithPerm file gid (Perm r w x))
+      Right _ >>> ChmodGroup gid (Perm r w x) = do
+        e <- upsertDbfs (makeFileGroupsWithPerm file gid (Perm r w x))
           [ (I.=.) FileGroupsGroupR   r
           , (I.=.) FileGroupsGroupW   w
           , (I.=.) FileGroupsGroupX   x
           ]
-        return ()
-        -- update $ \directoryGroups -> do
-        --   set directoryGroups [ DirectoryGroupsGroupR =. val r
-        --                       , DirectoryGroupsGroupW =. val w
-        --                       , DirectoryGroupsGroupX =. val x
-        --                       ]
-        --   where_ (directoryGroups^.DirectoryGroupsDirectoryId ==. val dir
-        --           &&. directoryGroups^.DirectoryGroupsGroupId ==. val gid)
-
+        return $ fmap (const () ) e
 
 
 

@@ -346,16 +346,18 @@ spec = withApp $ do
     Right dir3 <- user3 `mkdir` "dir3"
 
     Right _ <- (user1 `chmodDirectory` dir1)
-               (Just $ Perm True True True)
-               [(group2, Perm True True True)]
-               (Just $ Perm True True True)
+               [ ChmodOwner $ Perm True True True
+               , ChmodGroup group2 $ Perm True True True
+               , ChmodEveryone  $ Perm True True True
+               ]
 
     Right _ <- (user2 `chmodDirectory`  dir2)
-               (Just $ Perm True False False)
-               [ (group1, Perm False True False)
-               , (group2, Perm False True False)
-               , (group3, Perm False True False) ]
-               (Just $ Perm False False True)
+               [ ChmodOwner $ Perm True False False
+               , ChmodGroup group1 $ Perm False True False
+               , ChmodGroup group2 $ Perm False True False
+               , ChmodGroup group3 $ Perm False True False
+               , ChmodEveryone $ Perm False False True
+               ]
 
     (dir0 `isDirectoryReadableBy` root) `shouldReturn` True
 
@@ -426,26 +428,27 @@ spec = withApp $ do
       Right file3 <- user3 `touchAt` dir3 $ "file"
 
       Right _ <- (user1 `chmodDirectory` dir1)
-                 (Just $ Perm True True True)
-                 [(group2, Perm False False True)]
-                 (Just $ Perm False False False)
+                 [ ChmodOwner $ Perm True True True
+                 , ChmodGroup group1 $ Perm False False True
+                 , ChmodEveryone $ Perm False False False ]
 
       Right _ <- (user1 `chmodFile` file1)
-                 (Just $ Perm True True True)
-                 [(group2, Perm True True True)]
-                 (Just $ Perm True True True)
+                 [ ChmodOwner $ Perm True True True
+                 , ChmodGroup group2 $ Perm True True True
+                 , ChmodEveryone $ Perm True True True ]
 
       Right _ <- (user2 `chmodFile`  file2)
-                 (Just $ Perm True False False)
-                 [ (group1, Perm False True False)
-                 , (group2, Perm False True False)
-                 , (group3, Perm False True False) ]
-                 (Just $ Perm False False True)
+                 [ ChmodOwner $  Perm True False False
+                 , ChmodGroup group1 $ Perm False True False
+                 , ChmodGroup group2 $ Perm False True False
+                 , ChmodGroup group3 $ Perm False True False
+                 , ChmodEveryone $ Perm False False True ]
 
       Right _ <- (user2 `chmodDirectory` dir2)
-                 (Just $ Perm True True True)
-                 [(group2, Perm True True True)]
-                 (Just $ Perm True True False)
+                 [ ChmodOwner $ Perm True True True
+                 , ChmodGroup group2 $ Perm True True True
+                 , ChmodEveryone $ Perm True True False ]
+
       return (root, user1,user2,user3,group1,group2,group3,dir0,dir1,dir2,dir3,file0,file1,file2,file3)
 
     Left (FileAlreadyExists _) <- runDB $ user1 `touchAt` dir1 $ "file"
@@ -555,7 +558,7 @@ spec = withApp $ do
       user2 `chownDirectory` dir2 $ [ ChownAddGroup group3 ]
 
 
-    runDB $ do
+    Right _ <- runDB $ do
       root `chownDirectory` dir1 $ [ ChownDelGroup group1
                                    , ChownDelGroup group2
                                    , ChownDelGroup group3
