@@ -525,13 +525,14 @@ spec = withApp $ do
     (runDB $ getDirectoryUserId dir3) `shouldReturn` Right user3
 
 
-    Left (AlreadyOwner _)  <- runDB $ root `chownDirectory` dir1 $ [ ChownAddGroup group1 ]
+--    Left (AlreadyOwner _)  <- runDB $ root `chownDirectory` dir1 $ [ ChownAddGroup group1 ]
+    Left (AlreadyOwner _)  <- runDB $ root `chown`          dir1 $ [ ChownAddGroup group1 ]
 
     runDB $ do
-      root `chownDirectory` dir1 $ [ ChownOwner user2
-                                   , ChownAddGroup group2
-                                   , ChownAddGroup group3
-                                   ]
+      root `chown` dir1 $ [ ChownOwner user2
+                          , ChownAddGroup group2
+                          , ChownAddGroup group3
+                          ]
 
     (runDB $ getDirectoryUserId dir1) `shouldReturn` Right user2
     Right gs <- runDB $ getDirectoryGroups dir1
@@ -552,18 +553,63 @@ spec = withApp $ do
 
 
     Left (PermissionError _) <- runDB $
-      user1 `chownDirectory` dir2 $ [ ChownOwner user1 ]
+      user1 `chown` dir2 $ [ ChownOwner user1 ]
 
     Right _ <- runDB $
-      user2 `chownDirectory` dir2 $ [ ChownAddGroup group3 ]
+      user2 `chown` dir2 $ [ ChownAddGroup group3 ]
 
 
     Right _ <- runDB $ do
-      root `chownDirectory` dir1 $ [ ChownDelGroup group1
-                                   , ChownDelGroup group2
-                                   , ChownDelGroup group3
-                                   ]
+      root `chown` dir1 $ [ ChownDelGroup group1
+                          , ChownDelGroup group2
+                          , ChownDelGroup group3
+                          ]
 
     Right [] <- runDB $ getDirectoryGroups dir1
+
+    return ()
+
+  it "tests umask" $ do
+    (root,user1,user2,user3,group1,group2,group3,dir0,dir1,dir2,dir3) <- runDB $ do
+      root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+      Right user1 <- root `useradd` "user1"
+      Right user2 <- root `useradd` "user2"
+      Right user3 <- root `useradd` "user3"
+
+      Right group1 <- user1 `groupadd` "group1"
+      Right group2 <- user2 `groupadd` "group2"
+      Right group3 <- user3 `groupadd` "group3"
+
+      Right _  <- user1 `usermod` user1 $ [ SetUmask $ UMask
+                                            False False True
+                                            False True  True
+                                            True  True True ]
+
+      Right u  <- user1 `usermod` user1 $ [ AddToGroup group1 ]
+      Right u  <- user1 `usermod` user2 $ [ AddToGroup group1 ]
+      Right u  <- user2 `usermod` user2 $ [ AddToGroup group2 ]
+      Right u  <- user3 `usermod` user3 $ [ AddToGroup group3 ]
+
+
+      Right dir0 <- root  `mkdir` "dir0"
+      Right dir1 <- user1 `mkdir` "dir1"
+      Right dir2 <- user2 `mkdir` "dir2"
+      Right dir3 <- user3 `mkdir` "dir3"
+
+      return (root, user1,user2,user3,group1,group2,group3,dir0,dir1,dir2,dir3)
+
+
+    runDB (get user1) >>= putStrLn . T.pack .  show
+    (runDB $ dir1 `isDirectoryOwnerReadableBy` user1) `shouldReturn` True
+    (runDB $ dir1 `isDirectoryOwnerWritableBy` user1) `shouldReturn` True
+    (runDB $ dir1 `isDirectoryOwnerExecutableBy` user1) `shouldReturn` False
+
+    (runDB $ dir1 `isDirectoryGroupReadableBy`  user2) `shouldReturn` True
+    (runDB $ dir1 `isDirectoryGroupWritableBy`  user2) `shouldReturn` False
+    (runDB $ dir1 `isDirectoryGroupExecutableBy` user2) `shouldReturn` False
+
+    (runDB $ dir1 `isDirectoryEveryoneReadableBy` user3) `shouldReturn` False
+    (runDB $ dir1 `isDirectoryEveryoneWritableBy` user3) `shouldReturn` False
+    (runDB $ dir1 `isDirectoryEveryoneExecutableBy` user3) `shouldReturn` False
 
     return ()
