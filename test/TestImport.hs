@@ -196,6 +196,12 @@ shouldReturnAndMatchList m bs = do
   as <- m
   liftIO $ as `H.shouldMatchList` bs
 
+shouldReturnRightMatchingList :: (?loc :: CallStack , MonadIO m, Show a, Eq a)
+                            => m (Either e [a]) -> [a] -> m ()
+shouldReturnRightMatchingList m bs = do
+  Right gs <- m
+  liftIO $ gs `H.shouldMatchList` bs
+
 
 shouldBe :: (?loc :: CallStack , Eq a, Show a, MonadIO m)
             => a -> a -> m()
