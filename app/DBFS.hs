@@ -13,6 +13,7 @@ module DBFS
        , ChmodOption(..)
        , mkdir
        , touch , touchAt
+--       , mkdir' , touch'
        , isPrivileged
        , isGroupOwnerOf
        , belongs
@@ -21,7 +22,7 @@ module DBFS
        , getDirectoryUserId
        , getDirectoryGroups
        , chown
-       , chownDirectory
+--       , chownDirectory
 --       , chownFile
        , chmodDirectory
        , chmodFile
@@ -67,7 +68,7 @@ module DBFS
        , isFileWritableBy
        , isFileExecutableBy
 
-         -- , lsPrograms
+       , lsDirectory
          -- , lsGoals
 
          -- , findPrograms
@@ -121,6 +122,9 @@ data DbfsError = DirectoryDoesNotExist Text
                | DuplicateFileGroups Text
                | AlreadyOwner Text
                | NotAnOwner Text
+               | EntryAlreadyExists Text
+               | EntityDoesNotExist Text
+               | DuplicateOwnerGroups Text
                | SchemaError Text -- Code smell (should be handled earlier, not here)
                deriving (Eq,Show)
 
@@ -143,7 +147,84 @@ data ChmodOption = ChmodOwner Perm
                  deriving (Eq,Show)
 
 
+-- Abstracts file like objects not necessarily backed by databases (but their children are)
+class (PersistFileEntity (PseudoEntry record), Show (PseudoKey record))
+      => PseudoDirectoryEntity record where
+  data PseudoKey   record
+  type PseudoEntry record :: *
 
+  getPseudoEntity      :: MonadIO m => PseudoKey record -> SqlPersistT m (Maybe record)
+  isPseudoExecutableBy :: MonadIO m => PseudoKey record -> UserAccountId -> SqlPersistT m Bool
+  makePseudoEntry      :: UserAccountId -> PseudoKey record -> Text -> UMask -> PseudoEntry record
+  entryAlreadyExistsError :: PseudoKey record -> Text -> DbfsError
+  entryAlreadyExistsError key name = EntryAlreadyExists $ T.concat [ T.pack (show key), name]
+  pseudoEntityDoesNotExistError :: PseudoKey record -> DbfsError
+  pseudoEntityDoesNotExistError key = EntityDoesNotExist (T.pack $ show key)
+
+class ( PersistEntity record, PersistEntity (OwnerGroup record)
+      , PersistEntityBackend record ~ SqlBackend, PersistEntityBackend (OwnerGroup record) ~ SqlBackend)
+      => PersistFileEntity record where
+  type OwnerGroup   record :: *
+
+  makeOwnerGroup   :: Key record -> GroupId -> UMask -> OwnerGroup record
+  uniqueOwnerGroup :: Key record -> GroupId -> Unique (OwnerGroup record)
+
+  doesNotExistError    :: Key record -> DbfsError
+  doesNotExistError key = EntityDoesNotExist (T.pack $ show key)
+
+  duplicateGroupsError :: Key record -> DbfsError
+  duplicateGroupsError key = DuplicateOwnerGroups (T.pack $ show key)
+
+  getFile    :: (MonadIO m) => Key record -> SqlPersistT m (Maybe record)
+  ownerField :: Key record -> EntityField record (Key UserAccount)
+  ownerId    :: record -> (Key UserAccount)
+  getOwnerId :: MonadIO m => Key record -> SqlPersistT m (Result (Key UserAccount))
+  getOwnerId k =  do mu <- getFile k
+                     case mu of
+                       Just u  -> Right <$> return (ownerId u)
+                       Nothing -> Left  <$> return (doesNotExistError k)
+
+
+data RootDirectory = RootDirectory deriving (Show)
+
+instance PseudoDirectoryEntity RootDirectory where
+  data PseudoKey RootDirectory = PseudoRootKey RootDirectory deriving (Show)
+  type PseudoEntry RootDirectory = Directory
+
+  getPseudoEntity _  = return $ Just RootDirectory
+  isPseudoExecutableBy _ _ = return True
+  makePseudoEntry he _ name umask = makeDirectory he name umask
+
+instance PseudoDirectoryEntity Directory where
+  data PseudoKey Directory = PseudoDirKey (Key Directory) deriving (Show)
+  type PseudoEntry Directory = File
+
+  getPseudoEntity (PseudoDirKey dirkey)  = get dirkey
+  isPseudoExecutableBy (PseudoDirKey dirkey) uid = dirkey `isDirectoryExecutableBy` uid
+  makePseudoEntry he (PseudoDirKey dirkey) name umask = makeFile he dirkey name umask
+  entryAlreadyExistsError (PseudoDirKey key) name = FileAlreadyExists $ T.concat [T.pack $ show key, name]
+
+instance PersistFileEntity Directory where
+  type OwnerGroup Directory = DirectoryGroups
+  makeOwnerGroup = makeDirectoryGroups
+  uniqueOwnerGroup = UniqueDirectoryGroups
+
+  doesNotExistError  key = DirectoryDoesNotExist  (T.pack $ show key)
+--  alreadyExistsError key = DirectoryAlreadyExists (T.pack $ show key)
+  getFile = get
+  ownerField _ = DirectoryUserId
+  ownerId = directoryUserId
+
+instance PersistFileEntity File where
+  type OwnerGroup File = FileGroups
+  makeOwnerGroup = makeFileGroups
+  uniqueOwnerGroup = UniqueFileGroups
+
+  doesNotExistError  key = FileDoesNotExist  (T.pack $ show key)
+--  alreadyExistsError key = FileAlreadyExists (T.pack $ show key)
+  getFile = get
+  ownerField _ = FileUserId
+  ownerId = fileUserId
 
 
 -- Rule: SHOULD NEVER THROW IN ANY WAY FROM THE FUNCTIONS IN THIS MODULE.
@@ -435,8 +516,8 @@ belongs he = do
 
 -------------------------- Entity creation  --------------------------
 -- In our system, everyone is allowed to create a directory (which is really a prolog program)
-mkdir :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result DirectoryId)
-mkdir he name = do
+mkdir' :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result DirectoryId)
+mkdir' he name = do
   muser <- get he
 
   case muser of
@@ -460,8 +541,8 @@ mkdir he name = do
 
 
 
-touch :: MonadIO m => UserAccountId -> DirectoryId -> Text -> SqlPersistT m (Result FileId)
-touch he dir name = do
+touch' :: MonadIO m => UserAccountId -> DirectoryId -> Text -> SqlPersistT m (Result FileId)
+touch' he dir name = do
   muser <- get he
   mdir  <- get dir
 -- Unlike a unix filesystem, creating files is allowed iff the directory is executable, not writable
@@ -487,8 +568,44 @@ touch he dir name = do
     (_ , _ ,  _ ) -> return $ Left $ PermissionError $ T.pack "directory not executable(but MAY be writable)"
 
 
+touch :: MonadIO m => UserAccountId -> DirectoryId -> Text -> SqlPersistT m (Result FileId)
+touch he dir name = open he (PseudoDirKey dir) name
+
 touchAt :: MonadIO m => UserAccountId -> DirectoryId -> Text -> SqlPersistT m (Result FileId)
 touchAt = touch
+
+mkdir :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result DirectoryId)
+mkdir he name = open he (PseudoRootKey RootDirectory) name
+
+
+open :: (MonadIO m
+        , PseudoDirectoryEntity dir , PersistEntityBackend (OwnerGroup (PseudoEntry dir)) ~ SqlBackend)
+        =>  UserAccountId ->  PseudoKey dir -> Text -> SqlPersistT m (Result (Key (PseudoEntry dir)))
+open he dirkey name = do
+  muser    <- get  he
+  mdir  <- getPseudoEntity dirkey
+  x <- dirkey `isPseudoExecutableBy` he
+  case (muser, mdir, x) of
+
+    (Just user, Just _dir, True) ->  do
+      let umask =  umaskFromUserAccount user
+      efile <- insertDbfs (entryAlreadyExistsError dirkey name) (makePseudoEntry he dirkey name umask)
+      case efile of
+        Left  err -> return $ Left err
+        Right file -> do
+          groups <- belongs he -- should not throw
+
+          case groups of
+            Right gs -> do
+              forM_  gs $  \g ->
+                insertDbfs (duplicateGroupsError file) (makeOwnerGroup file g umask)
+              return $ Right file
+            Left err -> return $ Left err
+
+    (Nothing, _      , _  )  -> return $ Left $ UserDoesNotExist      $ T.pack (show he)
+    (_      , Nothing , _ )  -> return $ Left $ pseudoEntityDoesNotExistError dirkey
+    (_ , _ ,  _ ) -> return $ Left $ PermissionError $ T.pack "parent is not executable(but may be writable)"
+
 
 
 -- lsRoot :: UserId -> Int -> Int -> Handler [ Entity Directory ]
@@ -716,7 +833,37 @@ isFileExecutableBy dir him = orM [ dir `isFileOwnerExecutableBy`  him
 
 
 
--- --------------------  lsHeadPrograms  --------------------
+-- --------------------  ls  --------------------
+lsDirectory :: (MonadIO m )
+      => UserAccountId -> Int64 -> Int64 -> SqlPersistT m (Result [DirectoryId])
+
+lsDirectory uid offs lim = do
+  prv <- isPrivileged uid
+  results <- select $
+             from $ \(directory
+                      `LeftOuterJoin`
+                      (directoryGroups `InnerJoin` groupMembers )) ->
+                    distinctOn [don (directory^.DirectoryId) ] $ do
+                      on (groupMembers^.GroupMembersGroupId ==. directoryGroups^.DirectoryGroupsGroupId)
+                      on (directoryGroups^.DirectoryGroupsDirectoryId ==. directory^.DirectoryId)
+                      where_ ( directoryOwnerReadable uid directory
+                               ||. directoryGroupReadable uid directoryGroups groupMembers
+                               ||. directoryEveryoneReadable uid directory
+                               ||. val prv ==. val True
+                             )
+                      offset offs
+                      limit lim
+                      return (directory^.DirectoryId)
+  return (Right $ map unValue results)
+  where
+    directoryOwnerReadable uid directory = directory^.DirectoryUserId ==. val uid
+                                           &&. directory^.DirectoryOwnerR ==. val True
+
+    directoryGroupReadable uid directoryGroups groupMembers =
+      groupMembers^.GroupMembersMember ==. val uid
+      &&. directoryGroups^.DirectoryGroupsGroupR ==. val True
+
+    directoryEveryoneReadable uid directory = directory^.DirectoryEveryoneR ==. val True
 
 -- lsHeadPrograms :: Int64 -> Int64 -> UserId ->  SqlPersistT m [Entity Directory]
 -- lsHeadPrograms lim offs uid  =
@@ -1079,47 +1226,8 @@ chownDirectory he it opts = do
 
 
 
-class (PersistEntity record, PersistEntity (OwnerGroups record))  => PersistFileEntity record where
-  type OwnerGroups record :: *
-  makeOwnerGroups   :: Key record -> GroupId -> UMask -> OwnerGroups record
-  uniqueOwnerGroups :: Key record -> GroupId -> Unique (OwnerGroups record)
 
-  doesNotExistError  :: Key record -> DbfsError
-  alreadyExistsError :: Key record -> DbfsError
-  getFile :: (MonadIO m) => Key record -> SqlPersistT m (Maybe record)
-  ownerField :: Key record -> EntityField record (Key UserAccount)
-  ownerId      :: record -> (Key UserAccount)
-  getOwnerId :: MonadIO m => Key record -> SqlPersistT m (Result (Key UserAccount))
-  getOwnerId k =  do mu <- getFile k
-                     case mu of
-                       Just u  -> Right <$> return (ownerId u)
-                       Nothing -> Left  <$> return (doesNotExistError k)
-
-
-instance PersistFileEntity Directory where
-  type OwnerGroups Directory = DirectoryGroups
-  makeOwnerGroups = makeDirectoryGroups
-  uniqueOwnerGroups = UniqueDirectoryGroups
-
-  doesNotExistError  key = DirectoryDoesNotExist  (T.pack $ show key)
-  alreadyExistsError key = DirectoryAlreadyExists (T.pack $ show key)
-  getFile = get
-  ownerField _ = DirectoryUserId
-  ownerId = directoryUserId
-
-instance PersistFileEntity File where
-  type OwnerGroups File = FileGroups
-  makeOwnerGroups = makeFileGroups
-  uniqueOwnerGroups = UniqueFileGroups
-
-  doesNotExistError  key = FileDoesNotExist  (T.pack $ show key)
-  alreadyExistsError key = FileAlreadyExists (T.pack $ show key)
-  getFile = get
-  ownerField _ = FileUserId
-  ownerId = fileUserId
-
-chown :: (MonadIO m , PersistFileEntity val
-         , PersistEntityBackend val ~ SqlBackend, PersistEntityBackend (OwnerGroups val) ~ SqlBackend)
+chown :: (MonadIO m , PersistFileEntity val)
          => UserAccountId -> Key val -> [ChownOption] -> SqlPersistT m (Result (Key val))
 chown he key opts = do
   mit <- getFile key
@@ -1158,7 +1266,7 @@ chown he key opts = do
                                        (T.concat ["only root or the owner can change the group ownership"])
            (Right umask, Right _ , True ) ->
              fmap (const k) <$>
-             insertDbfs (AlreadyOwner $ T.pack $ show gid) (makeOwnerGroups k gid umask)
+             insertDbfs (AlreadyOwner $ T.pack $ show gid) (makeOwnerGroup k gid umask)
 
      (Right k) >>> (ChownDelGroup gid) =
        do
@@ -1173,43 +1281,7 @@ chown he key opts = do
                                    (T.concat ["only root or the owner can change the group ownership"])
            (Right _, Right _ , True ) ->
              fmap (const k) <$>
-             (deleteByDbfs (NotAnOwner $ T.pack $ show gid) $ uniqueOwnerGroups k gid)
-
-
-
--- chownGoal :: UserId -> Maybe UserId -> [GroupId] -> FileId
---              -> SqlPersistT m (Maybe FileId)
--- chownGoal uid muid gids goalid = do
---   prv <- privileged uid
---   own <- isOwner uid goalid
---   umask <- userUmask uid
-
---   case (writable, prv, own , muid ) of
---     (True, _ , Just uid') -> do changeOwner uid' pid
---                                       changeGroup gids pid umask
-
---     ( True, _ , Nothing )  -> do changeGroup gids pid umask
-
---     ( _, True, Just uid')  -> do return Nothing
-
---     ( _, True, Nothing  )  -> do changeGroup gids pid umask
-
---     (_, _ , _ )  -> return Nothing
-
---   where
---     changeUser uid goalid = do update $ \p -> do
---                               set p [ FileUserId =. val uid
---                                     ]
---                               where_ (p^.FileId ==. val goalid)
---                             return (Just goalid)
-
---     changeGroup  gids goalid umask = do delete $ \p -> do
---                                           where_ (p^.GoalGroupsFileId ==. goalid)
---                                         forM_ gids (\gid -> insert (GoalGroups goalid gid
---                                                                     (not (umaskGroupR umask))
---                                                                     (not (umaskGroupW umask))
---                                                                     (not (umaskGroupX umask))))
---                                         return (Just goalid)
+             (deleteByDbfs (NotAnOwner $ T.pack $ show gid) $ uniqueOwnerGroup k gid)
 
 
 

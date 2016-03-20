@@ -422,10 +422,10 @@ spec = withApp $ do
       Right dir2 <- user2 `mkdir` "dir2"
       Right dir3 <- user3 `mkdir` "dir3"
 
-      Right file0 <- root  `touchAt` dir0 $ "file"
-      Right file1 <- user1 `touchAt` dir1 $ "file"
-      Right file2 <- user2 `touchAt` dir2 $ "file"
-      Right file3 <- user3 `touchAt` dir3 $ "file"
+      Right file0 <- root  `touch` dir0 $ "file"
+      Right file1 <- user1 `touch` dir1 $ "file"
+      Right file2 <- user2 `touch` dir2 $ "file"
+      Right file3 <- user3 `touch` dir3 $ "file"
 
       Right _ <- (user1 `chmodDirectory` dir1)
                  [ ChmodOwner $ Perm True True True
@@ -451,9 +451,9 @@ spec = withApp $ do
 
       return (root, user1,user2,user3,group1,group2,group3,dir0,dir1,dir2,dir3,file0,file1,file2,file3)
 
-    Left (FileAlreadyExists _) <- runDB $ user1 `touchAt` dir1 $ "file"
-    Left (PermissionError _  ) <- runDB $ user3 `touchAt` dir1 $ "file3"
-    Left (PermissionError _  ) <- runDB $ user3 `touchAt` dir2 $ "file3"
+    Left (FileAlreadyExists _) <- runDB $ user1 `touch` dir1 $ "file"
+    Left (PermissionError _  ) <- runDB $ user3 `touch` dir1 $ "file3"
+    Left (PermissionError _  ) <- runDB $ user3 `touch` dir2 $ "file3"
 
     (runDB $ dir0 `isDirectoryReadableBy` root) `shouldReturn` True
 
@@ -611,5 +611,59 @@ spec = withApp $ do
     (runDB $ dir1 `isDirectoryEveryoneReadableBy` user3) `shouldReturn` False
     (runDB $ dir1 `isDirectoryEveryoneWritableBy` user3) `shouldReturn` False
     (runDB $ dir1 `isDirectoryEveryoneExecutableBy` user3) `shouldReturn` False
+
+    return ()
+
+  it "creates directories and lists them" $ do
+    (root,user1,user2,user3,group1,group2,group3,dir0,dir1,dir2,dir3) <- runDB $ do
+      root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+      Right user1 <- root `useradd` "user1"
+      Right user2 <- root `useradd` "user2"
+      Right user3 <- root `useradd` "user3"
+
+      Right group1 <- user1 `groupadd` "group1"
+      Right group2 <- user2 `groupadd` "group2"
+      Right group3 <- user3 `groupadd` "group3"
+
+      Right u  <- user1 `usermod` user1 $ [ AddToGroup group1 ]
+      Right u  <- user1 `usermod` user2 $ [ AddToGroup group1 ]
+      Right u  <- user2 `usermod` user2 $ [ AddToGroup group2 ]
+      Right u  <- user3 `usermod` user3 $ [ AddToGroup group3 ]
+
+      Right dir0 <- root  `mkdir` "dir0"
+      Right dir1 <- user1 `mkdir` "dir1"
+      Right dir2 <- user2 `mkdir` "dir2"
+      Right dir3 <- user3 `mkdir` "dir3"
+
+      Right _ <- (user1 `chmodDirectory` dir1)
+                 [ ChmodOwner        $ Perm True  True True
+                 , ChmodGroup group2 $ Perm False True True
+                 , ChmodEveryone     $ Perm False True True
+                 ]
+
+      Right _ <- (user2 `chmodDirectory`  dir2)
+                 [ ChmodOwner $ Perm True False False
+                 , ChmodGroup group1 $ Perm False True False
+                 , ChmodGroup group2 $ Perm False True False
+                 , ChmodGroup group3 $ Perm False True False
+                 , ChmodEveryone $ Perm False False True
+                 ]
+
+      Right _ <- (root `chmodDirectory`  dir3)
+                 [ ChmodOwner        $ Perm False False False
+                 , ChmodGroup group1 $ Perm False True False
+                 , ChmodGroup group2 $ Perm False True False
+                 , ChmodGroup group3 $ Perm False True False
+                 , ChmodEveryone     $ Perm False False True
+                 ]
+
+
+      return (root,user1,user2,user3,group1,group2,group3,dir0,dir1,dir2,dir3)
+
+    (runDB $ lsDirectory root  0 10) `shouldReturnRightMatchingList`  [dir0,dir1,dir2,dir3]
+    (runDB $ lsDirectory user1 0 10) `shouldReturnRightMatchingList`  [dir0,dir1]
+    (runDB $ lsDirectory user2 0 10) `shouldReturnRightMatchingList`  [dir0,dir1,dir2]
+    (runDB $ lsDirectory user3 0 10) `shouldReturnRightMatchingList`  [dir0]
+
 
     return ()
