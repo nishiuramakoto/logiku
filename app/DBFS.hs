@@ -69,23 +69,16 @@ module DBFS
        , isFileExecutableBy
 
        , lsDirectory
-         -- , lsGoals
+       , lsFile
 
-         -- , findPrograms
-         -- , findGoals
+       , readDirectory
+       , readFile
 
-         -- , readProgram
-         -- , readGoal
+       , writeDirectory
+       , writeFile
 
-         -- , writeProgram
-         -- , writeGoal
-
-         -- , createProgram
-         -- , createGoal
-
-         -- , rmProgram
-         -- , rmGoal
-
+       , rmdir
+       , unlink,rm
 
          -- , programTagsAdd
          -- , programTagsDel
@@ -100,7 +93,9 @@ module DBFS
   ) where
 
 
-import             Import hiding ((==.), (>=.) ,(||.)  , on , Value , update , (=.) , forM_ , delete)
+import             Import hiding ((==.), (>=.) ,(||.)  , on , Value , update , (=.) , forM_ , delete
+                                 , readFile, writeFile
+                                 )
 import  qualified  Import as I
 import             Database.Esqueleto hiding(insert)
 import  qualified  Database.Persist as P
@@ -117,6 +112,7 @@ data DbfsError = DirectoryDoesNotExist Text
                | NotAGroupMember  Text
                | DirectoryAlreadyExists Text
                | FileAlreadyExists Text
+               | DirectoryNonEmpty Text
                | PermissionError  Text
                | DuplicateDirectoryGroups Text
                | DuplicateFileGroups Text
@@ -248,10 +244,10 @@ deleteByDbfs err v = do mval <- getBy v
                                          return $ Right ()
                           Nothing  -> return $ Left  err
 
-deleteDbfs :: (MonadIO m, PersistEntity val, PersistUnique (PersistEntityBackend val) )
+_deleteDbfs :: (MonadIO m, PersistEntity val, PersistUnique (PersistEntityBackend val) )
               => DbfsError -> Key val -> ReaderT (PersistEntityBackend val) m (Result ())
-deleteDbfs err v = do mval <- get v
-                      case mval of
+_deleteDbfs err v = do mval <- get v
+                       case mval of
                         Just _   -> do P.delete v
                                        return $ Right ()
                         Nothing  -> return $ Left  err
@@ -275,10 +271,10 @@ upsertDbfs v updates = do
 
 
 -- | Replace if there is a conflicting key with this value; returns 'Left' otherwise.
-replaceDbfs :: (MonadIO m, PersistEntity val, PersistUnique (PersistEntityBackend val) )
+_replaceDbfs :: (MonadIO m, PersistEntity val, PersistUnique (PersistEntityBackend val) )
               => DbfsError ->  val -> ReaderT (PersistEntityBackend val) m (Result (Entity val))
-replaceDbfs err v = do mukey <- checkUnique v
-                       case mukey of
+_replaceDbfs err v = do mukey <- checkUnique v
+                        case mukey of
                          Just _   -> Right <$> upsert v []
                          Nothing  -> Left  <$> return err
 
@@ -516,8 +512,8 @@ belongs he = do
 
 -------------------------- Entity creation  --------------------------
 -- In our system, everyone is allowed to create a directory (which is really a prolog program)
-mkdir' :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result DirectoryId)
-mkdir' he name = do
+_mkdir' :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result DirectoryId)
+_mkdir' he name = do
   muser <- get he
 
   case muser of
@@ -541,8 +537,8 @@ mkdir' he name = do
 
 
 
-touch' :: MonadIO m => UserAccountId -> DirectoryId -> Text -> SqlPersistT m (Result FileId)
-touch' he dir name = do
+_touch' :: MonadIO m => UserAccountId -> DirectoryId -> Text -> SqlPersistT m (Result FileId)
+_touch' he dir name = do
   muser <- get he
   mdir  <- get dir
 -- Unlike a unix filesystem, creating files is allowed iff the directory is executable, not writable
@@ -833,7 +829,7 @@ isFileExecutableBy dir him = orM [ dir `isFileOwnerExecutableBy`  him
 
 
 
--- --------------------  ls  --------------------
+--------------------------------  ls  --------------------------------
 lsDirectory :: (MonadIO m )
       => UserAccountId -> Int64 -> Int64 -> SqlPersistT m (Result [DirectoryId])
 
@@ -856,323 +852,149 @@ lsDirectory uid offs lim = do
                       return (directory^.DirectoryId)
   return (Right $ map unValue results)
   where
-    directoryOwnerReadable uid directory = directory^.DirectoryUserId ==. val uid
+    directoryOwnerReadable uid' directory = directory^.DirectoryUserId ==. val uid'
                                            &&. directory^.DirectoryOwnerR ==. val True
 
-    directoryGroupReadable uid directoryGroups groupMembers =
-      groupMembers^.GroupMembersMember ==. val uid
+    directoryGroupReadable uid' directoryGroups groupMembers =
+      groupMembers^.GroupMembersMember ==. val uid'
       &&. directoryGroups^.DirectoryGroupsGroupR ==. val True
 
-    directoryEveryoneReadable uid directory = directory^.DirectoryEveryoneR ==. val True
-
--- lsHeadPrograms :: Int64 -> Int64 -> UserId ->  SqlPersistT m [Entity Directory]
--- lsHeadPrograms lim offs uid  =
---       select $
---       from $ \(program
---                `FullOuterJoin` ownerFlags
---                `FullOuterJoin` everyoneFlags
---                `FullOuterJoin` groupFlags
---                `FullOuterJoin` userGroups )  -> do
---                on (groupFlags^.DirectoryGroupSecurityGroupId ==. userGroups^.GroupMemberGroupId)
---                on (program^.DirectoryId ==. groupFlags^.DirectoryGroupSecurityDirectoryId)
---                on (program^.DirectoryId ==. everyoneFlags^.DirectoryEveryoneSecurityDirectoryId)
---                on (program^.DirectoryId ==. ownerFlags^.DirectoryOwnerSecurityDirectoryId)
-
---                where_ ( programOwnerReadableCond uid program ownerFlags
---                         ||. programGroupReadableCond uid groupFlags userGroups
---                         ||. programEveryoneReadableCond everyoneFlags )
---                limit lim
---                offset offs
---                return program
+    directoryEveryoneReadable _uid' directory = directory^.DirectoryEveryoneR ==. val True
 
 
--- programOwnerReadableCond :: UserId
---                             -> SqlExpr (Entity Directory)
---                             -> SqlExpr (Entity DirectoryOwnerSecurity)
---                             -> SqlExpr (Value Bool)
--- programOwnerReadableCond uid prog ownerFlags = prog^.DirectoryUserId ==. val uid
---                                             &&. ownerFlags^.DirectoryOwnerSecurityR ==. val True
-
--- programGroupReadableCond :: UserId
---                             -> SqlExpr (Entity DirectoryGroupSecurity)
---                             -> SqlExpr (Entity GroupMember)
---                             -> SqlExpr (Value Bool)
--- programGroupReadableCond uid groupFlags userGroups = userGroups^.GroupMemberMember ==. val uid
---                                                      &&. groupFlags^.DirectoryGroupSecurityR ==. val True
-
--- programEveryoneReadableCond :: SqlExpr (Entity DirectoryEveryoneSecurity) -> SqlExpr (Value Bool)
--- programEveryoneReadableCond everyOneFlags = everyOneFlags^.DirectoryEveryoneSecurityR ==. val True
+isDirectoryEmpty :: MonadIO m
+                    => DirectoryId -> SqlPersistT m Bool
+isDirectoryEmpty dir = do
+  files <- select $
+           from $ \file -> do
+             where_ (file^.FileDirectoryId ==. val dir)
+  return $ null files
 
 
--- -------------------------------- lsHeadGoals ---------------------------------
+lsFile :: (MonadIO m )
+      => UserAccountId -> Int64 -> Int64 -> SqlPersistT m (Result [FileId])
 
--- lsHeadGoals :: Int64 -> Int64 -> UserId -> DirectoryId -> SqlPersistT m [Entity File]
--- lsHeadGoals lim offs uid pid = do
---   x <- programExecutable uid pid
---   if x then callSelect else throwM (GoalAccessError "Program goal not listable")
+lsFile uid offs lim = do
+  prv <- isPrivileged uid
+  results <- select $
+             from $ \(file
+                      `LeftOuterJoin`
+                      (fileGroups `InnerJoin` groupMembers )) ->
+                    distinctOn [don (file^.FileId) ] $ do
+                      on (groupMembers^.GroupMembersGroupId ==. fileGroups^.FileGroupsGroupId)
+                      on (fileGroups^.FileGroupsFileId ==. file^.FileId)
+                      where_ ( fileOwnerReadable uid file
+                               ||. fileGroupReadable uid fileGroups groupMembers
+                               ||. fileEveryoneReadable uid file
+                               ||. val prv ==. val True
+                             )
+                      offset offs
+                      limit lim
+                      return (file^.FileId)
+  return (Right $ map unValue results)
+  where
+    fileOwnerReadable uid' file = file^.FileUserId ==. val uid'
+                                 &&. file^.FileOwnerR ==. val True
 
---   where
---     callSelect =
---       select $
---       from $ \(goal
---                `FullOuterJoin` ownerFlags
---                `FullOuterJoin` everyoneFlags
---                `FullOuterJoin` groupFlags
---                `FullOuterJoin` userGroups )  -> do
---                on (groupFlags^.FileGroupSecurityGroupId ==. userGroups^.GroupMemberGroupId)
---                on (goal^.FileId ==. groupFlags^.FileGroupSecurityFileId)
---                on (goal^.FileId ==. everyoneFlags^.FileEveryoneSecurityFileId)
---                on (goal^.FileId ==. ownerFlags^.FileOwnerSecurityFileId)
+    fileGroupReadable uid' fileGroups groupMembers =
+      groupMembers^.GroupMembersMember ==. val uid'
+      &&. fileGroups^.FileGroupsGroupR ==. val True
 
---                where_ ( goalOwnerReadableCond uid goal ownerFlags
---                         ||. goalGroupReadableCond uid groupFlags userGroups
---                         ||. goalEveryoneReadableCond everyoneFlags )
---                limit lim
---                offset offs
---                return goal
+    fileEveryoneReadable _uid' file = file^.FileEveryoneR ==. val True
 
--- goalOwnerReadableCond :: UserId -> SqlExpr (Entity File) -> SqlExpr (Entity FileOwnerSecurity)
---                          -> SqlExpr (Value Bool)
--- goalOwnerReadableCond uid goal ownerFlags = goal^.FileUserId ==. val uid
---                                             &&. ownerFlags^.FileOwnerSecurityR ==. val True
+------------------------------ ReadDirectory  ----------------------------
+readDirectory :: MonadIO m => UserAccountId -> DirectoryId -> SqlPersistT m (Result  Directory)
+readDirectory he dir = do
+  readable <- dir `isDirectoryReadableBy` he
+  if readable
+    then do ps <- get dir
+            case ps of
+              Just d  -> return $ Right d
+              Nothing -> return $ Left $ DirectoryDoesNotExist $ T.concat [T.pack $ show dir ]
+    else return $ Left $ PermissionError $ T.concat [T.pack $ show (he,dir) ]
 
--- goalGroupReadableCond :: UserId -> SqlExpr (Entity FileGroupSecurity) -> SqlExpr (Entity GroupMember)
---                          -> SqlExpr (Value Bool)
--- goalGroupReadableCond uid groupFlags userGroups = userGroups^.GroupMemberMember ==. val uid
---                                                   &&. groupFlags^.FileGroupSecurityR ==. val True
-
--- goalEveryoneReadableCond :: SqlExpr (Entity FileEveryoneSecurity)
---                             -> SqlExpr (Value Bool)
--- goalEveryoneReadableCond everyOneFlags = everyOneFlags^.FileEveryoneSecurityR ==. val True
-
-
--- ---------------------------- FindPrograms ----------------------------
-
--- findPrograms :: UserId
---           ->  (SqlExpr (Entity Directory) -> SqlExpr (Value Bool))
---           ->  SqlQuery ()
---           ->  SqlPersistT m [Entity Directory]
--- findPrograms  uid programFilter query =
---   select $
---   from $ \((program
---             `FullOuterJoin` programOwnerFlags
---             `FullOuterJoin` programEveryoneFlags
---             `FullOuterJoin` programGroupFlags
---             `FullOuterJoin` programUserGroups)
---           )  -> do
---            on (programUserGroups^.GroupMemberGroupId ==. programGroupFlags^.DirectoryGroupSecurityGroupId)
---            on (program^.DirectoryId ==. programGroupFlags^.DirectoryGroupSecurityDirectoryId)
---            on (program^.DirectoryId ==. programEveryoneFlags^.DirectoryEveryoneSecurityDirectoryId)
---            on (program^.DirectoryId ==. programOwnerFlags^.DirectoryOwnerSecurityDirectoryId)
-
---            where_ (( programOwnerReadableCond uid program programOwnerFlags
---                      ||. programGroupReadableCond uid programGroupFlags programUserGroups
---                      ||. programEveryoneReadableCond programEveryoneFlags )
---                    &&. programFilter program )
---            query
---            return (program)
-
--- ---------------------------- FindGoals ----------------------------
+readFile :: MonadIO m => UserAccountId -> FileId -> SqlPersistT m (Result  File)
+readFile he file = do
+  readable <- file `isFileReadableBy` he
+  if readable
+    then do ps <- get file
+            case ps of
+              Just f  -> return $ Right f
+              Nothing -> return $ Left $ FileDoesNotExist $ T.concat [T.pack $ show file ]
+    else return $ Left $ PermissionError $ T.concat [T.pack $ show (he,file) ]
 
 
--- findGoals :: UserId
---           ->  (SqlExpr (Entity Directory) -> SqlExpr (Value Bool))
---           ->  (SqlExpr (Entity File)    -> SqlExpr (Value Bool))
---           ->  SqlQuery ()
---           ->  SqlPersistT m [(Entity Directory, Entity File)]
--- findGoals  uid programFilter goalFilter query =
---   select $
---   from $ \((program
---             `FullOuterJoin` programOwnerFlags
---             `FullOuterJoin` programEveryoneFlags
---             `FullOuterJoin` programGroupFlags
---             `FullOuterJoin` programUserGroups)
---            `InnerJoin`
---            (goal
---             `FullOuterJoin` goalOwnerFlags
---             `FullOuterJoin` goalEveryoneFlags
---             `FullOuterJoin` goalGroupFlags
---             `FullOuterJoin` goalUserGroups
---            ))  -> do
---            on (goalUserGroups^.GroupMemberGroupId ==. goalGroupFlags^.FileGroupSecurityGroupId)
---            on (goal^.FileId ==. goalGroupFlags^.FileGroupSecurityFileId)
---            on (goal^.FileId ==. goalEveryoneFlags^.FileEveryoneSecurityFileId)
---            on (goal^.FileId ==. goalOwnerFlags^.FileOwnerSecurityFileId)
+--------------------------  WriteDirectory  --------------------------
+writeDirectory :: MonadIO m => UserAccountId -> Entity Directory -> SqlPersistT m (Result (Entity Directory))
+writeDirectory he directory@(Entity key v) = do
+  writable <- key `isDirectoryWritableBy` he
+  if writable
+    then repsert key v >> return (Right directory)
+    else return $ Left $ DirectoryDoesNotExist $ T.concat [ T.pack $ show (he,key) ]
 
---            on (goal^.FileDirectoryId ==. program^.DirectoryId)
-
---            on (programUserGroups^.GroupMemberGroupId ==. programGroupFlags^.DirectoryGroupSecurityGroupId)
---            on (program^.DirectoryId ==. programGroupFlags^.DirectoryGroupSecurityDirectoryId)
---            on (program^.DirectoryId ==. programEveryoneFlags^.DirectoryEveryoneSecurityDirectoryId)
---            on (program^.DirectoryId ==. programOwnerFlags^.DirectoryOwnerSecurityDirectoryId)
-
-
---            where_ (( goalOwnerReadableCond uid goal goalOwnerFlags
---                      ||. goalGroupReadableCond uid goalGroupFlags goalUserGroups
---                      ||. goalEveryoneReadableCond goalEveryoneFlags )
---                    &&.
---                    ( programOwnerReadableCond uid program programOwnerFlags
---                      ||. programGroupReadableCond uid programGroupFlags programUserGroups
---                      ||. programEveryoneReadableCond programEveryoneFlags )
---                    &&. programFilter program &&. goalFilter goal )
---            query
---            return (program,goal)
-
-
-
--- ---------------------------- ReadProgram  ----------------------------
-
--- readProgram :: UserId -> DirectoryId -> SqlPersistT m (Maybe (Entity Directory))
--- readProgram uid pid = do
---   readable <- programReadable uid pid
---   if readable
---     then do ps <- select $
---                   from $ \program -> do
---                     where_ (program^.DirectoryId ==. val pid)
---                     return program
---             case ps of
---               [p] -> return (Just p)
---               _   -> throwM $ FileSystemError "impossible error"
---     else return Nothing
-
--- ---------------------------- ReadGoal  ----------------------------
-
--- readGoal :: UserId -> FileId -> SqlPersistT m (Maybe (Entity File))
--- readGoal uid gid = do
---   readable <- goalReadable uid gid
---   if readable
---     then do gs <- select $
---                   from $ \goal -> do
---                     where_ (goal^.FileId ==. val gid)
---                     return goal
---             case gs of
---               [g] -> return (Just g)
---               _   -> throwM $ FileSystemError "impossible error"
---     else return Nothing
-
--- ----------------------------  Write ------------------------------
-
--- writeProgram :: UserId -> Entity Directory -> SqlPersistT m (Maybe (Entity Directory))
--- writeProgram uid prog@(Entity pid (Directory uid' name expl code)) = do
---   writable <- programWritable uid pid
---   if writable
---     then do update $ \p -> do
---               set p [ DirectoryUserId      =. val uid'
---                     , DirectoryName        =. val name
---                     , DirectoryExplanation =. val expl
---                     , DirectoryCode        =. val code
---                     ]
---               where_ (p^.DirectoryId ==. val pid)
---             return (Just prog)
---     else
---     return Nothing
-
-
-
--- writeGoal :: UserId -> Entity File -> SqlPersistT m (Maybe (Entity File))
--- writeGoal uid goal@(Entity gid (File uid' pid name expl code)) = do
---   writable <- goalWritable uid gid
---   if writable
---     then do update $ \p -> do
---               set p [ FileUserId      =. val uid'
---                     , FileDirectoryId   =. val pid
---                     , FileName        =. val name
---                     , FileExplanation =. val expl
---                     , FileCode        =. val code
---                     ]
---               where_ (p^.FileId ==. val gid)
---             return (Just goal)
---     else
---     return Nothing
-
-
--- ------------------------------  Create  ------------------------------
--- createProgram ::  UserId -> Text -> Text -> Text
---                   -> SqlPersistT m (Maybe DirectoryId)
--- createProgram  uid name expl code = do
---   exists <- userExists uid
---   if not exists
---     then return Nothing
---     else do
---     umask <- userUmask uid
---     pid <- insert $ Directory uid name expl code
---            (not (umaskOwnerR umask))
---            (not (umaskOwnerW umask))
---            (not (umaskOwnerX umask))
---            (not (umaskEveryoneR umask))
---            (not (umaskEveryoneW umask))
---            (not (umaskEveryoneX umask))
---     return $ Just pid
-
--- createGoal ::  UserId -> DirectoryId -> Text -> Text -> Text
---            -> SqlPersistT m (Maybe DirectoryId)
--- createGoal  uid pid name expl code = do
---   exists <- userExists uid
---   x      <- programExecutable uid pid
-
---   if not exists || not x
---     then return Nothing
---     else do
---       umask <- userUmask uid
---       pid <- insert $ File uid pid name expl code
---              (not (umaskOwnerR umask))
---              (not (umaskOwnerW umask))
---              (not (umaskOwnerX umask))
---              (not (umaskEveryoneR umask))
---              (not (umaskEveryoneW umask))
---              (not (umaskEveryoneX umask))
---       return $ Just pid
+writeFile :: MonadIO m => UserAccountId -> Entity File -> SqlPersistT m (Result (Entity File))
+writeFile he file@(Entity key v) = do
+  writable <- key `isFileWritableBy` he
+  if writable
+    then repsert key v >> return (Right file)
+    else return $ Left $ FileDoesNotExist $ T.concat [ T.pack $ show (he,key) ]
 
 
 -- ---------------------------- rmdir/unlink ----------------------------
--- rmdirProgram :: UserId -> DirectoryId -> SqlPersistT m (Maybe DirectoryId)
--- rmdirProgram uid pid = do
---   writable <- programWritable uid pid
---   goals    <- lsGoals uid pid
---   if writable && null goals
---     then rm pid
---     else return Nothing
 
---   where
---     rm pid = do delete $
---                   from $ \p -> do
---                     where_ (p^.ProgramGroupsDirectoryId ==. val pid)
---                 delete $
---                   from $ \p -> do
---                     where_ (p^.DirectorysTagsDirectoryId ==. val pid)
---                 delete $
---                   from $ \p -> do
---                     where_ (p^.DirectoryId ==. val pid)
+rmdir :: MonadIO m =>UserAccountId -> DirectoryId -> SqlPersistT m (Result ())
+rmdir he dir = do
+  writable <- dir `isDirectoryWritableBy` he
+  is_empty    <- isDirectoryEmpty dir
+  case (writable , is_empty) of
+    (True,True) ->
+      do delete $
+           from $ \directoryTags -> do
+             where_ (directoryTags^.DirectoryTagsDirectoryId ==. val dir)
 
--- unlinkGoal :: UserId -> FileId -> SqlPersistT m (Maybe FileId)
--- unlinkGoal uid pid = do
---   writable <- programWritable uid pid
---   if writable
---     then unlink' pid
---     else return  Nothing
+         delete $
+           from $ \directoryGroups -> do
+             where_ (directoryGroups^.DirectoryGroupsDirectoryId ==. val dir)
 
---   where
---     unlink' pid = do delete $
---                        from $ \p -> do
---                          where_ (p^.GoalGroupsFileId ==. val pid)
+         delete $
+           from $ \directory -> do
+             where_ (directory^.DirectoryId ==. val dir)
+         return $ Right ()
 
---                      delete $
---                        from $ \p -> do
---                          where_ (p^.FilesTagsFileId ==. val pid)
+    (False , _) ->  return $ Left $ PermissionError $ T.concat [T.pack $ show (he,dir) ]
+    (_  , False) -> return $ Left $ DirectoryNonEmpty $ T.concat [T.pack $ show (he,dir) ]
 
---                      delete $
---                        from $ \p -> do
---                          where_ (p^.FileId ==. val pid)
+unlink :: MonadIO m =>UserAccountId -> FileId -> SqlPersistT m (Result ())
+unlink he file = do
+  writable <- file `isFileWritableBy` he
 
+  case (writable) of
+    (True) ->
+      do delete $
+           from $ \fileTags -> do
+             where_ (fileTags^.FileTagsFileId ==. val file)
 
+         delete $
+           from $ \fileGroups -> do
+             where_ (fileGroups^.FileGroupsFileId ==. val file)
+
+         delete $
+           from $ \file' -> do
+             where_ (file'^.FileId ==. val file)
+         return $ Right ()
+
+    (False) ->  return $ Left $ PermissionError $ T.concat [T.pack $ show (he,file) ]
+
+rm :: MonadIO m =>UserAccountId -> FileId -> SqlPersistT m (Result ())
+rm = unlink
 
 ------------------------------  chown --------------------------------
 
 
 
-chownDirectory :: MonadIO m =>
+_chownDirectory :: MonadIO m =>
                   UserAccountId -> DirectoryId -> [ChownOption] -> SqlPersistT m (Result DirectoryId)
-chownDirectory he it opts = do
+_chownDirectory he it opts = do
   mdir <- get it
   case mdir of
     Just _  -> foldlM (>>>) (Right it) opts
