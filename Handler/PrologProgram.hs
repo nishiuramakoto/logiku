@@ -13,8 +13,10 @@ import             Text.Read(reads)
 import             Data.Time.LocalTime
 import             Language.Prolog2
 import             Database
+import             DBFS
 import             Text.Parsec
 import             Control.Monad.Trans.Maybe
+
 
 -- For testing
 import             Handler.PrologTest

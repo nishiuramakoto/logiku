@@ -27,6 +27,7 @@ module DBFS
        , chmodDirectory
        , chmodFile
 
+       , su
        , useradd
        , usermod
        , userdel
@@ -201,9 +202,9 @@ instance PseudoDirectoryEntity Directory where
   entryAlreadyExistsError (PseudoDirKey key) name = FileAlreadyExists $ T.concat [T.pack $ show key, name]
 
 instance PersistFileEntity Directory where
-  type OwnerGroup Directory = DirectoryGroups
-  makeOwnerGroup = makeDirectoryGroups
-  uniqueOwnerGroup = UniqueDirectoryGroups
+  type OwnerGroup Directory = DirectoryGroup
+  makeOwnerGroup = makeDirectoryGroup
+  uniqueOwnerGroup = UniqueDirectoryGroup
 
   doesNotExistError  key = DirectoryDoesNotExist  (T.pack $ show key)
 --  alreadyExistsError key = DirectoryAlreadyExists (T.pack $ show key)
@@ -212,9 +213,9 @@ instance PersistFileEntity Directory where
   ownerId = directoryUserId
 
 instance PersistFileEntity File where
-  type OwnerGroup File = FileGroups
-  makeOwnerGroup = makeFileGroups
-  uniqueOwnerGroup = UniqueFileGroups
+  type OwnerGroup File = FileGroup
+  makeOwnerGroup = makeFileGroup
+  uniqueOwnerGroup = UniqueFileGroup
 
   doesNotExistError  key = FileDoesNotExist  (T.pack $ show key)
 --  alreadyExistsError key = FileAlreadyExists (T.pack $ show key)
@@ -322,13 +323,26 @@ getDirectoryGroups dir =
      case mu of
        Just _ -> do gs <- select $
                             from $ \directoryGroups -> do
-                              where_ (directoryGroups^.DirectoryGroupsDirectoryId ==. val dir)
+                              where_ (directoryGroups^.DirectoryGroupDirectoryId ==. val dir)
                               return $ directoryGroups
-                    return $ Right (map (directoryGroupsGroupId . entityVal) gs)
+                    return $ Right (map (directoryGroupGroupId . entityVal) gs)
        Nothing -> Left  <$> return (DirectoryDoesNotExist $ T.pack $ show dir)
 ------------------------------ User ------------------------------
 
+su :: MonadIO m => SqlPersistT m (Result UserAccountId)
+su = do roots <- select $
+                 from $ \userAccount -> do
+                   where_ (userAccount^.UserAccountPrivileged ==. val True)
+                   limit 1
+                   return userAccount
 
+        case roots of
+          (Entity root _:_) -> return $ Right root
+          []       -> makeRoot
+  where
+    makeRoot :: MonadIO m => SqlPersistT m (Result UserAccountId)
+    makeRoot = do root <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+                  return $ Right root
 
 useradd :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result UserAccountId)
 useradd he ident = do
@@ -352,7 +366,7 @@ userdel he him = do
 
             delete $
               from $ \groupMembers -> do
-                where_ (groupMembers^.GroupMembersMember ==. val him)
+                where_ (groupMembers^.GroupMemberMember ==. val him)
 
             delete $
               from $ \directory -> do
@@ -384,7 +398,7 @@ usermod he him opts =  foldlM (>>>) (Right him) opts
       own <- he `isGroupOwnerOf`  gid
       if (prv || own)
         then do fmap (const him) <$>
-                  insertDbfs (AlreadyGroupMember $ T.pack $ show him ) (makeGroupMembers gid him)
+                  insertDbfs (AlreadyGroupMember $ T.pack $ show him ) (makeGroupMember gid him)
 
         else return $ Left $ PermissionError $
                   T.concat [ T.pack $  show he , "is neither root nor the group owner" ]
@@ -472,16 +486,16 @@ groupdel he gid = do
   own   <- he `isGroupOwnerOf` gid
   if  prv || own
     then do delete $
-              from $ \directoryGroups -> do
-                where_ (directoryGroups^.DirectoryGroupsGroupId ==. val gid)
+              from $ \directoryGroup -> do
+                where_ (directoryGroup^.DirectoryGroupGroupId ==. val gid)
 
             delete $
-              from $ \fileGroups -> do
-                where_ (fileGroups^.FileGroupsGroupId ==. val gid)
+              from $ \fileGroup -> do
+                where_ (fileGroup^.FileGroupGroupId ==. val gid)
 
             delete $
-              from $ \groupMembers -> do
-                where_ (groupMembers^.GroupMembersGroupId  ==. val gid)
+              from $ \groupMember -> do
+                where_ (groupMember^.GroupMemberGroupId  ==. val gid)
 
             delete $
               from $ \grp -> do
@@ -501,10 +515,10 @@ belongs he = do
   muser <- get he
   case muser of
     Just _ -> do  groups  <- select $
-                                from $ \groupMembers -> do
-                                  where_ (groupMembers^.GroupMembersMember ==. val he)
-                                  return groupMembers
-                  return $ Right $ map (groupMembersGroupId . entityVal)  groups
+                                from $ \groupMember -> do
+                                  where_ (groupMember^.GroupMemberMember ==. val he)
+                                  return groupMember
+                  return $ Right $ map (groupMemberGroupId . entityVal)  groups
 
     Nothing -> return $ Left $ UserDoesNotExist $ T.pack $ show he
 
@@ -528,7 +542,7 @@ _mkdir' he name = do
           case groups of
             Right gs -> do
               forM_  gs $ \g -> do
-                insertDbfs (DuplicateDirectoryGroups (T.pack $ show dir)) $ makeDirectoryGroups dir g umask
+                insertDbfs (DuplicateDirectoryGroups (T.pack $ show dir)) $ makeDirectoryGroup dir g umask
               return $ Right dir
 
             Left err -> return $ Left err
@@ -555,7 +569,7 @@ _touch' he dir name = do
           case groups of
             Right gs -> do
               forM_  gs $  \g ->
-                insertDbfs (DuplicateFileGroups (T.pack $ show file)) (makeFileGroups file g umask)
+                insertDbfs (DuplicateFileGroups (T.pack $ show file)) (makeFileGroup file g umask)
               return $ Right file
             Left err -> return $ Left err
 
@@ -649,16 +663,16 @@ isDirectoryEveryoneAccessibleBy dir _him field = do
   return $ not $ null ds
 
 isDirectoryGroupAccessibleBy :: MonadIO m
-                                => DirectoryId -> UserAccountId -> EntityField DirectoryGroups Bool
+                                => DirectoryId -> UserAccountId -> EntityField DirectoryGroup Bool
                              -> SqlPersistT m Bool
 isDirectoryGroupAccessibleBy dir him field = do
   ds <- select $
-        from $ \(directory `InnerJoin` directoryGroups `InnerJoin` groupMembers) -> do
-          on (groupMembers^.GroupMembersGroupId ==. directoryGroups^.DirectoryGroupsGroupId)
-          on (directoryGroups^.DirectoryGroupsDirectoryId ==. directory^.DirectoryId)
+        from $ \(directory `InnerJoin` directoryGroup `InnerJoin` groupMember) -> do
+          on (groupMember^.GroupMemberGroupId ==. directoryGroup^.DirectoryGroupGroupId)
+          on (directoryGroup^.DirectoryGroupDirectoryId ==. directory^.DirectoryId)
           where_ ( directory^.DirectoryId ==. val dir
-                   &&. directoryGroups^.field ==. val True
-                   &&. groupMembers^.GroupMembersMember ==. val him )
+                   &&. directoryGroup^.field ==. val True
+                   &&. groupMember^.GroupMemberMember ==. val him )
           return directory
   return $ not $ null ds
 
@@ -687,16 +701,16 @@ isFileEveryoneAccessibleBy f _him field = do
   return $ not $ null ds
 
 isFileGroupAccessibleBy :: MonadIO m
-                                => FileId -> UserAccountId -> EntityField FileGroups Bool
+                                => FileId -> UserAccountId -> EntityField FileGroup Bool
                              -> SqlPersistT m Bool
 isFileGroupAccessibleBy f him field = do
   ds <- select $
-        from $ \(file `InnerJoin` fileGroups `InnerJoin` groupMembers) -> do
-          on (groupMembers^.GroupMembersGroupId ==. fileGroups^.FileGroupsGroupId)
-          on (fileGroups^.FileGroupsFileId ==. file^.FileId)
+        from $ \(file `InnerJoin` fileGroup `InnerJoin` groupMember) -> do
+          on (groupMember^.GroupMemberGroupId ==. fileGroup^.FileGroupGroupId)
+          on (fileGroup^.FileGroupFileId ==. file^.FileId)
           where_ ( file^.FileId ==. val f
-                   &&. fileGroups^.field ==. val True
-                   &&. groupMembers^.GroupMembersMember ==. val him )
+                   &&. fileGroup^.field ==. val True
+                   &&. groupMember^.GroupMemberMember ==. val him )
           return file
   return $ not $ null ds
 
@@ -718,15 +732,15 @@ isDirectoryOwnerExecutableBy dir him = dir `isDirectoryOwnerAccessibleBy` him $ 
 
 isDirectoryGroupReadableBy :: MonadIO m
                               =>  DirectoryId -> UserAccountId -> SqlPersistT m Bool
-isDirectoryGroupReadableBy dir him = dir `isDirectoryGroupAccessibleBy` him $ DirectoryGroupsGroupR
+isDirectoryGroupReadableBy dir him = dir `isDirectoryGroupAccessibleBy` him $ DirectoryGroupGroupR
 
 isDirectoryGroupWritableBy :: MonadIO m
                               => DirectoryId -> UserAccountId -> SqlPersistT m Bool
-isDirectoryGroupWritableBy dir him = dir `isDirectoryGroupAccessibleBy` him $ DirectoryGroupsGroupW
+isDirectoryGroupWritableBy dir him = dir `isDirectoryGroupAccessibleBy` him $ DirectoryGroupGroupW
 
 isDirectoryGroupExecutableBy :: MonadIO m
                                 => DirectoryId -> UserAccountId -> SqlPersistT m Bool
-isDirectoryGroupExecutableBy dir him = dir `isDirectoryGroupAccessibleBy` him $  DirectoryGroupsGroupX
+isDirectoryGroupExecutableBy dir him = dir `isDirectoryGroupAccessibleBy` him $  DirectoryGroupGroupX
 
 
 isDirectoryEveryoneReadableBy :: MonadIO m
@@ -781,15 +795,15 @@ isFileOwnerExecutableBy dir him = dir `isFileOwnerAccessibleBy` him $  FileOwner
 
 isFileGroupReadableBy :: MonadIO m
                               =>  FileId -> UserAccountId -> SqlPersistT m Bool
-isFileGroupReadableBy dir him = dir `isFileGroupAccessibleBy` him $ FileGroupsGroupR
+isFileGroupReadableBy dir him = dir `isFileGroupAccessibleBy` him $ FileGroupGroupR
 
 isFileGroupWritableBy :: MonadIO m
                               => FileId -> UserAccountId -> SqlPersistT m Bool
-isFileGroupWritableBy dir him = dir `isFileGroupAccessibleBy` him $ FileGroupsGroupW
+isFileGroupWritableBy dir him = dir `isFileGroupAccessibleBy` him $ FileGroupGroupW
 
 isFileGroupExecutableBy :: MonadIO m
                                 => FileId -> UserAccountId -> SqlPersistT m Bool
-isFileGroupExecutableBy dir him = dir `isFileGroupAccessibleBy` him $  FileGroupsGroupX
+isFileGroupExecutableBy dir him = dir `isFileGroupAccessibleBy` him $  FileGroupGroupX
 
 
 isFileEveryoneReadableBy :: MonadIO m
@@ -838,12 +852,12 @@ lsDirectory uid offs lim = do
   results <- select $
              from $ \(directory
                       `LeftOuterJoin`
-                      (directoryGroups `InnerJoin` groupMembers )) ->
+                      (directoryGroup `InnerJoin` groupMember )) ->
                     distinctOn [don (directory^.DirectoryId) ] $ do
-                      on (groupMembers^.GroupMembersGroupId ==. directoryGroups^.DirectoryGroupsGroupId)
-                      on (directoryGroups^.DirectoryGroupsDirectoryId ==. directory^.DirectoryId)
+                      on (groupMember^.GroupMemberGroupId ==. directoryGroup^.DirectoryGroupGroupId)
+                      on (directoryGroup^.DirectoryGroupDirectoryId ==. directory^.DirectoryId)
                       where_ ( directoryOwnerReadable uid directory
-                               ||. directoryGroupReadable uid directoryGroups groupMembers
+                               ||. directoryGroupReadable uid directoryGroup groupMember
                                ||. directoryEveryoneReadable uid directory
                                ||. val prv ==. val True
                              )
@@ -855,9 +869,9 @@ lsDirectory uid offs lim = do
     directoryOwnerReadable uid' directory = directory^.DirectoryUserId ==. val uid'
                                            &&. directory^.DirectoryOwnerR ==. val True
 
-    directoryGroupReadable uid' directoryGroups groupMembers =
-      groupMembers^.GroupMembersMember ==. val uid'
-      &&. directoryGroups^.DirectoryGroupsGroupR ==. val True
+    directoryGroupReadable uid' directoryGroup groupMember =
+      groupMember^.GroupMemberMember ==. val uid'
+      &&. directoryGroup^.DirectoryGroupGroupR ==. val True
 
     directoryEveryoneReadable _uid' directory = directory^.DirectoryEveryoneR ==. val True
 
@@ -879,12 +893,12 @@ lsFile uid offs lim = do
   results <- select $
              from $ \(file
                       `LeftOuterJoin`
-                      (fileGroups `InnerJoin` groupMembers )) ->
+                      (fileGroup `InnerJoin` groupMember )) ->
                     distinctOn [don (file^.FileId) ] $ do
-                      on (groupMembers^.GroupMembersGroupId ==. fileGroups^.FileGroupsGroupId)
-                      on (fileGroups^.FileGroupsFileId ==. file^.FileId)
+                      on (groupMember^.GroupMemberGroupId ==. fileGroup^.FileGroupGroupId)
+                      on (fileGroup^.FileGroupFileId ==. file^.FileId)
                       where_ ( fileOwnerReadable uid file
-                               ||. fileGroupReadable uid fileGroups groupMembers
+                               ||. fileGroupReadable uid fileGroup groupMember
                                ||. fileEveryoneReadable uid file
                                ||. val prv ==. val True
                              )
@@ -896,9 +910,9 @@ lsFile uid offs lim = do
     fileOwnerReadable uid' file = file^.FileUserId ==. val uid'
                                  &&. file^.FileOwnerR ==. val True
 
-    fileGroupReadable uid' fileGroups groupMembers =
-      groupMembers^.GroupMembersMember ==. val uid'
-      &&. fileGroups^.FileGroupsGroupR ==. val True
+    fileGroupReadable uid' fileGroup groupMember =
+      groupMember^.GroupMemberMember ==. val uid'
+      &&. fileGroup^.FileGroupGroupR ==. val True
 
     fileEveryoneReadable _uid' file = file^.FileEveryoneR ==. val True
 
@@ -949,12 +963,12 @@ rmdir he dir = do
   case (writable , is_empty) of
     (True,True) ->
       do delete $
-           from $ \directoryTags -> do
-             where_ (directoryTags^.DirectoryTagsDirectoryId ==. val dir)
+           from $ \directoryTag -> do
+             where_ (directoryTag^.DirectoryTagDirectoryId ==. val dir)
 
          delete $
-           from $ \directoryGroups -> do
-             where_ (directoryGroups^.DirectoryGroupsDirectoryId ==. val dir)
+           from $ \directoryGroup -> do
+             where_ (directoryGroup^.DirectoryGroupDirectoryId ==. val dir)
 
          delete $
            from $ \directory -> do
@@ -971,12 +985,12 @@ unlink he file = do
   case (writable) of
     (True) ->
       do delete $
-           from $ \fileTags -> do
-             where_ (fileTags^.FileTagsFileId ==. val file)
+           from $ \fileTag -> do
+             where_ (fileTag^.FileTagFileId ==. val file)
 
          delete $
-           from $ \fileGroups -> do
-             where_ (fileGroups^.FileGroupsFileId ==. val file)
+           from $ \fileGroup -> do
+             where_ (fileGroup^.FileGroupFileId ==. val file)
 
          delete $
            from $ \file' -> do
@@ -1029,7 +1043,7 @@ _chownDirectory he it opts = do
                                        (T.concat ["only root or the owner can change the group ownership"])
           (Right umask, Right _ , True ) ->
             fmap (const it) <$>
-            insertDbfs (AlreadyOwner $ T.pack $ show gid) (makeDirectoryGroups it gid umask)
+            insertDbfs (AlreadyOwner $ T.pack $ show gid) (makeDirectoryGroup it gid umask)
 
     (Right _ ) >>> (ChownDelGroup gid) =
       do
@@ -1044,7 +1058,7 @@ _chownDirectory he it opts = do
                                        (T.concat ["only root or the owner can change the group ownership"])
           (Right _, Right _ , True ) ->
             fmap (const it) <$>
-            (deleteByDbfs (NotAnOwner $ T.pack $ show gid) $ UniqueDirectoryGroups it gid)
+            (deleteByDbfs (NotAnOwner $ T.pack $ show gid) $ UniqueDirectoryGroup it gid)
 
 
 
@@ -1151,10 +1165,10 @@ chmodDirectory he dir opts  = do
         ]
 
       Right _ >>> ChmodGroup gid (Perm r w x) = do
-        e <- upsertDbfs (makeDirectoryGroupsWithPerm dir gid (Perm r w x))
-          [ (I.=.) DirectoryGroupsGroupR   r
-          , (I.=.) DirectoryGroupsGroupW   w
-          , (I.=.) DirectoryGroupsGroupX   x
+        e <- upsertDbfs (makeDirectoryGroupWithPerm dir gid (Perm r w x))
+          [ (I.=.) DirectoryGroupGroupR   r
+          , (I.=.) DirectoryGroupGroupW   w
+          , (I.=.) DirectoryGroupGroupX   x
           ]
         return $ fmap (const () ) e
 
@@ -1199,10 +1213,10 @@ chmodFile he file opts  = do
         ]
 
       Right _ >>> ChmodGroup gid (Perm r w x) = do
-        e <- upsertDbfs (makeFileGroupsWithPerm file gid (Perm r w x))
-          [ (I.=.) FileGroupsGroupR   r
-          , (I.=.) FileGroupsGroupW   w
-          , (I.=.) FileGroupsGroupX   x
+        e <- upsertDbfs (makeFileGroupWithPerm file gid (Perm r w x))
+          [ (I.=.) FileGroupGroupR   r
+          , (I.=.) FileGroupGroupW   w
+          , (I.=.) FileGroupGroupX   x
           ]
         return $ fmap (const () ) e
 

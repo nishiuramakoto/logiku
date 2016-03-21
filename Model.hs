@@ -182,56 +182,56 @@ makeGroup name ownerId =
   , groupExplanation = ""
   }
 
-makeGroupMembers :: GroupId -> UserAccountId -> GroupMembers
-makeGroupMembers  gid uid =  GroupMembers gid uid
+makeGroupMember :: GroupId -> UserAccountId -> GroupMember
+makeGroupMember  gid uid =  GroupMember gid uid
 
-makeDirectoryGroups :: DirectoryId -> GroupId -> UMask -> DirectoryGroups
-makeDirectoryGroups dir gid umask =
-  DirectoryGroups
-  { directoryGroupsDirectoryId = dir
-  , directoryGroupsGroupId     = gid
-  , directoryGroupsGroupR      = permissionGroupR directoryDefaultPermission && not (umaskGroupR umask)
-  , directoryGroupsGroupW      = permissionGroupW directoryDefaultPermission && not (umaskGroupW umask)
-  , directoryGroupsGroupX      = permissionGroupX directoryDefaultPermission && not (umaskGroupX umask)
+makeDirectoryGroup :: DirectoryId -> GroupId -> UMask -> DirectoryGroup
+makeDirectoryGroup dir gid umask =
+  DirectoryGroup
+  { directoryGroupDirectoryId = dir
+  , directoryGroupGroupId     = gid
+  , directoryGroupGroupR      = permissionGroupR directoryDefaultPermission && not (umaskGroupR umask)
+  , directoryGroupGroupW      = permissionGroupW directoryDefaultPermission && not (umaskGroupW umask)
+  , directoryGroupGroupX      = permissionGroupX directoryDefaultPermission && not (umaskGroupX umask)
   }
 
-makeDirectoryGroupsWithPerm :: DirectoryId -> GroupId -> Perm -> DirectoryGroups
-makeDirectoryGroupsWithPerm dir gid perm =
-  DirectoryGroups
-  { directoryGroupsDirectoryId = dir
-  , directoryGroupsGroupId     = gid
-  , directoryGroupsGroupR      = permR perm
-  , directoryGroupsGroupW      = permW perm
-  , directoryGroupsGroupX      = permX perm
+makeDirectoryGroupWithPerm :: DirectoryId -> GroupId -> Perm -> DirectoryGroup
+makeDirectoryGroupWithPerm dir gid perm =
+  DirectoryGroup
+  { directoryGroupDirectoryId = dir
+  , directoryGroupGroupId     = gid
+  , directoryGroupGroupR      = permR perm
+  , directoryGroupGroupW      = permW perm
+  , directoryGroupGroupX      = permX perm
   }
 
 
-makeFileGroups :: FileId -> GroupId -> UMask -> FileGroups
-makeFileGroups file gid umask =
-  FileGroups
-  { fileGroupsFileId      = file
-  , fileGroupsGroupId     = gid
-  , fileGroupsGroupR      = permissionGroupR fileDefaultPermission && not (umaskGroupR umask)
-  , fileGroupsGroupW      = permissionGroupW fileDefaultPermission && not (umaskGroupW umask)
-  , fileGroupsGroupX      = permissionGroupX fileDefaultPermission && not (umaskGroupX umask)
+makeFileGroup :: FileId -> GroupId -> UMask -> FileGroup
+makeFileGroup file gid umask =
+  FileGroup
+  { fileGroupFileId      = file
+  , fileGroupGroupId     = gid
+  , fileGroupGroupR      = permissionGroupR fileDefaultPermission && not (umaskGroupR umask)
+  , fileGroupGroupW      = permissionGroupW fileDefaultPermission && not (umaskGroupW umask)
+  , fileGroupGroupX      = permissionGroupX fileDefaultPermission && not (umaskGroupX umask)
   }
 
-makeFileGroupsWithPerm :: FileId -> GroupId -> Perm -> FileGroups
-makeFileGroupsWithPerm file gid perm =
-  FileGroups
-  { fileGroupsFileId      = file
-  , fileGroupsGroupId     = gid
-  , fileGroupsGroupR      = permR perm
-  , fileGroupsGroupW      = permW perm
-  , fileGroupsGroupX      = permX perm
+makeFileGroupWithPerm :: FileId -> GroupId -> Perm -> FileGroup
+makeFileGroupWithPerm file gid perm =
+  FileGroup
+  { fileGroupFileId      = file
+  , fileGroupGroupId     = gid
+  , fileGroupGroupR      = permR perm
+  , fileGroupGroupW      = permW perm
+  , fileGroupGroupX      = permX perm
   }
 
 
 makeTag :: Text -> Tag
 makeTag tag = Tag tag
 
-makeDirectoryTags :: DirectoryId -> TagId -> DirectoryTags
-makeDirectoryTags = DirectoryTags
+makeDirectoryTag :: DirectoryId -> TagId -> DirectoryTag
+makeDirectoryTag = DirectoryTag
 
-makeFileTags :: FileId -> TagId -> FileTags
-makeFileTags = FileTags
+makeFileTag :: FileId -> TagId -> FileTag
+makeFileTag = FileTag
