@@ -234,7 +234,6 @@ spec = withApp $ do
 
 
   it "tests useradd and userdel" $ runDB $ do
-    --root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
     Right root  <- su
     Right user1 <- root `useradd` "user1"
     Right user2 <- root `useradd` "user2"
@@ -408,7 +407,8 @@ spec = withApp $ do
 
   it "creates files with appropriate permissions" $ do
     (root,user1,user2,user3,group1,group2,group3,dir0,dir1,dir2,dir3,file0,file1,file2,file3) <- runDB $ do
-      root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+
+      Right root  <- su
       Right user1 <- root `useradd` "user1"
       Right user2 <- root `useradd` "user2"
       Right user3 <- root `useradd` "user3"
@@ -503,7 +503,7 @@ spec = withApp $ do
 
   it "tests chown" $ do
     (root,user1,user2,user3,group1,group2,group3,dir0,dir1,dir2,dir3) <- runDB $ do
-      root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+      Right root  <- su
       Right user1 <- root `useradd` "user1"
       Right user2 <- root `useradd` "user2"
       Right user3 <- root `useradd` "user3"
@@ -576,7 +576,7 @@ spec = withApp $ do
 
   it "tests umask" $ do
     (root,user1,user2,user3,group1,group2,group3,dir0,dir1,dir2,dir3) <- runDB $ do
-      root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+      Right root  <- su
       Right user1 <- root `useradd` "user1"
       Right user2 <- root `useradd` "user2"
       Right user3 <- root `useradd` "user3"
@@ -621,7 +621,7 @@ spec = withApp $ do
 
   it "creates directories and lists them" $ do
     (root,user1,user2,user3,group1,group2,group3,dir0,dir1,dir2,dir3) <- runDB $ do
-      root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+      Right root  <- su
       Right user1 <- root `useradd` "user1"
       Right user2 <- root `useradd` "user2"
       Right user3 <- root `useradd` "user3"
