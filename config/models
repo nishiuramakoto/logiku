@@ -65,14 +65,14 @@ Group
     UniqueGroup  name
     deriving Show
 
-GroupMembers
+GroupMember
     groupId      GroupId
     member       UserAccountId
 
     UniqueGroupMember groupId member
     deriving Show
 
-DirectoryGroups
+DirectoryGroup
   directoryId   DirectoryId
   groupId       GroupId
 
@@ -80,10 +80,10 @@ DirectoryGroups
   groupW Bool
   groupX Bool
 
-  UniqueDirectoryGroups  directoryId groupId
+  UniqueDirectoryGroup  directoryId groupId
   deriving Show
 
-FileGroups
+FileGroup
   fileId     FileId
   groupId    GroupId
 
@@ -91,7 +91,7 @@ FileGroups
   groupW Bool
   groupX Bool
 
-  UniqueFileGroups fileId groupId
+  UniqueFileGroup fileId groupId
   deriving Show
 
 
@@ -101,16 +101,16 @@ Tag
 	UniqueTag	name
 	deriving Show
 
-DirectoryTags
+DirectoryTag
 	directoryId	DirectoryId
 	tagId		TagId
-	UniqueDirectoryTags directoryId tagId
+	UniqueDirectoryTag directoryId tagId
 	deriving Show
 
-FileTags
+FileTag
 	fileId	FileId
 	tagId	TagId
-	UniqueFileTags fileId tagId
+	UniqueFileTag fileId tagId
         deriving Show
 
 

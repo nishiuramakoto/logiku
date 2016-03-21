@@ -19,7 +19,7 @@ encrypted_bundles= $(bundle).gpg $(subbundle).gpg
 #password="nK\"]q4wA!lx;y:"
 password="2OXOZp&<ld?~-G"
 
-all : challenge-password  cp-to-s3
+backup : challenge-password  cp-to-s3
 
 %.git.gpg : %.git
 	gpg  -c --passphrase $(password)  $^

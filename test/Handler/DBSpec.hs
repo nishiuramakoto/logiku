@@ -99,7 +99,8 @@ setupTestDB1 =
 setupTestDB2 :: YesodExample App ()
 setupTestDB2 =
   runDB $ do
-    root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+    --root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+    Right root  <- su
     Right user1 <- root `useradd` "user1"
     Right user2 <- root `useradd` "user2"
     Right user3 <- root `useradd` "user3"
@@ -156,12 +157,12 @@ dbIsEmpty = do
   [] <- selectAll :: TestDB [Entity Directory]
   [] <- selectAll :: TestDB [Entity File]
   [] <- selectAll :: TestDB [Entity Group]
-  [] <- selectAll :: TestDB [Entity GroupMembers]
-  [] <- selectAll :: TestDB [Entity DirectoryGroups]
-  [] <- selectAll :: TestDB [Entity FileGroups]
+  [] <- selectAll :: TestDB [Entity GroupMember]
+  [] <- selectAll :: TestDB [Entity DirectoryGroup]
+  [] <- selectAll :: TestDB [Entity FileGroup]
   [] <- selectAll :: TestDB [Entity Tag]
-  [] <- selectAll :: TestDB [Entity DirectoryTags]
-  [] <- selectAll :: TestDB [Entity FileTags]
+  [] <- selectAll :: TestDB [Entity DirectoryTag]
+  [] <- selectAll :: TestDB [Entity FileTag]
   return True
 
 
@@ -233,7 +234,8 @@ spec = withApp $ do
 
 
   it "tests useradd and userdel" $ runDB $ do
-    root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+    --root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+    Right root  <- su
     Right user1 <- root `useradd` "user1"
     Right user2 <- root `useradd` "user2"
     Right user3 <- root `useradd` "user3"
@@ -256,7 +258,8 @@ spec = withApp $ do
 
 
   it "tests usermod" $ runDB $ do
-    root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+    -- root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+    Right root  <- su
     Right user1 <- root `useradd` "user1"
     Right user2 <- root `useradd` "user2"
     Right user3 <- root `useradd` "user3"
@@ -269,7 +272,7 @@ spec = withApp $ do
     (getUserDisplayName user1) `shouldReturn` Right (Just "name")
     (getUserDisplayName user2) `shouldReturn` Right Nothing
 
-    groupMembers <- selectAll :: TestDB [Entity GroupMembers]
+    groupMembers <- selectAll :: TestDB [Entity GroupMember]
     length groupMembers `shouldBe` 2
 
     Left (NotAGroupMember _)   <- user1 `usermod` user2 $ [ DelFromGroup group1 , DelFromGroup group1]
@@ -282,7 +285,8 @@ spec = withApp $ do
 
 
   it "tests groupadd and groupdel" $ runDB $ do
-    root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+    -- root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+    Right root  <- su
     Right user1 <- root `useradd` "user1"
     Right user2 <- root `useradd` "user2"
     Right user3 <- root `useradd` "user3"
@@ -296,7 +300,7 @@ spec = withApp $ do
     Right _  <- user2 `usermod` user2 $ [ AddToGroup group2 ]
     Right _  <- user3 `usermod` user3 $ [ AddToGroup group3 ]
 
-    groupMembers <- selectAll :: TestDB [Entity GroupMembers]
+    groupMembers <- selectAll :: TestDB [Entity GroupMember]
     length groupMembers `shouldBe` 4
 
     groups <- selectAll :: TestDB [Entity Group]
@@ -307,12 +311,12 @@ spec = withApp $ do
     groups <- selectAll :: TestDB [Entity Group]
     length groups `shouldBe` 2
 
-    groupMembers <- selectAll :: TestDB [Entity GroupMembers]
+    groupMembers <- selectAll :: TestDB [Entity GroupMember]
     length groupMembers `shouldBe` 2
 
     root `usermod` user3 $ [DelFromGroup group3]
 
-    groupMembers <- selectAll :: TestDB [Entity GroupMembers]
+    groupMembers <- selectAll :: TestDB [Entity GroupMember]
     length groupMembers `shouldBe` 1
 
     root `userdel` user1
@@ -322,11 +326,12 @@ spec = withApp $ do
     groups <- selectAll :: TestDB [Entity Group]
     length groups `shouldBe` 0
 
-    groupMembers <- selectAll :: TestDB [Entity GroupMembers]
+    groupMembers <- selectAll :: TestDB [Entity GroupMember]
     length groupMembers `shouldBe` 0
 
   it "creates directories with appropriate permissions" $ runDB $ do
-    root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+    -- root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
+    Right root  <- su
     Right user1 <- root `useradd` "user1"
     Right user2 <- root `useradd` "user2"
     Right user3 <- root `useradd` "user3"

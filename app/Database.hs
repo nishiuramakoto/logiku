@@ -132,19 +132,19 @@ insertTag (Tag tag) = do
     Just _  -> return Nothing
     Nothing -> Just <$> (runDBtime $ insert $ Tag tag)
 
-insertDirectoryTag :: DirectoryTags -> Handler (Maybe DirectoryTagsId)
-insertDirectoryTag (DirectoryTags progId tagId) = do
-  mTag <- runDBtime $ getBy $ UniqueDirectoryTags progId tagId
+insertDirectoryTag :: DirectoryTag -> Handler (Maybe DirectoryTagId)
+insertDirectoryTag (DirectoryTag progId tagId) = do
+  mTag <- runDBtime $ getBy $ UniqueDirectoryTag progId tagId
   case mTag of
     Just _  -> return Nothing
-    Nothing -> Just <$> (runDBtime $ insert $ DirectoryTags progId tagId)
+    Nothing -> Just <$> (runDBtime $ insert $ DirectoryTag progId tagId)
 
-insertFileTag :: FileTags -> Handler (Maybe FileTagsId)
-insertFileTag (FileTags goalId tagId) = do
-  mTag <- runDBtime $ getBy $ UniqueFileTags goalId tagId
+insertFileTag :: FileTag -> Handler (Maybe FileTagId)
+insertFileTag (FileTag goalId tagId) = do
+  mTag <- runDBtime $ getBy $ UniqueFileTag goalId tagId
   case mTag of
     Just _  -> return Nothing
-    Nothing -> Just <$> (runDBtime $ insert $ FileTags goalId tagId)
+    Nothing -> Just <$> (runDBtime $ insert $ FileTag goalId tagId)
 
 ------------------------  Insert or Replace --------------------------
 
@@ -290,14 +290,14 @@ deleteProgram :: DirectoryId -> Handler ()
 deleteProgram pid = do
   goals <- selectProgramGoals 0 0 pid -- select all goals
   mapM_ ( deleteGoal . entityToId )  goals
-  ts <- runDBtime $ selectList [ DirectoryTagsDirectoryId ==. pid ] []
+  ts <- runDBtime $ selectList [ DirectoryTagDirectoryId ==. pid ] []
   runDBtime $ mapM_ deleteEntity ts
   runDBtime $ delete pid
 
 
 deleteGoal :: FileId -> Handler ()
 deleteGoal gid = do
-  runDBtime $ selectList [ FileTagsFileId ==. gid ] [] >>=  mapM_ deleteEntity
+  runDBtime $ selectList [ FileTagFileId ==. gid ] [] >>=  mapM_ deleteEntity
   runDBtime $ delete gid
 
 
