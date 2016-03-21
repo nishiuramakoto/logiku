@@ -4,14 +4,7 @@
 /favicon.ico FaviconR GET
 /robots.txt  RobotsR GET
 
-/            HomeR GET POST
-
-/comments    CommentR POST
-
-/blog        BlogR GET
-/blog/#Int   BlogContR POST
-
-/01.html     Portfolio01R GET
+/            HomeR GET
 
 /expert/leak_in_bathroom      LeakInBathroomR     GET
 /expert/leak_in_bathroom/#Int LeakInBathroomContR POST
@@ -35,3 +28,12 @@
 /prolog/delete-goals            DeleteGoalR  POST
 /prolog/syntax-check            SyntaxCheckR POST
 /prolog/ajax-test               AjaxTestR    POST
+
+
+-- Lovely old home.. Now I have to go
+
+/old         OldHomeR GET POST
+/comments    CommentR POST
+
+/blog        BlogR GET
+/blog/#Int   BlogContR POST

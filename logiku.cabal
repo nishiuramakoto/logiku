@@ -22,7 +22,7 @@ library
                      Settings
                      Settings.StaticFiles
                      Handler.Common
-                     Handler.Home
+                     Handler.OldHome
                      Handler.Comment
                      -- My additions
                      Control.Monad.CC.CCCxe
@@ -31,7 +31,7 @@ library
                      Database
                      DBFS
                      Authentication
-                     Handler.Portfolio
+                     Handler.Home
                      Handler.Blog
                      Handler.Base
                      Handler.PrologTest
@@ -181,6 +181,9 @@ test-suite test
                 ViewPatterns
                 TupleSections
 
+    other-modules: TestImport
+                   Handler.DBSpec
+
     build-depends: base
                  , logiku
                  , yesod-test >= 1.5.0.1 && < 1.6
@@ -205,7 +208,7 @@ test-suite test
                  , containers >=0.5.6.2
                  , wai >= 3.2.0
                  , hspec-core >= 2.2.2
-                 , QuickCheck >= 2.8.2
+                 , QuickCheck >= 2.8.1
 -- library
 --         hs-source-dirs: CC-delcont-cxe-0.1.0.2
 --         exposed-modules:Control.Monad.CC.CCCxe

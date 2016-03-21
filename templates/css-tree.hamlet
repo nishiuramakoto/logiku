@@ -1,5 +1,5 @@
 
-<a href="@{Portfolio01R}"> トップ
+<a href="@{HomeR}"> ホーム
 
 <ol class="categoryTree">
     <li>

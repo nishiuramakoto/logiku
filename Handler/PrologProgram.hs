@@ -108,7 +108,7 @@ getPrologProgramImplR  = do
     Just uid ->  run $ ccMain uid
     Nothing  ->  do
       setMessage $ toHtml ("Login first" :: Text)
-      redirect Portfolio01R
+      redirect HomeR
 
 postPrologProgramContR  :: Int -> Handler Html
 postPrologProgramContR klabel = do
@@ -294,7 +294,7 @@ inquireParseSuccess name code = do
 
 ------------------------------  finish  ------------------------------
 directoryFinishHtml :: CC (PS Html) Handler Html
-directoryFinishHtml = lift $ redirect Portfolio01R
+directoryFinishHtml = lift $ redirect HomeR
 
 
 ------------------------  Application logic  ------------------------

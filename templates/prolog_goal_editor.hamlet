@@ -51,4 +51,4 @@
 
 <footer class="articleDetailFoot">
     <aside class="creditUnit">
-        <a href="@{Portfolio01R}"> トップ
+        <a href="@{HomeR}"> ホーム

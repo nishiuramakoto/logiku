@@ -1,46 +1,131 @@
 module Handler.Home where
 
-import Import
-import Yesod.Form.Bootstrap3 (BootstrapFormLayout (..), renderBootstrap3,
-                              withSmallInput)
-import Text.Julius (RawJS (..))
+import  Import
+import  Control.Monad.CC.CCCxe
+import  ContMap
+import  LogicT.SRReifT
 
--- This is a handler function for the GET request method on the HomeR
--- resource pattern. All of your resource patterns are defined in
--- config/routes
---
--- The majority of the code you will write in Yesod lives in these handler
--- functions. You can spread them across multiple files if you are so
--- inclined, or create a single monolithic file.
+
 getHomeR :: Handler Html
 getHomeR = do
-    (formWidget, formEnctype) <- generateFormPost sampleForm
-    let submission = Nothing :: Maybe (FileInfo, Text)
-        handlerName = "getHomeR" :: Text
-    defaultLayout $ do
-        let (commentFormId, commentTextareaId, commentListId) = commentIds
-        aDomId <- newIdent
-        setTitle "Welcome To Yesod!"
-        $(widgetFile "homepage")
 
-postHomeR :: Handler Html
-postHomeR = do
-    ((result, formWidget), formEnctype) <- runFormPost sampleForm
-    let handlerName = "postHomeR" :: Text
-        submission = case result of
-            FormSuccess res -> Just res
-            _ -> Nothing
+  defaultLayout $ do
+    addStylesheet $ StaticR  css_normalize_css
+    setTitle "ホーム"
+    toWidget $(widgetFile "home")
 
-    defaultLayout $ do
-        let (commentFormId, commentTextareaId, commentListId) = commentIds
-        aDomId <- newIdent
-        setTitle "Welcome To Yesod!"
-        $(widgetFile "homepage")
+getLeakInBathroomR :: Handler Html
+getLeakInBathroomR = run leak_in_bathroom'
 
-sampleForm :: Form (FileInfo, Text)
-sampleForm = renderBootstrap3 BootstrapBasicForm $ (,)
-    <$> fileAFormReq "Choose a file"
-    <*> areq textField (withSmallInput "What's on the file?") Nothing
+postLeakInBathroomContR  :: Int -> Handler Html
+postLeakInBathroomContR klabel = defaultResume klabel
 
-commentIds :: (Text, Text, Text)
-commentIds = ("js-commentForm", "js-createCommentTextarea", "js-commentList")
+defaultResume  :: Int -> Handler Html
+defaultResume klabel = do
+  cont_html <- defaultLayout [whamlet|Continue|]
+  not_found_html <- defaultLayout [whamlet|Not Found|]
+  resume klabel cont_html not_found_html
+
+
+leak_in_bathroom' :: CC (PS Html) Handler Html
+leak_in_bathroom' = do
+  b <- observe leak_in_bathroom
+  lift $ defaultLayout $ toWidget $
+    if b
+    then  $(widgetFile "leak-in-bathroom-yes")
+    else  $(widgetFile "leak-in-bathroom-no")
+
+
+getLeakInKitchenR :: Handler Html
+getLeakInKitchenR = run leak_in_kitchen'
+
+postLeakInKitchenContR  :: Int -> Handler Html
+postLeakInKitchenContR klabel = do
+  cont_html <- defaultLayout [whamlet|Continue|]
+  not_found_html <- defaultLayout [whamlet|Not Found|]
+  resume klabel cont_html not_found_html
+
+leak_in_kitchen' :: CC (PS Html) Handler Html
+leak_in_kitchen' = do
+  b <- observe leak_in_kitchen
+  lift $ defaultLayout $ toWidget $
+    if b
+    then  $(widgetFile "leak-in-kitchen-yes")
+    else  $(widgetFile "leak-in-kitchen-no")
+
+
+------------------------------  Domain Logic --------------------------------
+type Logic a = SG (CC (PS Html) Handler) a
+leak_in_bathroom :: Logic Bool
+leak_in_bathroom = do
+  (hall_wet >>  kitchen_dry) `mplus` return False
+
+problem_in_kitchen :: Logic Bool
+problem_in_kitchen = do
+  (hall_wet >>  bathroom_dry ) `mplus` return False
+
+no_water_from_outside :: Logic Bool
+no_water_from_outside = do
+  window_closed `mplus` no_rain `mplus` return False
+
+leak_in_kitchen :: Logic Bool
+leak_in_kitchen = do
+  (problem_in_kitchen >>  no_water_from_outside) `mplus` return False
+-------------------------- Data marshalling --------------------------
+data BoolForm = BoolForm
+                   { bool :: Bool
+                   } deriving Show
+boolWidget :: ContId -> Widget -> Enctype -> Widget
+boolWidget klabel bool_widget enctype = $(widgetFile "bool")
+
+boolForm :: Html -> MForm Handler (FormResult BoolForm, Widget)
+boolForm = renderDivs $ BoolForm
+              <$> areq boolField "Yes or no:" Nothing
+
+boolHtml :: Text -> Logic (ContId, Html)
+boolHtml query_string = do
+  (klabel, widget, enctype) <- lift $ lift $ generateCcFormPost $ boolForm
+  html <- lift $ lift $ defaultLayout $ [whamlet|#{query_string}|] >> boolWidget klabel widget enctype
+  return (klabel, html)
+
+inquireBool :: Text -> Logic (ContId, BoolForm)
+inquireBool query_string = do
+  (klabel, html) <- boolHtml query_string
+  bool <- lift $ inquirePostUntil klabel html boolForm
+  return (klabel, bool)
+----------------------------------------------------------------------
+
+hall_wet :: Logic Bool
+hall_wet = do
+  (_klabel, BoolForm bool ) <- inquireBool "hall wet?"
+  if bool
+    then return True
+    else mzero
+
+kitchen_dry :: Logic Bool
+kitchen_dry = do
+  (_klabel, BoolForm  bool) <- inquireBool "kitchen dry?"
+  if bool
+    then return True
+    else mzero
+
+bathroom_dry :: Logic Bool
+bathroom_dry = do
+  (_klabel, BoolForm bool) <- inquireBool "bathroom dry?"
+  if bool
+    then return True
+    else mzero
+
+window_closed :: Logic Bool
+window_closed = do
+  (_klabel, BoolForm bool) <- inquireBool "window closed?"
+  if bool
+    then return True
+    else mzero
+
+no_rain :: Logic Bool
+no_rain = do
+  (_klabel, BoolForm bool) <- inquireBool "no rain?"
+  if bool
+    then return True
+    else mzero
