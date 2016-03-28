@@ -2,7 +2,7 @@
 <header id="pageHead">
     <small id="statusBar">
         <div id="siteInfo">
-            Logiku
+            BitBotBed
         <div id="userInfo">
             <form id="userInfoForm" class="iconr2" method=get action="@{HomeR}">
                 <ul>
@@ -13,9 +13,7 @@
                             <a id="logout" href="@{AuthR LogoutR}"> ログアウト
                     $nothing
                         <li>
-                            <a id="login" href="@{AuthR LoginR}"> ログイン
-                    <li>
-                        <a id="signup"> 新規
+                            <a id="login" href="@{AuthR LoginR}"> ログイン/新規
                     <li>
                         <input id="searchBox" placeholder="検索" type=text>
 

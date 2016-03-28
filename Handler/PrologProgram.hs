@@ -21,6 +21,14 @@ import             Control.Monad.Trans.Maybe
 -- For testing
 import             Handler.PrologTest
 -------------------------- Helper functions --------------------------
+
+
+
+
+
+
+
+
 type ProgramError = Either RuntimeError ParseError
 
 entityToVal :: Entity t -> t
@@ -54,13 +62,14 @@ programOK text =  case programCheck text of
   Right _    -> True
 
 
-maybeUserId :: Handler (Maybe UserAccountId)
-maybeUserId = do
+maybeUserId' :: Handler (Maybe UserAccountId)
+maybeUserId' = do
   muident <- maybeUserIdent
   -- muident <- selectFirstUserIdent
   $(logInfo) $ T.pack $ "muident" ++ show muident
+  created <- liftIO $ getCurrentTime
   case muident of
-    Just ident -> do Entity uid _ <- runDB $ upsert (makeUserAccount ident) ([] :: [Update UserAccount])
+    Just ident -> do Entity uid _ <- runDB $ upsert (makeUserAccount ident created ) ([] :: [Update UserAccount])
                      return $ Just uid
     Nothing    -> return Nothing
 

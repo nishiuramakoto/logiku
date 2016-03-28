@@ -1,89 +1,16 @@
-@import url(https://fonts.googleapis.com/css?family=Schoolbell);
-
-@font-face {
-  font-family: 'Schoolbell';
-  font-style: normal;
-  font-weight: 400;
-  src: local('Schoolbell'), url(https://fonts.gstatic.com/s/schoolbell/v6/BSqn7FernLolrt-MFco9Wi3USBnSvpkopQaUR-2r7iU.ttf) format('truetype');
-}
-
-// @font-face {
-//   font-family: 'Lora';
-//   font-style: normal;
-//   font-weight: 400;
-//   src: local('Lora'), local('Lora-Regular'), url(https://fonts.gstatic.com/s/lora/v9/4A-myfZX6oDr9CtSTkTGig.ttf) format('truetype');
-// }
+@import url(http://fonts.googleapis.com/css?family=Antic+Didone);
 
 body { color: #333333; }
 
-	    /* ページ */
-#pageHead {
-    width: 980px;
-    height: 20px;
-    margin: 0 auto;
-}
+/*ページ*/
 #page {
 	width: 980px;
 	margin: 0 auto;
 }
 
-/* Status Bar  */
-#pageHead #statusBar {
-    font-size: 1.0em;
-    line-height: 1.5;
-    margin-bottom: 1em;
-}
-
-#pageHead #statusBar #siteInfo {
-	width: 550px;
-	float: left;
-	font-family: 'Schoolbell', serif ;
-	font-size: 5em;
-/*	font-family: 'Antic Didone', serif;
-	color: #CCCCCC;
-	background-color: #000000;
-*/
-}
-
-#pageHead #statusBar #userInfo #userInfoForm {
-    margin : 0;
-    padding: 0;
-}
-
-#pageHead #statusBar #userInfo #userInfoForm ul{
-    list-style-type: none;
-    margin: 0;
-    padding: 0;
-}
-
-#pageHead #statusBar #userInfo #userInfoForm ul li{
-    float: left;
-}
-
-#pageHead #statusBar #userInfo #userInfoForm ul li a{
-    display: block;
-    padding-left: 10px;
-    padding-right: 10px;
-    padding-top : 5px;
-//    background-color: #dddddd;
-}
-
-
-/* Message */
-#message {
-    clear:both;
-    color: red;
-}
-
-/* Debug info */
-#debug {
-    display:none;
-}
-
-
 /* ページヘッダー */
 #pageHead #siteTitle {
-	font-size: 1em;
+	font-size: 30px;
 	line-height: 1.2;
 	margin-bottom: 0;
 	font-family: 'Antic Didone', serif;
@@ -221,7 +148,7 @@ body { color: #333333; }
 
 /* 見出し */
 #pageBodyMain .pageTitle {
-	font-size: 1em;
+	font-size: 26px;
 	background-color: #F2F2E5;
 	padding: 5px 15px;
 	line-height: 1.231;
@@ -271,4 +198,16 @@ body { color: #333333; }
 #pageBodyMain .creditUnit p {
 	font-size: 12px;
 	line-height: 1.5;
+}
+
+
+/* Command List */
+
+.articleDetailBody .commandItemHeader .commandItemName {
+    text-align: left;
+}
+
+.articleDetailBody .commandItemHeader .commandItemTime {
+    text-align: right;
+    font-size: 0.8em;
 }

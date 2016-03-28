@@ -19,11 +19,9 @@
                 <a href="">雇用保険
             <li class="file">
                 <a href="">労災
-            <li class="file">
-                <a href="test.html">test.html
     <li>
         <label for="roudou">生活
-        <input type="checkbox"  id="subfolder2">
+        <input type="checkbox"  checked id="subfolder3">
         <ol>
             <li class="file">
                 <a href="">掃除
