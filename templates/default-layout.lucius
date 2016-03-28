@@ -7,12 +7,6 @@
   src: local('Schoolbell'), url(https://fonts.gstatic.com/s/schoolbell/v6/BSqn7FernLolrt-MFco9Wi3USBnSvpkopQaUR-2r7iU.ttf) format('truetype');
 }
 
-// @font-face {
-//   font-family: 'Lora';
-//   font-style: normal;
-//   font-weight: 400;
-//   src: local('Lora'), local('Lora-Regular'), url(https://fonts.gstatic.com/s/lora/v9/4A-myfZX6oDr9CtSTkTGig.ttf) format('truetype');
-// }
 
 body { color: #333333; }
 
