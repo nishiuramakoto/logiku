@@ -1,0 +1,23 @@
+
+<article class="articleDetail">
+    <header class="articleDetailHead">
+        <nav class="globalNavi">
+            <ul>
+                <li>
+                    <a href="@{HomeR}">    コマンド
+                <li>
+                    <a href="@{HomeBotR}"> ボット
+
+    <section class="articleDetailBody">
+        <ul>
+            $forall file <- files
+                <li>
+                    <header  class="commandItemHeader">
+                        <div class="commandItemName">
+                            #{publicFileName file}
+                        <div class="commandItemTime">
+                            #{showTime tz $ publicFileCreated file}
+
+<footer class="articleDetailFoot">
+    <aside class="creditUnit">
+        補足

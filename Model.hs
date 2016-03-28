@@ -53,6 +53,52 @@ data Permission = Permission
        } deriving (Eq,Show)
 
 
+data PublicUserAccount = PublicUserAccount
+                         { publicUserAccountIdent       :: Text
+                         , publicUserAccountDisplayName :: Maybe Text
+                         , publicUserAccountCreated     :: UTCTime
+                         } deriving (Eq,Show)
+
+data PublicDirectory = PublicDirectory
+                       { publicDirectoryUserId    :: UserAccountId
+                       , publicDirectoryName      :: Text
+                       , publicDirectoryCreated   :: UTCTime
+                       } deriving (Eq,Show)
+
+data PublicFile      = PublicFile
+                       { publicFileUserId        :: UserAccountId
+                       , publicFileDirectoryId   :: DirectoryId
+                       , publicFileName          :: Text
+                       , publicFileCreated       :: UTCTime
+                       } deriving (Eq,Show)
+
+
+makePublicUserAccount :: UserAccount -> PublicUserAccount
+makePublicUserAccount _user@UserAccount { userAccountIdent = ident
+                                        , userAccountDisplayName = displayName
+                                        , userAccountCreated = created
+                                        } =
+  PublicUserAccount ident displayName created
+
+makePublicDirectory :: Directory -> PublicDirectory
+makePublicDirectory _dir@Directory { directoryUserId = uid
+                                   , directoryName   = name
+                                   , directoryCreated = created
+                                   } =
+  PublicDirectory uid name created
+
+makePublicFile :: File -> PublicFile
+makePublicFile _file@File { fileUserId = uid
+                          , fileDirectoryId = dir
+                          , fileName   = name
+                          , fileCreated = created
+                          } =
+  PublicFile uid dir name created
+
+
+
+
+
 -- not 666, since we file = goal and we want them to be executable by default
 fileDefaultPermission :: Permission
 fileDefaultPermission = Permission
@@ -81,13 +127,14 @@ directoryDefaultPermission = Permission
                              }
 
 
-makeUserAccount :: Text -> UserAccount
-makeUserAccount ident  =
+makeUserAccount :: Text -> UTCTime -> UserAccount
+makeUserAccount ident created =
   UserAccount
   { userAccountIdent = ident
   , userAccountPrivileged = False
   , userAccountPassword = Nothing
   , userAccountDisplayName = Nothing
+  , userAccountCreated     = created
                              -- Default umask=022
   , userAccountUmaskOwnerR = False
   , userAccountUmaskOwnerW = False
@@ -101,13 +148,14 @@ makeUserAccount ident  =
   }
 
 
-makeUserAccountWithUmask :: Text -> UMask -> UserAccount
-makeUserAccountWithUmask ident umask  =
+makeUserAccountWithUmask :: Text -> UTCTime -> UMask -> UserAccount
+makeUserAccountWithUmask ident created umask  =
   UserAccount
   { userAccountIdent = ident
   , userAccountPrivileged = False
   , userAccountPassword = Nothing
   , userAccountDisplayName = Nothing
+  , userAccountCreated     = created
                              -- Default umask=022
   , userAccountUmaskOwnerR = umaskOwnerR umask
   , userAccountUmaskOwnerW = umaskOwnerW umask
@@ -136,13 +184,14 @@ umaskFromUserAccount user = UMask
 
 
 
-makeDirectory :: UserAccountId -> Text -> UMask -> Directory
-makeDirectory uid name umask =
+makeDirectory :: UserAccountId -> Text -> UTCTime -> UMask -> Directory
+makeDirectory uid name created umask =
   Directory
   { directoryUserId = uid
   , directoryName   = name
   , directoryCode   = ""
   , directoryExplanation = ""
+  , directoryCreated  = created
 
   , directoryOwnerR    = permissionOwnerR directoryDefaultPermission && not (umaskOwnerR umask)
   , directoryOwnerW    = permissionOwnerW directoryDefaultPermission && not (umaskOwnerW umask)
@@ -156,14 +205,15 @@ makeDirectory uid name umask =
 
 
 
-makeFile :: UserAccountId -> DirectoryId -> Text -> UMask -> File
-makeFile uid dir name umask =
+makeFile :: UserAccountId -> DirectoryId -> Text -> UTCTime -> UMask -> File
+makeFile uid dir name created umask =
   File
   { fileUserId = uid
   , fileDirectoryId = dir
   , fileName   = name
   , fileCode   = ""
   , fileExplanation = ""
+  , fileCreated  = created
 
   , fileOwnerR    = permissionOwnerR fileDefaultPermission && not (umaskOwnerR umask)
   , fileOwnerW    = permissionOwnerW fileDefaultPermission && not (umaskOwnerW umask)
@@ -174,64 +224,73 @@ makeFile uid dir name umask =
   }
 
 
-makeGroup :: Text -> UserAccountId -> Group
-makeGroup name ownerId =
+makeGroup :: Text -> UserAccountId -> UTCTime -> Group
+makeGroup name  ownerId created =
   Group
   { groupName  = name
   , groupOwner = ownerId
+  , groupCreated = created
   , groupExplanation = ""
   }
 
-makeGroupMember :: GroupId -> UserAccountId -> GroupMember
-makeGroupMember  gid uid =  GroupMember gid uid
+makeGroupMember :: GroupId -> UserAccountId -> UTCTime -> GroupMember
+makeGroupMember  gid uid created =  GroupMember gid uid created
 
-makeDirectoryGroup :: DirectoryId -> GroupId -> UMask -> DirectoryGroup
-makeDirectoryGroup dir gid umask =
+makeDirectoryGroup :: DirectoryId -> GroupId -> UTCTime -> UMask -> DirectoryGroup
+makeDirectoryGroup dir gid created umask =
   DirectoryGroup
   { directoryGroupDirectoryId = dir
   , directoryGroupGroupId     = gid
+  , directoryGroupCreated     = created
+
   , directoryGroupGroupR      = permissionGroupR directoryDefaultPermission && not (umaskGroupR umask)
   , directoryGroupGroupW      = permissionGroupW directoryDefaultPermission && not (umaskGroupW umask)
   , directoryGroupGroupX      = permissionGroupX directoryDefaultPermission && not (umaskGroupX umask)
   }
 
-makeDirectoryGroupWithPerm :: DirectoryId -> GroupId -> Perm -> DirectoryGroup
-makeDirectoryGroupWithPerm dir gid perm =
+makeDirectoryGroupWithPerm :: DirectoryId -> GroupId -> UTCTime -> Perm -> DirectoryGroup
+makeDirectoryGroupWithPerm dir gid created perm =
   DirectoryGroup
   { directoryGroupDirectoryId = dir
   , directoryGroupGroupId     = gid
+  , directoryGroupCreated     = created
+
   , directoryGroupGroupR      = permR perm
   , directoryGroupGroupW      = permW perm
   , directoryGroupGroupX      = permX perm
   }
 
 
-makeFileGroup :: FileId -> GroupId -> UMask -> FileGroup
-makeFileGroup file gid umask =
+makeFileGroup :: FileId -> GroupId -> UTCTime -> UMask -> FileGroup
+makeFileGroup file gid created umask =
   FileGroup
   { fileGroupFileId      = file
   , fileGroupGroupId     = gid
+  , fileGroupCreated     = created
+
   , fileGroupGroupR      = permissionGroupR fileDefaultPermission && not (umaskGroupR umask)
   , fileGroupGroupW      = permissionGroupW fileDefaultPermission && not (umaskGroupW umask)
   , fileGroupGroupX      = permissionGroupX fileDefaultPermission && not (umaskGroupX umask)
   }
 
-makeFileGroupWithPerm :: FileId -> GroupId -> Perm -> FileGroup
-makeFileGroupWithPerm file gid perm =
+makeFileGroupWithPerm :: FileId -> GroupId -> UTCTime -> Perm -> FileGroup
+makeFileGroupWithPerm file gid created perm =
   FileGroup
   { fileGroupFileId      = file
   , fileGroupGroupId     = gid
+  , fileGroupCreated     = created
+
   , fileGroupGroupR      = permR perm
   , fileGroupGroupW      = permW perm
   , fileGroupGroupX      = permX perm
   }
 
 
-makeTag :: Text -> Tag
-makeTag tag = Tag tag
+makeTag :: Text -> UTCTime -> Tag
+makeTag tag created = Tag tag created
 
-makeDirectoryTag :: DirectoryId -> TagId -> DirectoryTag
+makeDirectoryTag :: DirectoryId -> TagId -> UTCTime -> DirectoryTag
 makeDirectoryTag = DirectoryTag
 
-makeFileTag :: FileId -> TagId -> FileTag
+makeFileTag :: FileId -> TagId -> UTCTime -> FileTag
 makeFileTag = FileTag

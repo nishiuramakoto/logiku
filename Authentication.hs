@@ -7,9 +7,7 @@ module Authentication(
   )  where
 
 import Import.NoFoundation
-
--- import Data.Text(Text)
--- import qualified Data.Text as T
+import DBFS
 -- import           Yesod.Auth.BrowserId
 import           Yesod.Auth.GoogleEmail2
 
@@ -64,6 +62,8 @@ maybeDisplayNameGoogle = do
 
 maybeUserIdent :: MonadHandler m => m (Maybe Text)
 maybeUserIdent = lookupSession "credsIdent"
+
+
 
 --  cacheSession userIdentString maybeUserIdentGoogle
 

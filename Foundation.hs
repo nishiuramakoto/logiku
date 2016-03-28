@@ -20,7 +20,7 @@ import qualified Data.Text as T
 import Authentication
 import ContMap
 import SideMenu
-
+import DBFS
 
 
 --------------------------------------------------------------------------
@@ -124,22 +124,14 @@ instance Yesod App where
 
     errorHandler = myErrorHandler
     defaultLayout widget = do
-      -- ZonedTime localTime zone  <- liftIO getZonedTime
-      -- $(logInfo) $ T.concat [ "1:" , T.pack $ show localTime ]
-
       master <- getYesod
       mmsg <- getMessage
-
-      -- ZonedTime localTime zone  <- liftIO getZonedTime
-      -- $(logInfo) $ T.concat [ "2:" , T.pack $ show localTime ]
 
       mName <- maybeUserIdent
       sess  <- getSession
       let categoryTree =  $(widgetFile "css-tree")
         -- let categoryTree = [whamlet|tree|]
 
-      -- ZonedTime localTime zone  <- liftIO getZonedTime
-      -- $(logInfo) $ T.concat [ "3:" , T.pack $ show localTime ]
 
         -- We break up the default layout into two components:
         -- default-layout is the contents of the body tag, and
@@ -151,9 +143,6 @@ instance Yesod App where
         addStylesheet $ StaticR css_bootstrap_css
         addStylesheet $ StaticR css_searchbox_css
         $(widgetFile "default-layout")
-
-      -- ZonedTime localTime zone  <- liftIO getZonedTime
-      -- $(logInfo) $ T.concat [ "4:" , T.pack $ show localTime ]
 
       withUrlRenderer $(hamletFile "templates/default-layout-wrapper.hamlet")
 
@@ -217,11 +206,13 @@ instance YesodAuth App where
 
     authenticate creds = runDB $ do
         x <- getBy $ UniqueUserAccount $ credsIdent creds
+        time <- liftIO $ getCurrentTime
+
         $(logInfo) $  T.concat [ "credsIdent" , (T.pack (show (credsIdent creds)))]
         setSession "credsIdent" (credsIdent creds)
         case x of
             Just (Entity uid _) -> return $ Authenticated uid
-            Nothing -> Authenticated <$> insert (makeUserAccount (credsIdent creds))
+            Nothing -> Authenticated <$> insert (makeUserAccount (credsIdent creds) time )
 
     -- You can add other plugins like BrowserID, email or OAuth here
     authPlugins _ = [ authBrowserId def
@@ -268,6 +259,31 @@ instance YesodCC App where
   getCcPool = appContMap
 
 
---------------------------  Authorization ----------------------------
+-- Authorization/Authentication(Should be moved to Authentication.hs) --
+
+
 myIsAuthorized :: Route App -> Bool -> HandlerT App IO  AuthResult
 myIsAuthorized _route _isWrite = return Authorized
+
+
+maybeUserId :: Handler (Maybe UserAccountId)
+maybeUserId = do
+  root <- runDB $ su
+  muident <- maybeUserIdent
+  case muident of
+    Just ident -> do euser <- runDB $ getUser ident
+                     case euser of
+                       Right uid -> return $ Just uid
+                       Left  _   -> do euser' <- runDB $ root `useradd` ident
+                                       case euser' of
+                                         Right user' -> return $ Just user'
+                                         Left  _     -> return $ Nothing
+
+    Nothing   -> Just <$> (runDB $ suGuest)
+
+getCurrentUser :: Handler UserAccountId
+getCurrentUser = do
+  muid <- maybeUserId
+  case muid of
+    Just uid -> return uid
+    Nothing  -> runDB $ suGuest

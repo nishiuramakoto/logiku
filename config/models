@@ -1,4 +1,5 @@
 ------------------ Prolog Program Database Schema -------------------------------
+-- TODO: Add modification times
 
 -- 'user' is a reserved name in postgres...
 UserAccount
@@ -6,6 +7,7 @@ UserAccount
     privileged  Bool
     password    Text Maybe
     displayName Text Maybe
+    created     UTCTime default=CURRENT_TIMESTAMP
 
     umaskOwnerR    Bool
     umaskOwnerW    Bool
@@ -26,6 +28,8 @@ Directory json
       name          Text
       code          Text
       explanation   Text
+      created       UTCTime default=CURRENT_TIMESTAMP
+
 
       ownerR    Bool
       ownerW    Bool
@@ -43,6 +47,7 @@ File
       name            Text
       code            Text
       explanation     Text
+      created         UTCTime default=CURRENT_TIMESTAMP
 
       ownerR    Bool
       ownerW    Bool
@@ -61,6 +66,7 @@ Group
     name         Text
     owner        UserAccountId
     explanation  Text
+    created      UTCTime default=CURRENT_TIMESTAMP
 
     UniqueGroup  name
     deriving Show
@@ -68,6 +74,7 @@ Group
 GroupMember
     groupId      GroupId
     member       UserAccountId
+    created      UTCTime default=CURRENT_TIMESTAMP
 
     UniqueGroupMember groupId member
     deriving Show
@@ -75,6 +82,7 @@ GroupMember
 DirectoryGroup
   directoryId   DirectoryId
   groupId       GroupId
+  created       UTCTime default=CURRENT_TIMESTAMP
 
   groupR Bool
   groupW Bool
@@ -86,6 +94,7 @@ DirectoryGroup
 FileGroup
   fileId     FileId
   groupId    GroupId
+  created    UTCTime default=CURRENT_TIMESTAMP
 
   groupR Bool
   groupW Bool
@@ -98,18 +107,24 @@ FileGroup
 ----------------------------- Tags  ----------------------------
 Tag
 	name		Text
+        created         UTCTime default=CURRENT_TIMESTAMP
+
 	UniqueTag	name
 	deriving Show
 
 DirectoryTag
 	directoryId	DirectoryId
 	tagId		TagId
+        created         UTCTime default=CURRENT_TIMESTAMP
+
 	UniqueDirectoryTag directoryId tagId
 	deriving Show
 
 FileTag
 	fileId	FileId
 	tagId	TagId
+        created UTCTime default=CURRENT_TIMESTAMP
+
 	UniqueFileTag fileId tagId
         deriving Show
 

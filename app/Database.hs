@@ -39,9 +39,10 @@ createProgram ::  UserAccountId -> Text -> Text -> Text
                   -> Handler (Maybe DirectoryId)
 createProgram  uid name expl code = runDB $ do
   muser <- get uid
+  time  <- liftIO $ getCurrentTime
   case muser of
     Just user -> do
-      pid <-  insert $ Directory uid name expl code
+      pid <-  insert $ Directory uid name expl code time
               (not (userAccountUmaskOwnerR user))
               (not (userAccountUmaskOwnerW user))
               (not (userAccountUmaskOwnerX user))
@@ -55,9 +56,10 @@ createGoal ::  UserAccountId -> DirectoryId -> Text -> Text -> Text
            -> Handler (Maybe FileId)
 createGoal  uid pid name expl code = runDB $ do
   muser <- get uid
+  time  <- liftIO $ getCurrentTime
   case muser of
     Just user -> do
-      goalid <- insert $ File uid pid name expl code
+      goalid <- insert $ File uid pid name expl code time
                 (not (userAccountUmaskOwnerR user))
                 (not (userAccountUmaskOwnerW user))
                 (not (userAccountUmaskOwnerX user))
@@ -88,9 +90,10 @@ writeProgram uid name expl code = runDB $ do
 insertUser :: UserAccount -> Handler (Maybe UserAccountId)
 insertUser user = do
   muser <- runDBtime $ getBy $ UniqueUserAccount (userAccountIdent user)
+  time  <- liftIO $ getCurrentTime
   case muser of
     Just _user -> return Nothing
-    Nothing   -> Just <$> (runDBtime $ insert $ (makeUserAccount (userAccountIdent user))
+    Nothing   -> Just <$> (runDBtime $ insert $ (makeUserAccount (userAccountIdent user) time)
                            { userAccountPassword = userAccountPassword user } )
 
 insertDirectory :: Directory -> Handler (Maybe DirectoryId)
@@ -126,25 +129,25 @@ insertFile goal = do
 
 
 insertTag :: Tag -> Handler (Maybe TagId)
-insertTag (Tag tag) = do
+insertTag (Tag tag time) = do
   mTag <- runDBtime $ getBy $ UniqueTag tag
   case mTag of
     Just _  -> return Nothing
-    Nothing -> Just <$> (runDBtime $ insert $ Tag tag)
+    Nothing -> Just <$> (runDBtime $ insert $ Tag tag time)
 
 insertDirectoryTag :: DirectoryTag -> Handler (Maybe DirectoryTagId)
-insertDirectoryTag (DirectoryTag progId tagId) = do
+insertDirectoryTag (DirectoryTag progId tagId time) = do
   mTag <- runDBtime $ getBy $ UniqueDirectoryTag progId tagId
   case mTag of
     Just _  -> return Nothing
-    Nothing -> Just <$> (runDBtime $ insert $ DirectoryTag progId tagId)
+    Nothing -> Just <$> (runDBtime $ insert $ DirectoryTag progId tagId time)
 
 insertFileTag :: FileTag -> Handler (Maybe FileTagId)
-insertFileTag (FileTag goalId tagId) = do
+insertFileTag (FileTag goalId tagId time) = do
   mTag <- runDBtime $ getBy $ UniqueFileTag goalId tagId
   case mTag of
     Just _  -> return Nothing
-    Nothing -> Just <$> (runDBtime $ insert $ FileTag goalId tagId)
+    Nothing -> Just <$> (runDBtime $ insert $ FileTag goalId tagId time)
 
 ------------------------  Insert or Replace --------------------------
 
