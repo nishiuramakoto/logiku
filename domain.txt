@@ -92,3 +92,4 @@ bitbotbed
 bitbotmaker
 botlii
 bitbotly
+botgy

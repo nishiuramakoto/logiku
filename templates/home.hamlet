@@ -3,7 +3,7 @@
     <header class="articleDetailHead">
         <nav class="globalNavi">
             <ul>
-                <li>
+                <li class="current">
                     <a href="@{HomeR}">    コマンド
                 <li>
                     <a href="@{HomeBotR}"> ボット
