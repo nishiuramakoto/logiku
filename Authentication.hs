@@ -7,7 +7,6 @@ module Authentication(
   )  where
 
 import Import.NoFoundation
-import DBFS
 -- import           Yesod.Auth.BrowserId
 import           Yesod.Auth.GoogleEmail2
 

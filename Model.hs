@@ -12,7 +12,9 @@ import Database.Persist.Quasi
 -- You can find more information on persistent and how to declare entities
 -- at:
 -- http://www.yesodweb.com/book/persistent/
-share [mkPersist sqlSettings, mkMigrate "migrateAll"]
+share [mkPersist sqlSettings
+      , mkDeleteCascade sqlSettings
+      , mkMigrate "migrateAll"]
     $(persistFileWith lowerCaseSettings "config/models")
 
 
@@ -127,14 +129,17 @@ directoryDefaultPermission = Permission
                              }
 
 
-makeUserAccount :: Text -> UTCTime -> UserAccount
-makeUserAccount ident created =
+makeUserAccount :: Text -> UTCTime -> UTCTime -> UTCTime -> UserAccount
+makeUserAccount ident created modified access =
   UserAccount
   { userAccountIdent = ident
   , userAccountPrivileged = False
   , userAccountPassword = Nothing
   , userAccountDisplayName = Nothing
   , userAccountCreated     = created
+  , userAccountModified    = modified
+  , userAccountAccess      = access
+  , userAccountAccessCount = 0
                              -- Default umask=022
   , userAccountUmaskOwnerR = False
   , userAccountUmaskOwnerW = False
@@ -148,14 +153,17 @@ makeUserAccount ident created =
   }
 
 
-makeUserAccountWithUmask :: Text -> UTCTime -> UMask -> UserAccount
-makeUserAccountWithUmask ident created umask  =
+makeUserAccountWithUmask :: Text -> UTCTime -> UTCTime -> UTCTime -> UMask -> UserAccount
+makeUserAccountWithUmask ident created modified access umask  =
   UserAccount
   { userAccountIdent = ident
   , userAccountPrivileged = False
   , userAccountPassword = Nothing
   , userAccountDisplayName = Nothing
   , userAccountCreated     = created
+  , userAccountModified    = modified
+  , userAccountAccess      = access
+  , userAccountAccessCount = 0
                              -- Default umask=022
   , userAccountUmaskOwnerR = umaskOwnerR umask
   , userAccountUmaskOwnerW = umaskOwnerW umask
@@ -184,14 +192,17 @@ umaskFromUserAccount user = UMask
 
 
 
-makeDirectory :: UserAccountId -> Text -> UTCTime -> UMask -> Directory
-makeDirectory uid name created umask =
+makeDirectory :: UserAccountId -> Text -> UTCTime -> UTCTime -> UTCTime -> UMask -> Directory
+makeDirectory uid name created modified access umask =
   Directory
   { directoryUserId = uid
   , directoryName   = name
   , directoryCode   = ""
   , directoryExplanation = ""
   , directoryCreated  = created
+  , directoryModified = modified
+  , directoryAccess   = access
+  , directoryAccessCount = 0
 
   , directoryOwnerR    = permissionOwnerR directoryDefaultPermission && not (umaskOwnerR umask)
   , directoryOwnerW    = permissionOwnerW directoryDefaultPermission && not (umaskOwnerW umask)
@@ -203,10 +214,8 @@ makeDirectory uid name created umask =
 
 
 
-
-
-makeFile :: UserAccountId -> DirectoryId -> Text -> UTCTime -> UMask -> File
-makeFile uid dir name created umask =
+makeFile :: UserAccountId -> DirectoryId -> Text -> UTCTime -> UTCTime -> UTCTime -> UMask -> File
+makeFile uid dir name created modified access umask =
   File
   { fileUserId = uid
   , fileDirectoryId = dir
@@ -214,6 +223,9 @@ makeFile uid dir name created umask =
   , fileCode   = ""
   , fileExplanation = ""
   , fileCreated  = created
+  , fileModified = modified
+  , fileAccess   = access
+  , fileAccessCount = 0
 
   , fileOwnerR    = permissionOwnerR fileDefaultPermission && not (umaskOwnerR umask)
   , fileOwnerW    = permissionOwnerW fileDefaultPermission && not (umaskOwnerW umask)
@@ -224,36 +236,37 @@ makeFile uid dir name created umask =
   }
 
 
-makeGroup :: Text -> UserAccountId -> UTCTime -> Group
-makeGroup name  ownerId created =
+makeGroup :: Text -> UserAccountId -> UTCTime -> UTCTime -> UTCTime -> Group
+makeGroup name  ownerId created modified access =
   Group
   { groupName  = name
   , groupOwner = ownerId
   , groupCreated = created
+  , groupModified = modified
+  , groupAccess   = access
+  , groupAccessCount = 0
   , groupExplanation = ""
   }
 
-makeGroupMember :: GroupId -> UserAccountId -> UTCTime -> GroupMember
-makeGroupMember  gid uid created =  GroupMember gid uid created
+makeGroupMember :: GroupId -> UserAccountId ->  GroupMember
+makeGroupMember  gid uid  =  GroupMember gid uid
 
-makeDirectoryGroup :: DirectoryId -> GroupId -> UTCTime -> UMask -> DirectoryGroup
-makeDirectoryGroup dir gid created umask =
+makeDirectoryGroup :: DirectoryId -> GroupId -> UMask -> DirectoryGroup
+makeDirectoryGroup dir gid  umask =
   DirectoryGroup
   { directoryGroupDirectoryId = dir
   , directoryGroupGroupId     = gid
-  , directoryGroupCreated     = created
 
   , directoryGroupGroupR      = permissionGroupR directoryDefaultPermission && not (umaskGroupR umask)
   , directoryGroupGroupW      = permissionGroupW directoryDefaultPermission && not (umaskGroupW umask)
   , directoryGroupGroupX      = permissionGroupX directoryDefaultPermission && not (umaskGroupX umask)
   }
 
-makeDirectoryGroupWithPerm :: DirectoryId -> GroupId -> UTCTime -> Perm -> DirectoryGroup
-makeDirectoryGroupWithPerm dir gid created perm =
+makeDirectoryGroupWithPerm :: DirectoryId -> GroupId -> Perm -> DirectoryGroup
+makeDirectoryGroupWithPerm dir gid  perm =
   DirectoryGroup
   { directoryGroupDirectoryId = dir
   , directoryGroupGroupId     = gid
-  , directoryGroupCreated     = created
 
   , directoryGroupGroupR      = permR perm
   , directoryGroupGroupW      = permW perm
@@ -261,24 +274,22 @@ makeDirectoryGroupWithPerm dir gid created perm =
   }
 
 
-makeFileGroup :: FileId -> GroupId -> UTCTime -> UMask -> FileGroup
-makeFileGroup file gid created umask =
+makeFileGroup :: FileId -> GroupId -> UMask -> FileGroup
+makeFileGroup file gid  umask =
   FileGroup
   { fileGroupFileId      = file
   , fileGroupGroupId     = gid
-  , fileGroupCreated     = created
 
   , fileGroupGroupR      = permissionGroupR fileDefaultPermission && not (umaskGroupR umask)
   , fileGroupGroupW      = permissionGroupW fileDefaultPermission && not (umaskGroupW umask)
   , fileGroupGroupX      = permissionGroupX fileDefaultPermission && not (umaskGroupX umask)
   }
 
-makeFileGroupWithPerm :: FileId -> GroupId -> UTCTime -> Perm -> FileGroup
-makeFileGroupWithPerm file gid created perm =
+makeFileGroupWithPerm :: FileId -> GroupId ->  Perm -> FileGroup
+makeFileGroupWithPerm file gid  perm =
   FileGroup
   { fileGroupFileId      = file
   , fileGroupGroupId     = gid
-  , fileGroupCreated     = created
 
   , fileGroupGroupR      = permR perm
   , fileGroupGroupW      = permW perm
@@ -286,11 +297,11 @@ makeFileGroupWithPerm file gid created perm =
   }
 
 
-makeTag :: Text -> UTCTime -> Tag
-makeTag tag created = Tag tag created
+makeTag :: Text -> Tag
+makeTag tag  = Tag tag
 
-makeDirectoryTag :: DirectoryId -> TagId -> UTCTime -> DirectoryTag
+makeDirectoryTag :: DirectoryId -> TagId -> DirectoryTag
 makeDirectoryTag = DirectoryTag
 
-makeFileTag :: FileId -> TagId -> UTCTime -> FileTag
+makeFileTag :: FileId -> TagId ->  FileTag
 makeFileTag = FileTag

@@ -13,6 +13,7 @@ module DBFS
        , ChmodOption(..)
        , mkdir
        , touch , touchAt
+       , fopen, opendir
 --       , mkdir' , touch'
        , isPrivileged
        , isGroupOwnerOf
@@ -83,6 +84,7 @@ module DBFS
        , writeFile
 
        , rmdir
+       , rm_rf
        , unlink,rm
 
          -- , programTagsAdd
@@ -107,6 +109,10 @@ import             Database.Esqueleto hiding(insert)
 import  qualified  Database.Persist as P
 import  qualified  Data.Text as T
 import             Data.Foldable hiding(null, mapM_)
+import             Control.Monad.Trans.Either
+
+-- Rule: Should never throw in any way from the functions in this module.
+--       Always test the validity of insert/update/delete etc. and return 'DbfsError' appropriately.
 
 
 data DbfsError = DirectoryDoesNotExist Text
@@ -114,6 +120,7 @@ data DbfsError = DirectoryDoesNotExist Text
                | UserDoesNotExist   Text
                | UserAlreadyExists Text
                | GroupAlreadyExists Text
+               | GroupDoesNotExist  Text
                | AlreadyGroupMember Text
                | NotAGroupMember  Text
                | DirectoryAlreadyExists Text
@@ -125,7 +132,9 @@ data DbfsError = DirectoryDoesNotExist Text
                | AlreadyOwner Text
                | NotAnOwner Text
                | EntryAlreadyExists Text
+               | EntryDoesNotExist Text
                | EntityDoesNotExist Text
+               | EntityCouldNotBeOpened Text
                | DuplicateOwnerGroups Text
                | SchemaError Text -- Code smell (should be handled earlier, not here)
                deriving (Eq,Show)
@@ -148,27 +157,74 @@ data ChmodOption = ChmodOwner Perm
                  | ChmodEveryone Perm
                  deriving (Eq,Show)
 
-
+----------------------  PsuedoDirectoryEntity ------------------------
 -- Abstracts file like objects not necessarily backed by databases (but their children are)
 class (PersistFileEntity (PseudoEntry record), Show (PseudoKey record))
       => PseudoDirectoryEntity record where
   data PseudoKey   record
   type PseudoEntry record :: *
 
-  getPseudoEntity      :: MonadIO m => PseudoKey record -> SqlPersistT m (Maybe record)
+  getPseudoEntity      :: MonadIO m
+                          => PseudoKey record -> SqlPersistT m (Maybe record)
   isPseudoExecutableBy :: MonadIO m => PseudoKey record -> UserAccountId -> SqlPersistT m Bool
-  makePseudoEntry      :: UserAccountId -> PseudoKey record -> Text -> UTCTime -> UMask -> PseudoEntry record
+
+  makePseudoEntry      :: UserAccountId -> PseudoKey record -> Text -> UTCTime -> UTCTime -> UTCTime -> UMask
+                          -> PseudoEntry record
+
+  getPseudoEntry    :: MonadIO m
+                       => PseudoKey record -> Key (PseudoEntry record)
+                       -> SqlPersistT m (Maybe (PseudoEntry record))
+
+  getPseudoEntryBy    :: MonadIO m
+                         => UserAccountId -> PseudoKey record -> Text
+                         -> SqlPersistT m (Maybe (Entity (PseudoEntry record)))
+
+  touchPseudoEntry ::  MonadIO m => PseudoKey record -> Key (PseudoEntry record) -> SqlPersistT m (Result ())
+
   entryAlreadyExistsError :: PseudoKey record -> Text -> DbfsError
   entryAlreadyExistsError key name = EntryAlreadyExists $ T.concat [ T.pack (show key), name]
+
   pseudoEntityDoesNotExistError :: PseudoKey record -> DbfsError
   pseudoEntityDoesNotExistError key = EntityDoesNotExist (T.pack $ show key)
 
+
+data RootDirectory = RootDirectory deriving (Show)
+
+instance PseudoDirectoryEntity RootDirectory where
+  data PseudoKey   RootDirectory = PseudoRootKey RootDirectory deriving (Show)
+  type PseudoEntry RootDirectory = Directory
+
+  getPseudoEntity _  = return $ Just RootDirectory
+
+  isPseudoExecutableBy _ _ = return True
+  makePseudoEntry he _ name time umask = makeDirectory he name time umask
+  getPseudoEntry _ key = get key
+  getPseudoEntryBy he _ name = getBy (UniqueDirectory he name)
+
+  touchPseudoEntry _ k = touchDirectory k
+
+instance PseudoDirectoryEntity Directory where
+  data PseudoKey   Directory = PseudoDirKey (Key Directory) deriving (Show)
+  type PseudoEntry Directory = File
+
+  getPseudoEntity (PseudoDirKey dirkey)  = get dirkey
+
+  isPseudoExecutableBy (PseudoDirKey dirkey) uid = dirkey `isDirectoryExecutableBy` uid
+  makePseudoEntry  he (PseudoDirKey dirkey) name time umask = makeFile he dirkey name time umask
+  getPseudoEntry _ key = get key
+  getPseudoEntryBy he (PseudoDirKey dirkey) name = getBy (UniqueFile he dirkey name)
+  entryAlreadyExistsError (PseudoDirKey key) name = FileAlreadyExists $ T.concat [T.pack $ show key, name]
+  touchPseudoEntry (PseudoDirKey _)  k = touchFile k
+
+
+------------------------  PersistFileEntity --------------------------
+-- Abstracts File like entities
 class ( PersistEntity record, PersistEntity (OwnerGroup record)
       , PersistEntityBackend record ~ SqlBackend, PersistEntityBackend (OwnerGroup record) ~ SqlBackend)
       => PersistFileEntity record where
   type OwnerGroup   record :: *
 
-  makeOwnerGroup   :: Key record -> GroupId -> UTCTime -> UMask -> OwnerGroup record
+  makeOwnerGroup   :: Key record -> GroupId -> UMask -> OwnerGroup record
   uniqueOwnerGroup :: Key record -> GroupId -> Unique (OwnerGroup record)
 
   doesNotExistError    :: Key record -> DbfsError
@@ -177,60 +233,45 @@ class ( PersistEntity record, PersistEntity (OwnerGroup record)
   duplicateGroupsError :: Key record -> DbfsError
   duplicateGroupsError key = DuplicateOwnerGroups (T.pack $ show key)
 
-  getFile    :: (MonadIO m) => Key record -> SqlPersistT m (Maybe record)
+  getFileEntity    :: (MonadIO m) => Key record  -> SqlPersistT m (Maybe record)
+  touchFileEntity  :: (MonadIO m) => Key record  -> SqlPersistT m (Result  ())
+
   ownerField :: Key record -> EntityField record (Key UserAccount)
   ownerId    :: record -> (Key UserAccount)
   getOwnerId :: MonadIO m => Key record -> SqlPersistT m (Result (Key UserAccount))
-  getOwnerId k =  do mu <- getFile k
+  getOwnerId k =  do mu <- getFileEntity k
                      case mu of
                        Just u  -> Right <$> return (ownerId u)
                        Nothing -> Left  <$> return (doesNotExistError k)
 
 
-data RootDirectory = RootDirectory deriving (Show)
-
-instance PseudoDirectoryEntity RootDirectory where
-  data PseudoKey RootDirectory = PseudoRootKey RootDirectory deriving (Show)
-  type PseudoEntry RootDirectory = Directory
-
-  getPseudoEntity _  = return $ Just RootDirectory
-  isPseudoExecutableBy _ _ = return True
-  makePseudoEntry he _ name time umask = makeDirectory he name time umask
-
-instance PseudoDirectoryEntity Directory where
-  data PseudoKey Directory = PseudoDirKey (Key Directory) deriving (Show)
-  type PseudoEntry Directory = File
-
-  getPseudoEntity (PseudoDirKey dirkey)  = get dirkey
-  isPseudoExecutableBy (PseudoDirKey dirkey) uid = dirkey `isDirectoryExecutableBy` uid
-  makePseudoEntry he (PseudoDirKey dirkey) name time umask = makeFile he dirkey name time umask
-  entryAlreadyExistsError (PseudoDirKey key) name = FileAlreadyExists $ T.concat [T.pack $ show key, name]
-
 instance PersistFileEntity Directory where
-  type OwnerGroup Directory = DirectoryGroup
+  type OwnerGroup       Directory = DirectoryGroup
+
   makeOwnerGroup = makeDirectoryGroup
   uniqueOwnerGroup = UniqueDirectoryGroup
 
   doesNotExistError  key = DirectoryDoesNotExist  (T.pack $ show key)
 --  alreadyExistsError key = DirectoryAlreadyExists (T.pack $ show key)
-  getFile = get
+  getFileEntity = get
+  touchFileEntity  = touchDirectory
+
   ownerField _ = DirectoryUserId
   ownerId = directoryUserId
 
 instance PersistFileEntity File where
-  type OwnerGroup File = FileGroup
+  type OwnerGroup       File = FileGroup
+
   makeOwnerGroup = makeFileGroup
   uniqueOwnerGroup = UniqueFileGroup
 
   doesNotExistError  key = FileDoesNotExist  (T.pack $ show key)
 --  alreadyExistsError key = FileAlreadyExists (T.pack $ show key)
-  getFile = get
+  getFileEntity = get
+  touchFileEntity = touchFile
+
   ownerField _ = FileUserId
   ownerId = fileUserId
-
-
--- Rule: SHOULD NEVER THROW IN ANY WAY FROM THE FUNCTIONS IN THIS MODULE.
---       ALWAYS test the validity of insert/update/delete etc.
 
 
 -------------------------- Helper functions --------------------------
@@ -339,6 +380,79 @@ getDirectoryGroups dir =
                               return $ directoryGroups
                     return $ Right (map (directoryGroupGroupId . entityVal) gs)
        Nothing -> Left  <$> return (DirectoryDoesNotExist $ T.pack $ show dir)
+
+
+---------------------- Modification/Access time ----------------------
+touchUserAccount :: MonadIO m => UserAccountId -> SqlPersistT m (Result ())
+touchUserAccount him = do
+  time <- liftIO $ getCurrentTime
+  updateDbfs (UserDoesNotExist $ T.pack $ show him)
+    him
+    [ (I.=.) UserAccountModified time
+    , (I.=.) UserAccountAccess   time
+    ]
+
+_touchGroup :: MonadIO m => GroupId -> SqlPersistT m (Result ())
+_touchGroup gid = do
+  time <- liftIO $ getCurrentTime
+  updateDbfs (GroupDoesNotExist $ T.pack $ show gid)
+    gid
+    [ (I.=.) GroupModified time
+    , (I.=.) GroupAccess   time
+    ]
+
+touchFile :: MonadIO m => FileId -> SqlPersistT m (Result ())
+touchFile file = do
+  time <- liftIO $ getCurrentTime
+  updateDbfs (FileDoesNotExist $ T.pack $ show file)
+    file
+    [ (I.=.) FileModified time
+    , (I.=.) FileAccess   time
+    ]
+
+touchDirectory :: MonadIO m => DirectoryId -> SqlPersistT m (Result ())
+touchDirectory dir = do
+  time <- liftIO $ getCurrentTime
+  updateDbfs (DirectoryDoesNotExist $ T.pack $ show dir)
+    dir
+    [ (I.=.) DirectoryModified time
+    , (I.=.) DirectoryAccess   time
+    ]
+
+_accessUserAccount :: MonadIO m => UserAccountId -> SqlPersistT m (Result ())
+_accessUserAccount him = do
+  time <- liftIO $ getCurrentTime
+  updateDbfs (UserDoesNotExist $ T.pack $ show him)
+    him
+    [ (I.=.) UserAccountAccess   time
+    ]
+
+_accessGroup :: MonadIO m => GroupId -> SqlPersistT m (Result ())
+_accessGroup gid = do
+  time <- liftIO $ getCurrentTime
+  updateDbfs (GroupDoesNotExist $ T.pack $ show gid)
+    gid
+    [ (I.=.) GroupAccess   time
+    ]
+
+accessFile :: MonadIO m => FileId -> SqlPersistT m (Result ())
+accessFile file = do
+  time <- liftIO $ getCurrentTime
+  updateDbfs (FileDoesNotExist $ T.pack $ show file)
+    file
+    [ (I.=.) FileAccess   time
+    ]
+
+accessDirectory :: MonadIO m => DirectoryId -> SqlPersistT m (Result ())
+accessDirectory dir = do
+  time <- liftIO $ getCurrentTime
+  updateDbfs (DirectoryDoesNotExist $ T.pack $ show dir)
+    dir
+    [ (I.=.) DirectoryAccess   time
+    ]
+
+
+
 ------------------------------ User ------------------------------
 
 su :: MonadIO m => SqlPersistT m  UserAccountId
@@ -354,7 +468,7 @@ su = do roots <- select $
   where
     makeRoot :: MonadIO m => SqlPersistT m  UserAccountId
     makeRoot = do time <- liftIO getCurrentTime
-                  root <- insert $ (makeUserAccount  "root" time) { userAccountPrivileged = True }
+                  root <- insert $ (makeUserAccount  "root" time time time) { userAccountPrivileged = True }
                   return   root
 
 
@@ -367,7 +481,7 @@ suGuest = do eguest <- getUser "guest"
   where
     makeGuest :: MonadIO m => SqlPersistT m  UserAccountId
     makeGuest = do time <- liftIO getCurrentTime
-                   guest <- insert $ (makeUserAccount  "guest" time)
+                   guest <- insert $ (makeUserAccount  "guest" time time time)
                    return $ guest
 
 unprivilege :: MonadIO m => UserAccountId -> SqlPersistT m ()
@@ -383,43 +497,55 @@ useradd he ident = do
   prv <- isPrivileged he
   time <- liftIO $ getCurrentTime
   if prv
-    then  insertDbfs (UserAlreadyExists ident) $ makeUserAccount ident time
+    then  insertDbfs (UserAlreadyExists ident) $ makeUserAccount ident time time time
     else  return $ Left  $ PermissionError "needs to be root to create a user"
 
-userdel :: MonadIO m => UserAccountId -> UserAccountId -> SqlPersistT m (Result UserAccountId)
+userdel :: MonadIO m => UserAccountId -> UserAccountId -> SqlPersistT m (Result ())
 userdel he him = do
   prv <- isPrivileged he
   uidExists <- userExists him
 
   if (prv || he == him) && uidExists
-    then do ownedGroups <- select $
-                           from $ \grp -> do
-                             where_ (grp^.GroupOwner ==. val him)
-                             return grp
-
-            forM_ (map entityKey ownedGroups) (he `groupdel`)
-
-            delete $
-              from $ \groupMembers -> do
-                where_ (groupMembers^.GroupMemberMember ==. val him)
-
-            delete $
-              from $ \directory -> do
-                where_ (directory^.DirectoryUserId ==. val him)
-
-            delete $
-              from $ \file -> do
-                where_ (file^.FileUserId ==. val him)
-
-            delete $
-              from $ \userAccount -> do
-                where_ (userAccount^.UserAccountId ==. val him)
-
-            return $ Right he
-
+    then do deleteCascade him
+            return $ Right ()
     else if not uidExists
          then return $ Left $ UserDoesNotExist (T.pack $ show him)
          else return $ Left $ PermissionError (T.pack (show he ++ " needs to be root to delete " ++ show him))
+
+  -- if (prv || he == him) && uidExists
+  --   then do ownedGroups <- select $
+  --                          from $ \grp -> do
+  --                            where_ (grp^.GroupOwner ==. val him)
+  --                            return grp
+
+  --           forM_ (map entityKey ownedGroups) (he `groupdel`)
+  --           delete $
+  --             from $ \directoryVote -> do
+  --               where_ (directoryVote^.DirectoryVoteUserId ==. val him)
+
+  --           delete $
+  --             from $ \fileVote -> do
+  --               where_ (fileVote^.FileVoteUserId ==. val him)
+
+  --           delete $
+  --             from $ \groupMembers -> do
+  --               where_ (groupMembers^.GroupMemberMember ==. val him)
+
+  --           delete $
+  --             from $ \directory -> do
+  --               where_ (directory^.DirectoryUserId ==. val him)
+
+  --           delete $
+  --             from $ \file -> do
+  --               where_ (file^.FileUserId ==. val him)
+
+  --           delete $
+  --             from $ \userAccount -> do
+  --               where_ (userAccount^.UserAccountId ==. val him)
+
+  --           return $ Right he
+
+
 
 
 usermod :: MonadIO m
@@ -431,10 +557,10 @@ usermod he him opts =  foldlM (>>>) (Right him) opts
     (Right _) >>> (AddToGroup gid) = do
       prv <- isPrivileged he
       own <- he `isGroupOwnerOf`  gid
-      time <- liftIO $ getCurrentTime
       if (prv || own)
-        then do fmap (const him) <$>
-                  insertDbfs (AlreadyGroupMember $ T.pack $ show him ) (makeGroupMember gid him time)
+        then do _ <- touchUserAccount him
+                fmap (const him) <$>
+                  insertDbfs (AlreadyGroupMember $ T.pack $ show him ) (makeGroupMember gid him)
 
         else return $ Left $ PermissionError $
                   T.concat [ T.pack $  show he , "is neither root nor the group owner" ]
@@ -443,8 +569,9 @@ usermod he him opts =  foldlM (>>>) (Right him) opts
       prv <- isPrivileged he
       own <- he `isGroupOwnerOf`  gid
       if (prv || own)
-        then fmap (const him) <$>
-             (deleteByDbfs (NotAGroupMember (T.pack $ show (gid,him))) $ UniqueGroupMember gid him)
+        then do _ <- touchUserAccount him
+                fmap (const him) <$>
+                  (deleteByDbfs (NotAGroupMember (T.pack $ show (gid,him))) $ UniqueGroupMember gid him)
 
         else return $ Left $ PermissionError $
              T.concat [ T.pack $  show he , " is neither root nor the group owner" ]
@@ -454,7 +581,8 @@ usermod he him opts =  foldlM (>>>) (Right him) opts
       let himself = he == him
 
       if (prv || himself)
-        then do update $ \user -> do
+        then do _ <- touchUserAccount him
+                update $ \user -> do
                   set user [ UserAccountDisplayName =. val (Just newName) ]
                   where_   (user^.UserAccountId ==. val him)
                 return $ Right him
@@ -466,7 +594,8 @@ usermod he him opts =  foldlM (>>>) (Right him) opts
       prv <- isPrivileged he
 
       if prv || (he == him)
-        then do fmap (fmap (const him)) $ updateDbfs (UserDoesNotExist $ T.pack $ show he)
+        then do _ <- touchUserAccount him
+                fmap (fmap (const him)) $ updateDbfs (UserDoesNotExist $ T.pack $ show he)
                   him
                   [ (I.=.) UserAccountUmaskOwnerR  (umaskOwnerR newUmask)
                   , (I.=.) UserAccountUmaskOwnerW  (umaskOwnerW newUmask)
@@ -483,6 +612,8 @@ usermod he him opts =  foldlM (>>>) (Right him) opts
                   T.concat [ T.pack $ show he , "is neither root nor the person he is trying to change " ]
 
 
+
+
 isGroupOwnerOf :: MonadIO m => UserAccountId -> GroupId -> SqlPersistT m Bool
 isGroupOwnerOf he gid =  do
   mgroup <- get gid
@@ -491,14 +622,12 @@ isGroupOwnerOf he gid =  do
     Nothing     -> return False
 
 
-
 --------------------------------  Group --------------------------------
 groupadd :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result GroupId)
 groupadd he groupName = do
   -- Anyone can make a group (TODO:should this be changed?)
   time <- liftIO $ getCurrentTime
-  insertDbfs (GroupAlreadyExists groupName) (makeGroup groupName he time)
-
+  insertDbfs (GroupAlreadyExists groupName) (makeGroup groupName he time time time)
 
    -- case mgid of
    --   Just gid ->
@@ -522,23 +651,25 @@ groupdel he gid = do
   prv   <- isPrivileged he
   own   <- he `isGroupOwnerOf` gid
   if  prv || own
-    then do delete $
-              from $ \directoryGroup -> do
-                where_ (directoryGroup^.DirectoryGroupGroupId ==. val gid)
-
-            delete $
-              from $ \fileGroup -> do
-                where_ (fileGroup^.FileGroupGroupId ==. val gid)
-
-            delete $
-              from $ \groupMember -> do
-                where_ (groupMember^.GroupMemberGroupId  ==. val gid)
-
-            delete $
-              from $ \grp -> do
-                where_ (grp^.GroupId ==. val gid)
-
+    then do deleteCascade gid
             return $ Right he
+    -- then do delete $
+    --           from $ \directoryGroup -> do
+    --             where_ (directoryGroup^.DirectoryGroupGroupId ==. val gid)
+
+    --         delete $
+    --           from $ \fileGroup -> do
+    --             where_ (fileGroup^.FileGroupGroupId ==. val gid)
+
+    --         delete $
+    --           from $ \groupMember -> do
+    --             where_ (groupMember^.GroupMemberGroupId  ==. val gid)
+
+    --         delete $
+    --           from $ \grp -> do
+    --             where_ (grp^.GroupId ==. val gid)
+
+    --         return $ Right he
 
     else
     return $ Left $ PermissionError
@@ -614,22 +745,28 @@ belongs he = do
 --     (_      , Nothing , _ )  -> return $ Left $ DirectoryDoesNotExist $ T.pack (show dir)
 --     (_ , _ ,  _ ) -> return $ Left $ PermissionError $ T.pack "directory not executable(but MAY be writable)"
 
+fopen :: MonadIO m => UserAccountId -> DirectoryId -> Text -> SqlPersistT m (Result (Entity File))
+fopen he dir name = open he (PseudoDirKey dir) name
 
-touch :: MonadIO m => UserAccountId -> DirectoryId -> Text -> SqlPersistT m (Result FileId)
-touch he dir name = open he (PseudoDirKey dir) name
+touch :: MonadIO m => UserAccountId -> DirectoryId -> Text -> SqlPersistT m (Result (Key File))
+touch he dir name = runEitherT $ do Entity key _ <- EitherT $ open he (PseudoDirKey dir) name
+                                    return key
 
-touchAt :: MonadIO m => UserAccountId -> DirectoryId -> Text -> SqlPersistT m (Result FileId)
+touchAt :: MonadIO m => UserAccountId -> DirectoryId -> Text -> SqlPersistT m (Result (Key File))
 touchAt = touch
 
-mkdir :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result DirectoryId)
-mkdir he name = open he (PseudoRootKey RootDirectory) name
+mkdir :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result (Key Directory))
+mkdir he name = runEitherT $ do Entity key _ <- EitherT $ open he (PseudoRootKey RootDirectory) name
+                                return key
 
+opendir :: MonadIO m => UserAccountId -> Text -> SqlPersistT m (Result (Entity Directory))
+opendir he name = open he (PseudoRootKey RootDirectory) name
 
 open :: (MonadIO m
         , PseudoDirectoryEntity dir , PersistEntityBackend (OwnerGroup (PseudoEntry dir)) ~ SqlBackend)
-        =>  UserAccountId ->  PseudoKey dir -> Text -> SqlPersistT m (Result (Key (PseudoEntry dir)))
+        =>  UserAccountId ->  PseudoKey dir -> Text -> SqlPersistT m (Result (Entity (PseudoEntry dir)))
 open he dirkey name = do
-  muser    <- get  he
+  muser <- get he
   mdir  <- getPseudoEntity dirkey
   x <- dirkey `isPseudoExecutableBy` he
   case (muser, mdir, x) of
@@ -637,22 +774,40 @@ open he dirkey name = do
     (Just user, Just _dir, True) ->  do
       let umask =  umaskFromUserAccount user
       created  <- liftIO $ getCurrentTime
-      efile <- insertDbfs (entryAlreadyExistsError dirkey name) (makePseudoEntry he dirkey name created umask)
+      efile <- insertDbfs (entryAlreadyExistsError dirkey name)
+                 (makePseudoEntry he dirkey name created created created umask)
       case efile of
-        Left  err -> return $ Left err
-        Right file -> do
-          groups <- belongs he -- should not throw
+        Left  (EntryAlreadyExists _)     -> getPseudoEntryBy he dirkey name >>= touch'
+        Left  (FileAlreadyExists  _)     -> getPseudoEntryBy he dirkey name >>= touch'
+        Left  (DirectoryAlreadyExists _) -> getPseudoEntryBy he dirkey name >>= touch'
+        Left  err                        -> return $ Left err
+        Right file                       -> do insertGroups file umask
+                                               getEntry file
 
-          case groups of
-            Right gs -> do
-              forM_  gs $  \g ->
-                insertDbfs (duplicateGroupsError file) (makeOwnerGroup file g created umask)
-              return $ Right file
-            Left err -> return $ Left err
 
     (Nothing, _      , _  )  -> return $ Left $ UserDoesNotExist      $ T.pack (show he)
     (_      , Nothing , _ )  -> return $ Left $ pseudoEntityDoesNotExistError dirkey
-    (_ , _ ,  _ ) -> return $ Left $ PermissionError $ T.pack "parent is not executable(but may be writable)"
+    (_ , _ ,  _ )            -> return $ Left $ PermissionError $
+                                           T.pack "parent is not executable(but may be writable)"
+
+  where
+
+    touch' (Just ent@(Entity key _value)) = touchPseudoEntry dirkey key >> return (Right ent)
+    touch' Nothing                   = return $ Left (EntryDoesNotExist (T.pack "file does not exist"))
+
+    insertGroups file  umask = do
+      groups <- belongs he -- should not throw
+      case groups of
+        Right gs -> do
+          forM_  gs $  \g ->
+            insertDbfs (duplicateGroupsError file) (makeOwnerGroup file g umask)
+        Left _  -> return ()
+
+    getEntry file = do mvalue <- getPseudoEntry dirkey file
+                       case mvalue of
+                         Just value -> return $ Right (Entity file value)
+                         Nothing     -> return $ Left  (EntityCouldNotBeOpened
+                                                        $ T.pack $ show file)
 
 
 
@@ -924,9 +1079,9 @@ isDirectoryEmpty dir = do
 
 
 lsFile :: (MonadIO m )
-      => UserAccountId -> Int64 -> Int64 -> SqlPersistT m (Result [FileId])
+      => UserAccountId -> DirectoryId -> Int64 -> Int64 -> SqlPersistT m (Result [FileId])
 
-lsFile uid offs lim = do
+lsFile uid dir offs lim = do
   prv <- isPrivileged uid
   results <- select $
              from $ \(file
@@ -935,14 +1090,16 @@ lsFile uid offs lim = do
                     distinctOn [don (file^.FileId) ] $ do
                       on (groupMember^.GroupMemberGroupId ==. fileGroup^.FileGroupGroupId)
                       on (fileGroup^.FileGroupFileId ==. file^.FileId)
-                      where_ ( fileOwnerReadable uid file
-                               ||. fileGroupReadable uid fileGroup groupMember
-                               ||. fileEveryoneReadable uid file
-                               ||. val prv ==. val True
+                      where_ ( (fileOwnerReadable uid file
+                                ||. fileGroupReadable uid fileGroup groupMember
+                                ||. fileEveryoneReadable uid file
+                                ||. val prv ==. val True
+                               ) &&. file^.FileDirectoryId ==. val dir
                              )
                       offset offs
                       limit lim
                       return (file^.FileId)
+  _ <- accessDirectory dir
   return (Right $ map unValue results)
   where
     fileOwnerReadable uid' file = file^.FileUserId ==. val uid'
@@ -1013,6 +1170,7 @@ readDirectory he dir = do
   readable <- dir `isDirectoryReadableBy` he
   if readable
     then do ps <- get dir
+            _  <- accessDirectory dir
             case ps of
               Just d  -> return $ Right d
               Nothing -> return $ Left $ DirectoryDoesNotExist $ T.concat [T.pack $ show dir ]
@@ -1023,6 +1181,7 @@ readFile he file = do
   readable <- file `isFileReadableBy` he
   if readable
     then do ps <- get file
+            _ <- accessFile file
             case ps of
               Just f  -> return $ Right f
               Nothing -> return $ Left $ FileDoesNotExist $ T.concat [T.pack $ show file ]
@@ -1034,14 +1193,19 @@ writeDirectory :: MonadIO m => UserAccountId -> Entity Directory -> SqlPersistT 
 writeDirectory he directory@(Entity key v) = do
   writable <- key `isDirectoryWritableBy` he
   if writable
-    then repsert key v >> return (Right directory)
+    then do repsert key v
+            _<- touchDirectory key
+            return (Right directory)
+
     else return $ Left $ DirectoryDoesNotExist $ T.concat [ T.pack $ show (he,key) ]
 
 writeFile :: MonadIO m => UserAccountId -> Entity File -> SqlPersistT m (Result (Entity File))
 writeFile he file@(Entity key v) = do
   writable <- key `isFileWritableBy` he
   if writable
-    then repsert key v >> return (Right file)
+    then do repsert key v
+            _<- touchFile key
+            return (Right file)
     else return $ Left $ FileDoesNotExist $ T.concat [ T.pack $ show (he,key) ]
 
 
@@ -1069,24 +1233,33 @@ rmdir he dir = do
     (False , _) ->  return $ Left $ PermissionError $ T.concat [T.pack $ show (he,dir) ]
     (_  , False) -> return $ Left $ DirectoryNonEmpty $ T.concat [T.pack $ show (he,dir) ]
 
-unlink :: MonadIO m =>UserAccountId -> FileId -> SqlPersistT m (Result ())
+rm_rf :: MonadIO m =>UserAccountId -> DirectoryId -> SqlPersistT m (Result ())
+rm_rf he dir = do
+  writable <- dir `isDirectoryWritableBy` he
+  is_empty    <- isDirectoryEmpty dir
+  case (writable , is_empty) of
+    (True,True) ->  deleteCascade dir >> return ( Right () )
+    (False , _) ->  return $ Left $ PermissionError $ T.concat [T.pack $ show (he,dir) ]
+    (_  , False) -> return $ Left $ DirectoryNonEmpty $ T.concat [T.pack $ show (he,dir) ]
+
+unlink :: MonadIO m => UserAccountId -> FileId -> SqlPersistT m (Result ())
 unlink he file = do
   writable <- file `isFileWritableBy` he
 
   case (writable) of
-    (True) ->
-      do delete $
-           from $ \fileTag -> do
-             where_ (fileTag^.FileTagFileId ==. val file)
+    (True) -> deleteCascade file >> return (Right ())
+      -- do delete $
+      --      from $ \fileTag -> do
+      --        where_ (fileTag^.FileTagFileId ==. val file)
 
-         delete $
-           from $ \fileGroup -> do
-             where_ (fileGroup^.FileGroupFileId ==. val file)
+      --    delete $
+      --      from $ \fileGroup -> do
+      --        where_ (fileGroup^.FileGroupFileId ==. val file)
 
-         delete $
-           from $ \file' -> do
-             where_ (file'^.FileId ==. val file)
-         return $ Right ()
+      --    delete $
+      --      from $ \file' -> do
+      --        where_ (file'^.FileId ==. val file)
+      --    return $ Right ()
 
     (False) ->  return $ Left $ PermissionError $ T.concat [T.pack $ show (he,file) ]
 
@@ -1158,7 +1331,7 @@ rm = unlink
 chown :: (MonadIO m , PersistFileEntity val)
          => UserAccountId -> Key val -> [ChownOption] -> SqlPersistT m (Result (Key val))
 chown he key opts = do
-  mit <- getFile key
+  mit <- getFileEntity key
 
   case mit of
     Just _  -> foldlM (>>>) (Right key) opts
@@ -1176,6 +1349,7 @@ chown he key opts = do
            then do e <- updateDbfs (doesNotExistError k)
                         k
                         [ (I.=.) (ownerField k) uid ]
+                   _ <- touchFileEntity k
                    return $ fmap (const k) e
 
            else return $ Left $ PermissionError (T.concat [ "only root can change the owner"
@@ -1186,7 +1360,8 @@ chown he key opts = do
          prv   <- isPrivileged he
          eumask <- getUserUmask he
          eowner <- getOwnerId k
-         created <- liftIO $ getCurrentTime
+         _ <- touchFileEntity k
+--         created <- liftIO $ getCurrentTime
 
          case (eumask,eowner , prv || eowner == Right he) of
            (Left err, _ , _ )  ->  return $ Left err
@@ -1195,13 +1370,14 @@ chown he key opts = do
                                        (T.concat ["only root or the owner can change the group ownership"])
            (Right umask, Right _ , True ) ->
              fmap (const k) <$>
-             insertDbfs (AlreadyOwner $ T.pack $ show gid) (makeOwnerGroup k gid created umask)
+             insertDbfs (AlreadyOwner $ T.pack $ show gid) (makeOwnerGroup k gid umask)
 
      (Right k) >>> (ChownDelGroup gid) =
        do
          prv   <- isPrivileged he
          eumask <- getUserUmask he
          eowner <- getOwnerId k
+         _ <- touchFileEntity k
 
          case (eumask,eowner , prv || eowner == Right he) of
            (Left err, _ , _ )  ->  return $ Left err
@@ -1211,8 +1387,6 @@ chown he key opts = do
            (Right _, Right _ , True ) ->
              fmap (const k) <$>
              (deleteByDbfs (NotAnOwner $ T.pack $ show gid) $ uniqueOwnerGroup k gid)
-
-
 
 
 ------------------------------  chmod --------------------------------
@@ -1241,25 +1415,27 @@ chmodDirectory he dir opts  = do
     where
       Left err >>> _ = return $ Left err
 
-      Right _  >>> ChmodOwner (Perm r w x) =
+      Right _  >>> ChmodOwner (Perm r w x) = do
+        _ <- touchDirectory dir
         updateDbfs (DirectoryDoesNotExist $ T.pack $ show dir)
-        dir
-        [ (I.=.) DirectoryOwnerR  r
-        , (I.=.) DirectoryOwnerW  w
-        , (I.=.) DirectoryOwnerX  x
-        ]
+          dir
+          [ (I.=.) DirectoryOwnerR  r
+          , (I.=.) DirectoryOwnerW  w
+          , (I.=.) DirectoryOwnerX  x
+          ]
 
-      Right _  >>> ChmodEveryone (Perm r w x) =
+      Right _  >>> ChmodEveryone (Perm r w x) = do
+        _ <- touchDirectory dir
         updateDbfs (DirectoryDoesNotExist $ T.pack $ show dir)
-        dir
-        [ (I.=.) DirectoryEveryoneR  r
-        , (I.=.) DirectoryEveryoneW  w
-        , (I.=.) DirectoryEveryoneX  x
-        ]
+          dir
+          [ (I.=.) DirectoryEveryoneR  r
+          , (I.=.) DirectoryEveryoneW  w
+          , (I.=.) DirectoryEveryoneX  x
+          ]
 
       Right _ >>> ChmodGroup gid (Perm r w x) = do
-        created <- liftIO $ getCurrentTime
-        e <- upsertDbfs (makeDirectoryGroupWithPerm dir gid created (Perm r w x))
+        _ <- touchDirectory dir
+        e <- upsertDbfs (makeDirectoryGroupWithPerm dir gid (Perm r w x))
           [ (I.=.) DirectoryGroupGroupR   r
           , (I.=.) DirectoryGroupGroupW   w
           , (I.=.) DirectoryGroupGroupX   x
@@ -1290,25 +1466,27 @@ chmodFile he file opts  = do
     where
       Left err >>> _ = return $ Left err
 
-      Right _  >>> ChmodOwner (Perm r w x) =
+      Right _  >>> ChmodOwner (Perm r w x) = do
+        _ <- touchFile file
         updateDbfs (FileDoesNotExist $ T.pack $ show file)
-        file
-        [ (I.=.) FileOwnerR  r
-        , (I.=.) FileOwnerW  w
-        , (I.=.) FileOwnerX  x
-        ]
+          file
+          [ (I.=.) FileOwnerR  r
+          , (I.=.) FileOwnerW  w
+          , (I.=.) FileOwnerX  x
+          ]
 
-      Right _  >>> ChmodEveryone (Perm r w x) =
+      Right _  >>> ChmodEveryone (Perm r w x) = do
+        _ <- touchFile file
         updateDbfs (FileDoesNotExist $ T.pack $ show file)
-        file
-        [ (I.=.) FileEveryoneR  r
-        , (I.=.) FileEveryoneW  w
-        , (I.=.) FileEveryoneX  x
-        ]
+          file
+          [ (I.=.) FileEveryoneR  r
+          , (I.=.) FileEveryoneW  w
+          , (I.=.) FileEveryoneX  x
+          ]
 
       Right _ >>> ChmodGroup gid (Perm r w x) = do
-        created <- liftIO $ getCurrentTime
-        e <- upsertDbfs (makeFileGroupWithPerm file gid created (Perm r w x))
+        _ <- touchFile file
+        e <- upsertDbfs (makeFileGroupWithPerm file gid  (Perm r w x))
           [ (I.=.) FileGroupGroupR   r
           , (I.=.) FileGroupGroupW   w
           , (I.=.) FileGroupGroupX   x

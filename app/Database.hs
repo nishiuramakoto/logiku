@@ -1,9 +1,11 @@
 module Database  where
 
-import             Import
+import             Import hiding(writeFile)
 import             Data.Time.LocalTime
 import qualified   Data.Text as T
-import Control.Monad.Trans.Maybe
+import             Control.Monad.Trans.Maybe
+import             DBFS
+import             Control.Monad.Trans.Either
 
 type Name         = Text
 type Explanation  = Text
@@ -27,6 +29,9 @@ deleteEntity :: forall t (m :: * -> *).
                 Entity t -> ReaderT (PersistEntityBackend t) m ()
 deleteEntity (Entity id' _) = delete id'
 
+eitherToMaybe :: Either a b -> Maybe b
+eitherToMaybe (Left  a) = Nothing
+eitherToMaybe (Right b) = Just b
 
 
 userExists :: UserAccountId -> Handler Bool
@@ -35,55 +40,32 @@ userExists uid = do user <- runDB $ get uid
                       Just _ -> return True
                       Nothing -> return False
 
-createProgram ::  UserAccountId -> Text -> Text -> Text
-                  -> Handler (Maybe DirectoryId)
-createProgram  uid name expl code = runDB $ do
-  muser <- get uid
-  time  <- liftIO $ getCurrentTime
-  case muser of
-    Just user -> do
-      pid <-  insert $ Directory uid name expl code time
-              (not (userAccountUmaskOwnerR user))
-              (not (userAccountUmaskOwnerW user))
-              (not (userAccountUmaskOwnerX user))
-              (not (userAccountUmaskEveryoneR user))
-              (not (userAccountUmaskEveryoneW user))
-              (not (userAccountUmaskEveryoneX user))
-      return $ Just pid
-    Nothing -> return Nothing
+createProgram :: UserAccountId -> Text -> Text -> Text
+                 -> Handler (Maybe DirectoryId)
+createProgram  uid name expl code = runDB $ fmap eitherToMaybe $ runEitherT $ do
+  Entity key dir <- EitherT $ uid `opendir` name
+  EitherT $ uid `writeDirectory` Entity key dir { directoryExplanation = expl
+                                                , directoryCode = code }
+  return $ key
+
+
 
 createGoal ::  UserAccountId -> DirectoryId -> Text -> Text -> Text
            -> Handler (Maybe FileId)
-createGoal  uid pid name expl code = runDB $ do
-  muser <- get uid
-  time  <- liftIO $ getCurrentTime
-  case muser of
-    Just user -> do
-      goalid <- insert $ File uid pid name expl code time
-                (not (userAccountUmaskOwnerR user))
-                (not (userAccountUmaskOwnerW user))
-                (not (userAccountUmaskOwnerX user))
-                (not (userAccountUmaskEveryoneR user))
-                (not (userAccountUmaskEveryoneW user))
-                (not (userAccountUmaskEveryoneX user))
-      return $ Just goalid
-    Nothing -> return Nothing
-
+createGoal  uid dir name expl code = runDB $ fmap eitherToMaybe $ runEitherT $ do
+  Entity key file <- EitherT $ uid `fopen` dir $ name
+  _               <- EitherT $ uid `writeFile` Entity key file { fileExplanation = expl
+                                                               , fileCode = code }
+  return key
 
 writeProgram :: UserAccountId -> Text -> Text -> Text
                 ->  Handler (Maybe DirectoryId)
-writeProgram uid name expl code = runDB $ do
-  mpid <- getBy $ UniqueDirectory uid name
-  case mpid of
-    Just (Entity pid _) -> do update pid [ DirectoryUserId     =.  uid
-                                         , DirectoryName       =.  name
-                                         , DirectoryExplanation =.  expl
-                                         , DirectoryCode        =.  code
-                                         ]
-                              return $ Just pid
-
-    Nothing -> return Nothing
-
+writeProgram uid name expl code = runDB $ fmap eitherToMaybe $ runEitherT $ do
+  Entity key dir  <- EitherT $ uid `opendir` name
+  _               <- EitherT $ uid `writeDirectory` Entity key dir { directoryExplanation = expl
+                                                                   , directoryCode        = code
+                                                                   }
+  return key
 
 ----------------------------  Insert or Nothing ------------------------------
 
@@ -93,7 +75,7 @@ insertUser user = do
   time  <- liftIO $ getCurrentTime
   case muser of
     Just _user -> return Nothing
-    Nothing   -> Just <$> (runDBtime $ insert $ (makeUserAccount (userAccountIdent user) time)
+    Nothing   -> Just <$> (runDBtime $ insert $ (makeUserAccount (userAccountIdent user) time time time)
                            { userAccountPassword = userAccountPassword user } )
 
 insertDirectory :: Directory -> Handler (Maybe DirectoryId)
@@ -129,25 +111,25 @@ insertFile goal = do
 
 
 insertTag :: Tag -> Handler (Maybe TagId)
-insertTag (Tag tag time) = do
+insertTag (Tag tag) = do
   mTag <- runDBtime $ getBy $ UniqueTag tag
   case mTag of
     Just _  -> return Nothing
-    Nothing -> Just <$> (runDBtime $ insert $ Tag tag time)
+    Nothing -> Just <$> (runDBtime $ insert $ Tag tag)
 
 insertDirectoryTag :: DirectoryTag -> Handler (Maybe DirectoryTagId)
-insertDirectoryTag (DirectoryTag progId tagId time) = do
+insertDirectoryTag (DirectoryTag progId tagId) = do
   mTag <- runDBtime $ getBy $ UniqueDirectoryTag progId tagId
   case mTag of
     Just _  -> return Nothing
-    Nothing -> Just <$> (runDBtime $ insert $ DirectoryTag progId tagId time)
+    Nothing -> Just <$> (runDBtime $ insert $ DirectoryTag progId tagId)
 
 insertFileTag :: FileTag -> Handler (Maybe FileTagId)
-insertFileTag (FileTag goalId tagId time) = do
+insertFileTag (FileTag goalId tagId) = do
   mTag <- runDBtime $ getBy $ UniqueFileTag goalId tagId
   case mTag of
     Just _  -> return Nothing
-    Nothing -> Just <$> (runDBtime $ insert $ FileTag goalId tagId time)
+    Nothing -> Just <$> (runDBtime $ insert $ FileTag goalId tagId)
 
 ------------------------  Insert or Replace --------------------------
 

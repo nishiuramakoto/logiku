@@ -71,12 +71,14 @@ sqlTest6 = select $
 
 
 setupTestDB1 :: YesodExample App ()
-setupTestDB1 =
-    runDB $ do
-      user1  <- insert $ makeUserAccount  "user1"
-      user2  <- insert $ makeUserAccount  "user2"
-      user3  <- insert $ makeUserAccount  "user3"
-      group1 <- insert $ (makeGroup "group1" user1) { groupExplanation = "abc" }
+setupTestDB1 = do
+  time <- liftIO $ getCurrentTime
+
+  runDB $ do
+      user1  <- insert $ makeUserAccount  "user1" time time time
+      user2  <- insert $ makeUserAccount  "user2" time time time
+      user3  <- insert $ makeUserAccount  "user3" time time time
+      group1 <- insert $ (makeGroup "group1" user1 time time time) { groupExplanation = "abc" }
       Right group1   <- groupadd user1 "group2"
       Right dir1   <- mkdir user1 "dir1"
       Right dir2   <- mkdir user2 "dir2"
@@ -89,7 +91,6 @@ setupTestDB1 =
       Right file2  <- touch user2 dir2 "file3"
       Right file2  <- touch user2 dir2 "file4"
 
-
       Right u  <- usermod user1 user2 [ AddToGroup group1 ]
       Right u' <- usermod user2 user2 [ SetDisplayName "me" ]
 
@@ -100,7 +101,7 @@ setupTestDB2 :: YesodExample App ()
 setupTestDB2 =
   runDB $ do
     --root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
-    Right root  <- su
+    root  <- su
     Right user1 <- root `useradd` "user1"
     Right user2 <- root `useradd` "user2"
     Right user3 <- root `useradd` "user3"
@@ -234,7 +235,7 @@ spec = withApp $ do
 
 
   it "tests useradd and userdel" $ runDB $ do
-    Right root  <- su
+    root  <- su
     Right user1 <- root `useradd` "user1"
     Right user2 <- root `useradd` "user2"
     Right user3 <- root `useradd` "user3"
@@ -258,7 +259,7 @@ spec = withApp $ do
 
   it "tests usermod" $ runDB $ do
     -- root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
-    Right root  <- su
+    root  <- su
     Right user1 <- root `useradd` "user1"
     Right user2 <- root `useradd` "user2"
     Right user3 <- root `useradd` "user3"
@@ -285,7 +286,7 @@ spec = withApp $ do
 
   it "tests groupadd and groupdel" $ runDB $ do
     -- root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
-    Right root  <- su
+    root  <- su
     Right user1 <- root `useradd` "user1"
     Right user2 <- root `useradd` "user2"
     Right user3 <- root `useradd` "user3"
@@ -330,7 +331,7 @@ spec = withApp $ do
 
   it "creates directories with appropriate permissions" $ runDB $ do
     -- root  <- insert $ (makeUserAccount  "root") { userAccountPrivileged = True }
-    Right root  <- su
+    root  <- su
     Right user1 <- root `useradd` "user1"
     Right user2 <- root `useradd` "user2"
     Right user3 <- root `useradd` "user3"
@@ -408,7 +409,7 @@ spec = withApp $ do
   it "creates files with appropriate permissions" $ do
     (root,user1,user2,user3,group1,group2,group3,dir0,dir1,dir2,dir3,file0,file1,file2,file3) <- runDB $ do
 
-      Right root  <- su
+      root  <- su
       Right user1 <- root `useradd` "user1"
       Right user2 <- root `useradd` "user2"
       Right user3 <- root `useradd` "user3"
@@ -456,7 +457,7 @@ spec = withApp $ do
 
       return (root, user1,user2,user3,group1,group2,group3,dir0,dir1,dir2,dir3,file0,file1,file2,file3)
 
-    Left (FileAlreadyExists _) <- runDB $ user1 `touch` dir1 $ "file"
+    Right _ <- runDB $ user1 `touch` dir1 $ "file"
     Left (PermissionError _  ) <- runDB $ user3 `touch` dir1 $ "file3"
     Left (PermissionError _  ) <- runDB $ user3 `touch` dir2 $ "file3"
 
@@ -503,7 +504,7 @@ spec = withApp $ do
 
   it "tests chown" $ do
     (root,user1,user2,user3,group1,group2,group3,dir0,dir1,dir2,dir3) <- runDB $ do
-      Right root  <- su
+      root  <- su
       Right user1 <- root `useradd` "user1"
       Right user2 <- root `useradd` "user2"
       Right user3 <- root `useradd` "user3"
@@ -576,7 +577,7 @@ spec = withApp $ do
 
   it "tests umask" $ do
     (root,user1,user2,user3,group1,group2,group3,dir0,dir1,dir2,dir3) <- runDB $ do
-      Right root  <- su
+      root  <- su
       Right user1 <- root `useradd` "user1"
       Right user2 <- root `useradd` "user2"
       Right user3 <- root `useradd` "user3"
@@ -621,7 +622,7 @@ spec = withApp $ do
 
   it "creates directories and lists them" $ do
     (root,user1,user2,user3,group1,group2,group3,dir0,dir1,dir2,dir3) <- runDB $ do
-      Right root  <- su
+      root  <- su
       Right user1 <- root `useradd` "user1"
       Right user2 <- root `useradd` "user2"
       Right user3 <- root `useradd` "user3"
