@@ -208,8 +208,8 @@ body {
 /* Global Navigator  */
 #pageBodyMain .articleDetailHead .globalNavi {
     border: solid #CCCCCC;
-    border-width: 0.05em 0;
-    padding: 1em 0;
+    border-width: 0.5pt 0;
+    padding: 0.5em 0;
 }
 
 #pageBodyMain .articleDetailHead .globalNavi ul {
@@ -225,14 +225,14 @@ body {
 
 #pageBodyMain .articleDetailHead .globalNavi ul li {
     list-style: none;
-    width: 25em;
+    width: 10em;
     float: left;
-    border-left: solid 0.1em #CCCCCC;
+    border-left: solid 1px #CCCCCC;
     padding: 0 0.5em;
     box-sizing: border-box;
     text-align: center;
     font-size: 1em;
-    line-height: 0.1em;
+    line-height: 1;
 }
 #pageBodyMain .articleDetailHead .globalNavi ul li:first-child {
     border-left: none;
@@ -257,13 +257,28 @@ body {
     background-repeat: no-repeat;
     background-position: 0 8px;
     padding-left: 10px;
+    border-bottom: solid 1px #CCCCCC;
+}
+
+
+#pageBodyMain .articleDetailBody .commandItemHeader {
+    clear:both;
 }
 
 #pageBodyMain .articleDetailBody .commandItemHeader .commandItemName {
+//    float:left;
     text-align: left;
 }
 
-#pageBodyMain .articleDetailBody .commandItemHeader .commandItemTime {
-    text-align: right;
+#pageBodyMain .articleDetailBody .commandItemHeader .commandItemDate {
     font-size: 0.8em;
+//    float: right;
+    text-align: left;
+    color: #888888;
+}
+
+#pageBodyMain .articleDetailBody .commandItemHeader .commandItemDate:after {
+    content: "";
+    clear: both;
+    display:block;
 }

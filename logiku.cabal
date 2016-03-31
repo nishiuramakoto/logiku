@@ -147,6 +147,7 @@ library
                  , list-extras      >= 0.4.1.4
                  , logict
                  , esqueleto        >= 2.4.3
+                 , either           >= 4.4.1
 executable         logiku
     if flag(library-only)
         Buildable: False

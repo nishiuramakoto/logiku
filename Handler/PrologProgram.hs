@@ -69,7 +69,7 @@ maybeUserId' = do
   $(logInfo) $ T.pack $ "muident" ++ show muident
   created <- liftIO $ getCurrentTime
   case muident of
-    Just ident -> do Entity uid _ <- runDB $ upsert (makeUserAccount ident created ) ([] :: [Update UserAccount])
+    Just ident -> do Entity uid _ <- runDB $ upsert (makeUserAccount ident created created created ) ([] :: [Update UserAccount])
                      return $ Just uid
     Nothing    -> return Nothing
 

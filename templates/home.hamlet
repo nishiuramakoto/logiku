@@ -4,9 +4,9 @@
         <nav class="globalNavi">
             <ul>
                 <li class="current">
-                    <a href="@{HomeR}">    コマンド
+                    <a href="@{HomeR}">    最新のコマンド
                 <li>
-                    <a href="@{HomeBotR}"> ボット
+                    <a href="@{HomeBotR}"> 最新のプログラム
 
     <section class="articleDetailBody">
         <ul>
@@ -15,8 +15,8 @@
                     <header  class="commandItemHeader">
                         <div class="commandItemName">
                             #{publicFileName file}
-                        <div class="commandItemTime">
-                            #{showTime tz $ publicFileCreated file}
+                        <div class="commandItemDate">
+                            作成 #{showTime tz $ publicFileCreated file}
 
 <footer class="articleDetailFoot">
     <aside class="creditUnit">

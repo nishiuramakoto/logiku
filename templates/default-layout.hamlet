@@ -2,7 +2,7 @@
 <header id="pageHead">
     <small id="statusBar">
         <div id="siteInfo">
-            BitBotBed
+            Botsnest
         <div id="userInfo">
             <form id="userInfoForm" class="iconr2" method=get action="@{HomeR}">
                 <ul>
