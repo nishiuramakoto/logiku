@@ -74,7 +74,8 @@ module DBFS
 
        , lsDirectory
        , lsFile
-       , llFile
+--       , llFile
+       , findFile , findFile'
        , findExecutableFile
 
        , readDirectory
@@ -102,7 +103,8 @@ module DBFS
 
 import             Import.NoFoundation   hiding ((==.), (>=.) ,(||.)
                                                 , on , Value , update , (=.) , forM_ , delete
-                                                , readFile, writeFile
+                                                , readFile, writeFile , FileInfo
+                                                , isNothing
                                                 )
 import  qualified  Import.NoFoundation as I
 import             Database.Esqueleto hiding(insert)
@@ -110,6 +112,9 @@ import  qualified  Database.Persist as P
 import  qualified  Data.Text as T
 import             Data.Foldable hiding(null, mapM_)
 import             Control.Monad.Trans.Either
+import             Constructors
+import             Data.List (nubBy)
+import  qualified  Data.Function as F
 
 -- Rule: Should never throw in any way from the functions in this module.
 --       Always test the validity of insert/update/delete etc. and return 'DbfsError' appropriately.
@@ -389,7 +394,7 @@ touchUserAccount him = do
   updateDbfs (UserDoesNotExist $ T.pack $ show him)
     him
     [ (I.=.) UserAccountModified time
-    , (I.=.) UserAccountAccess   time
+    , (I.=.) UserAccountAccessed time
     ]
 
 _touchGroup :: MonadIO m => GroupId -> SqlPersistT m (Result ())
@@ -398,7 +403,7 @@ _touchGroup gid = do
   updateDbfs (GroupDoesNotExist $ T.pack $ show gid)
     gid
     [ (I.=.) GroupModified time
-    , (I.=.) GroupAccess   time
+    , (I.=.) GroupAccessed time
     ]
 
 touchFile :: MonadIO m => FileId -> SqlPersistT m (Result ())
@@ -407,7 +412,7 @@ touchFile file = do
   updateDbfs (FileDoesNotExist $ T.pack $ show file)
     file
     [ (I.=.) FileModified time
-    , (I.=.) FileAccess   time
+    , (I.=.) FileAccessed time
     ]
 
 touchDirectory :: MonadIO m => DirectoryId -> SqlPersistT m (Result ())
@@ -416,7 +421,7 @@ touchDirectory dir = do
   updateDbfs (DirectoryDoesNotExist $ T.pack $ show dir)
     dir
     [ (I.=.) DirectoryModified time
-    , (I.=.) DirectoryAccess   time
+    , (I.=.) DirectoryAccessed time
     ]
 
 _accessUserAccount :: MonadIO m => UserAccountId -> SqlPersistT m (Result ())
@@ -424,7 +429,7 @@ _accessUserAccount him = do
   time <- liftIO $ getCurrentTime
   updateDbfs (UserDoesNotExist $ T.pack $ show him)
     him
-    [ (I.=.) UserAccountAccess   time
+    [ (I.=.) UserAccountAccessed  time
     ]
 
 _accessGroup :: MonadIO m => GroupId -> SqlPersistT m (Result ())
@@ -432,7 +437,7 @@ _accessGroup gid = do
   time <- liftIO $ getCurrentTime
   updateDbfs (GroupDoesNotExist $ T.pack $ show gid)
     gid
-    [ (I.=.) GroupAccess   time
+    [ (I.=.) GroupAccessed  time
     ]
 
 accessFile :: MonadIO m => FileId -> SqlPersistT m (Result ())
@@ -440,7 +445,7 @@ accessFile file = do
   time <- liftIO $ getCurrentTime
   updateDbfs (FileDoesNotExist $ T.pack $ show file)
     file
-    [ (I.=.) FileAccess   time
+    [ (I.=.) FileAccessed   time
     ]
 
 accessDirectory :: MonadIO m => DirectoryId -> SqlPersistT m (Result ())
@@ -448,7 +453,7 @@ accessDirectory dir = do
   time <- liftIO $ getCurrentTime
   updateDbfs (DirectoryDoesNotExist $ T.pack $ show dir)
     dir
-    [ (I.=.) DirectoryAccess   time
+    [ (I.=.) DirectoryAccessed   time
     ]
 
 
@@ -1112,25 +1117,179 @@ lsFile uid dir offs lim = do
     fileEveryoneReadable _uid' file = file^.FileEveryoneR ==. val True
 
 
-llFile :: MonadIO m
-          => [ FileId ] -> SqlPersistT m (Result [ PublicFile ])
-llFile files =  foldrM (>>>) (Right []) files
-  where
-    _    >>> (Left err) = return (Left err)
-    file >>> (Right fs) = do mf <- getPublicFile file
-                             case mf of
-                               Just f  -> return $ Right (f:fs)
-                               Nothing -> return $ Left (FileDoesNotExist (T.pack $ show file))
+-- llFile :: MonadIO m
+--           => [ FileId ] -> SqlPersistT m (Result [ FileInfo ])
+-- llFile files =  foldrM (>>>) (Right []) files
+--   where
+--     _    >>> (Left err) = return (Left err)
+--     file >>> (Right fs) = do mf <- getFileInfo file
+--                              case mf of
+--                                Just f  -> return $ Right (f:fs)
+--                                Nothing -> return $ Left (FileDoesNotExist (T.pack $ show file))
 
 
-getPublicFile :: MonadIO m
-                 => FileId -> SqlPersistT m (Maybe PublicFile)
-getPublicFile file = do mf <- get file
-                        case mf of
-                          Just f  -> return $ Just $ makePublicFile f
-                          Nothing -> return Nothing
+-- getPublicFile :: MonadIO m
+--                  => FileId -> SqlPersistT m (Maybe PublicFile)
+-- getPublicFile file = do mf <- get file
+--                         case mf of
+--                           Just f  -> return $ Just $ makePublicFile f
+--                           Nothing -> return Nothing
 
 -------------------------------- Find --------------------------------
+
+findFile :: (MonadIO m )
+      => UserAccountId -> Int64 -> Int64 -> SqlPersistT m (Result [FileInfo])
+
+findFile uid offs lim = do
+  prv <- isPrivileged uid
+  results <- select $
+             from $ \(file
+                      `LeftOuterJoin`
+                      (fileGroup `InnerJoin` groupMember )) ->
+                    distinctOn [don (file^.FileId) ] $ do
+                      on (groupMember?.GroupMemberGroupId ==. fileGroup?.FileGroupGroupId)
+                      on (fileGroup?.FileGroupFileId ==. just (file^.FileId))
+                      where_ ( fileReadable        file fileGroup groupMember
+                               ||. fileWritable    file fileGroup groupMember
+                               ||. fileExecutable  file fileGroup groupMember
+                               ||. val prv ==. val True
+                             )
+                      offset offs
+                      limit lim
+
+                      return ((file^.FileId)
+                             ,(file^.FileUserId)
+                             ,(file^.FileDirectoryId)
+                             ,(file^.FileName)
+                             ,(file^.FileCreated)
+                             ,(file^.FileModified)
+                             ,(file^.FileAccessed)
+                             ,(fileReadable    file fileGroup groupMember)
+                             ,(fileWritable    file fileGroup groupMember)
+                             ,(fileExecutable  file fileGroup groupMember)
+                             )
+
+  return (Right $ map (\(Value file
+                        ,Value uid
+                        ,Value dir
+                        ,Value name
+                        ,Value created
+                        ,Value modified
+                        ,Value accessed
+                        ,Value r
+                        ,Value w
+                        ,Value x
+                        ) -> makeFileInfo file uid dir name created modified accessed r w x)
+          results)
+  --return (Right [])
+  where
+
+    fileReadable file fileGroup groupMember = fileOwnerReadable file
+                                              ||. fileGroupReadable fileGroup groupMember
+                                              ||. fileEveryoneReadable  file
+
+    fileWritable file fileGroup groupMember =  fileOwnerWritable  file
+                                               ||. fileGroupWritable  fileGroup groupMember
+                                               ||. fileEveryoneWritable  file
+
+    fileExecutable file fileGroup groupMember = fileOwnerExecutable  file
+                                                ||. fileGroupExecutable fileGroup groupMember
+                                                ||. fileEveryoneExecutable  file
+
+
+    fileOwnerReadable   file = file^.FileUserId ==. val uid &&. file^.FileOwnerR ==. val True
+    fileOwnerWritable   file = file^.FileUserId ==. val uid &&. file^.FileOwnerW ==. val True
+    fileOwnerExecutable file = file^.FileUserId ==. val uid &&. file^.FileOwnerX ==. val True
+
+    fileGroupReadable   fileGroup groupMember =  not_ (isNothing (groupMember?.GroupMemberMember))
+                                                 &&. not_ (isNothing (fileGroup?.FileGroupGroupR))
+                                                 &&. groupMember?.GroupMemberMember ==. just (val uid)
+                                                 &&. fileGroup?.FileGroupGroupR ==. just (val True)
+    fileGroupWritable   fileGroup groupMember =  not_ (isNothing (groupMember?.GroupMemberMember))
+                                                 &&. not_ (isNothing (fileGroup?.FileGroupGroupW))
+                                                 &&. groupMember?.GroupMemberMember ==. just (val uid)
+                                                 &&. fileGroup?.FileGroupGroupW ==. just (val True)
+    fileGroupExecutable fileGroup groupMember =  not_ (isNothing (groupMember?.GroupMemberMember))
+                                                 &&. not_ (isNothing (fileGroup?.FileGroupGroupX))
+                                                 &&. groupMember?.GroupMemberMember ==. just (val uid)
+                                                 &&. fileGroup?.FileGroupGroupX ==. just (val True)
+
+    fileEveryoneReadable   file = file^.FileEveryoneR ==. val True
+    fileEveryoneWritable   file = file^.FileEveryoneW ==. val True
+    fileEveryoneExecutable file = file^.FileEveryoneX ==. val True
+
+findFile' :: (MonadIO m )
+      => UserAccountId -> Int64 -> Int64 -> SqlPersistT m (Result [FileInfo])
+
+findFile' uid offs lim = do
+  prv <- isPrivileged uid
+  results <- select $
+             from $ \(file
+                      `LeftOuterJoin`
+                      (fileGroup `InnerJoin` groupMember )) -> do
+                      on (groupMember?.GroupMemberGroupId ==. fileGroup?.FileGroupGroupId)
+                      on (fileGroup?.FileGroupFileId ==. just (file^.FileId))
+                      offset offs
+                      limit lim
+                      return (file, fileGroup, groupMember)
+
+  return $ Right $ distinctOnFileId $ filter (accessible prv) $ flip map results $
+    \(Entity fid file , fileGroup , groupMember) ->
+    let uid  = fileUserId file
+        dir  = fileDirectoryId file
+        name = fileName file
+        created = fileCreated file
+        modified = fileModified file
+        accessed = fileAccessed file
+        r = fileReadable   file fileGroup groupMember
+        w = fileWritable   file fileGroup groupMember
+        x = fileExecutable file fileGroup groupMember
+    in makeFileInfo fid uid dir name created modified accessed r w x
+
+  where
+    fileReadable file fileGroup groupMember = fileOwnerReadable file
+                                              || fileGroupReadable fileGroup groupMember
+                                              || fileEveryoneReadable file
+    fileWritable file fileGroup groupMember = fileOwnerWritable file
+                                              || fileGroupWritable fileGroup groupMember
+                                              || fileEveryoneWritable file
+    fileExecutable file fileGroup groupMember = fileOwnerExecutable file
+                                              || fileGroupExecutable fileGroup groupMember
+                                              || fileEveryoneExecutable file
+
+    fileOwnerReadable file   = fileUserId file == uid && fileOwnerR file
+    fileOwnerWritable file   = fileUserId file == uid && fileOwnerW file
+    fileOwnerExecutable file = fileUserId file == uid && fileOwnerX file
+
+    fileGroupReadable (Just (Entity _ fileGroup)) (Just (Entity _ groupMember)) =
+      groupMemberMember groupMember == uid  && fileGroupGroupR fileGroup
+    fileGroupReadable _ _ = False
+
+    fileGroupWritable (Just (Entity _ fileGroup)) (Just (Entity _ groupMember)) =
+      groupMemberMember groupMember == uid  && fileGroupGroupW fileGroup
+    fileGroupWritable _ _ = False
+
+    fileGroupExecutable (Just (Entity _ fileGroup)) (Just (Entity _ groupMember)) =
+      groupMemberMember groupMember == uid  && fileGroupGroupX fileGroup
+    fileGroupExecutable _ _ = False
+
+
+    fileEveryoneReadable   file = fileEveryoneR file
+    fileEveryoneWritable   file = fileEveryoneW file
+    fileEveryoneExecutable file = fileEveryoneX file
+
+    accessible :: Bool -> FileInfo -> Bool
+    accessible prv info = prv || fileInfoR info || fileInfoW info || fileInfoX info
+
+    distinctOnFileId :: [FileInfo] -> [FileInfo]
+    distinctOnFileId = nubBy f
+      where
+        f  :: FileInfo -> FileInfo -> Bool
+        f = (==) `F.on` fileInfoFileId
+
+
+
+
 
 findExecutableFile :: MonadIO m
                       => UserAccountId -> Int64 -> Int64 -> SqlPersistT m (Result [FileId])

@@ -14,6 +14,7 @@ import             Data.Time.LocalTime
 import             Language.Prolog2
 import             Database
 import             DBFS
+import             Constructors
 import             Text.Parsec
 import             Control.Monad.Trans.Maybe
 

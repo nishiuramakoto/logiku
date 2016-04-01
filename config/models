@@ -1,5 +1,5 @@
 ------------------ Prolog Program Database Schema -------------------------------
--- TODO: Add modification times
+-- TODO: Seperate File Metadata and Content for performance
 
 -- 'user' is a reserved name in postgres...
 UserAccount
@@ -9,7 +9,7 @@ UserAccount
     displayName Text Maybe
     created     UTCTime default=CURRENT_TIMESTAMP
     modified    UTCTime default=CURRENT_TIMESTAMP
-    access      UTCTime default=CURRENT_TIMESTAMP
+    accessed    UTCTime default=CURRENT_TIMESTAMP
     accessCount Int     default=0
 
     umaskOwnerR    Bool
@@ -33,7 +33,7 @@ Directory json
       explanation   Text
       created       UTCTime default=CURRENT_TIMESTAMP
       modified      UTCTime default=CURRENT_TIMESTAMP
-      access        UTCTime default=CURRENT_TIMESTAMP
+      accessed      UTCTime default=CURRENT_TIMESTAMP
       accessCount   Int     default=0
 
       ownerR    Bool
@@ -54,7 +54,7 @@ File
       explanation     Text
       created         UTCTime default=CURRENT_TIMESTAMP
       modified        UTCTime default=CURRENT_TIMESTAMP
-      access          UTCTime default=CURRENT_TIMESTAMP
+      accessed        UTCTime default=CURRENT_TIMESTAMP
       accessCount     Int     default=0
 
       ownerR    Bool
@@ -76,7 +76,7 @@ Group
     explanation  Text
     created      UTCTime default=CURRENT_TIMESTAMP
     modified     UTCTime default=CURRENT_TIMESTAMP
-    access       UTCTime default=CURRENT_TIMESTAMP
+    accessed     UTCTime default=CURRENT_TIMESTAMP
     accessCount  Int     default=0
 
     UniqueGroup  name

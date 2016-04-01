@@ -30,6 +30,7 @@ library
                      SideMenu
                      Database
                      DBFS
+                     Constructors
                      Authentication
                      Handler.Home
                      Handler.Blog

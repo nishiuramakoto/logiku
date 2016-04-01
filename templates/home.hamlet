@@ -14,9 +14,9 @@
                 <li>
                     <header  class="commandItemHeader">
                         <div class="commandItemName">
-                            #{publicFileName file}
+                            #{fileInfoName file}
                         <div class="commandItemDate">
-                            作成 #{showTime tz $ publicFileCreated file}
+                            作成 #{showTime tz $ fileInfoCreated file}
 
 <footer class="articleDetailFoot">
     <aside class="creditUnit">
