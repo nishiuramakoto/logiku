@@ -4,9 +4,9 @@
         <nav class="globalNavi">
             <ul>
                 <li class="current">
-                    <a href="@{CommandR}">    最新のコマンド
+                    <a href="@{CommandR}">  最新のコマンド
                 <li>
-                    <a href="@{BotR}"> 最新のプログラム
+                    <a href="@{BotR}"> 最新のボット
 
     <section class="articleDetailBody">
         <ul>
@@ -16,7 +16,7 @@
                         <div class="commandItemName">
                             #{fileInfoName file}
                         <div class="commandItemDate">
-                            #{showPerm file} 作成 #{showTime tz $ fileInfoCreated file}
+                            #{showPermFile file} 作成 #{showTime tz $ fileInfoCreated file}
 
 <footer class="articleDetailFoot">
     <aside class="creditUnit">

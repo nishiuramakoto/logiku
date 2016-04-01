@@ -4,8 +4,9 @@
 /favicon.ico FaviconR GET
 /robots.txt  RobotsR GET
 
-/            HomeR GET
-/bots        HomeBotR GET
+/            HomeR    GET
+/command     CommandR GET
+/bot         BotR     GET
 
 
 /prolog                       PrologTestR         GET

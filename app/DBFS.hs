@@ -75,6 +75,7 @@ module DBFS
        , lsDirectory
        , lsFile
 --       , llFile
+       , findDirectory
        , findFile , findFile'
        , findExecutableFile
 
@@ -1136,6 +1137,86 @@ lsFile uid dir offs lim = do
 --                           Nothing -> return Nothing
 
 -------------------------------- Find --------------------------------
+
+findDirectory :: (MonadIO m )
+      => UserAccountId -> Int64 -> Int64 -> SqlPersistT m (Result [DirectoryInfo])
+
+findDirectory uid offs lim = do
+  prv <- isPrivileged uid
+  results <- select $
+             from $ \(directory
+                      `LeftOuterJoin`
+                      (directoryGroup `InnerJoin` groupMember )) ->
+                    distinctOn [don (directory^.DirectoryId) ] $ do
+                      on (groupMember?.GroupMemberGroupId ==. directoryGroup?.DirectoryGroupGroupId)
+                      on (directoryGroup?.DirectoryGroupDirectoryId ==. just (directory^.DirectoryId))
+                      where_ ( directoryReadable        directory directoryGroup groupMember
+                               ||. directoryWritable    directory directoryGroup groupMember
+                               ||. directoryExecutable  directory directoryGroup groupMember
+                               ||. val prv ==. val True
+                             )
+                      offset offs
+                      limit lim
+
+                      return ((directory^.DirectoryId)
+                             ,(directory^.DirectoryUserId)
+                             ,(directory^.DirectoryName)
+                             ,(directory^.DirectoryCreated)
+                             ,(directory^.DirectoryModified)
+                             ,(directory^.DirectoryAccessed)
+                             ,(directoryReadable    directory directoryGroup groupMember)
+                             ,(directoryWritable    directory directoryGroup groupMember)
+                             ,(directoryExecutable  directory directoryGroup groupMember)
+                             )
+
+  return (Right $ map (\(Value directory
+                        ,Value uid
+                        ,Value name
+                        ,Value created
+                        ,Value modified
+                        ,Value accessed
+                        ,Value r
+                        ,Value w
+                        ,Value x
+                        ) -> makeDirectoryInfo directory uid name created modified accessed r w x)
+          results)
+  --return (Right [])
+  where
+
+    directoryReadable directory directoryGroup groupMember = directoryOwnerReadable directory
+                                              ||. directoryGroupReadable directoryGroup groupMember
+                                              ||. directoryEveryoneReadable  directory
+
+    directoryWritable directory directoryGroup groupMember =  directoryOwnerWritable  directory
+                                               ||. directoryGroupWritable  directoryGroup groupMember
+                                               ||. directoryEveryoneWritable  directory
+
+    directoryExecutable directory directoryGroup groupMember = directoryOwnerExecutable  directory
+                                                ||. directoryGroupExecutable directoryGroup groupMember
+                                                ||. directoryEveryoneExecutable  directory
+
+
+    directoryOwnerReadable   directory = directory^.DirectoryUserId ==. val uid &&. directory^.DirectoryOwnerR ==. val True
+    directoryOwnerWritable   directory = directory^.DirectoryUserId ==. val uid &&. directory^.DirectoryOwnerW ==. val True
+    directoryOwnerExecutable directory = directory^.DirectoryUserId ==. val uid &&. directory^.DirectoryOwnerX ==. val True
+
+    directoryGroupReadable   directoryGroup groupMember =  not_ (isNothing (groupMember?.GroupMemberMember))
+                                                 &&. not_ (isNothing (directoryGroup?.DirectoryGroupGroupR))
+                                                 &&. groupMember?.GroupMemberMember ==. just (val uid)
+                                                 &&. directoryGroup?.DirectoryGroupGroupR ==. just (val True)
+    directoryGroupWritable   directoryGroup groupMember =  not_ (isNothing (groupMember?.GroupMemberMember))
+                                                 &&. not_ (isNothing (directoryGroup?.DirectoryGroupGroupW))
+                                                 &&. groupMember?.GroupMemberMember ==. just (val uid)
+                                                 &&. directoryGroup?.DirectoryGroupGroupW ==. just (val True)
+    directoryGroupExecutable directoryGroup groupMember =  not_ (isNothing (groupMember?.GroupMemberMember))
+                                                 &&. not_ (isNothing (directoryGroup?.DirectoryGroupGroupX))
+                                                 &&. groupMember?.GroupMemberMember ==. just (val uid)
+                                                 &&. directoryGroup?.DirectoryGroupGroupX ==. just (val True)
+
+    directoryEveryoneReadable   directory = directory^.DirectoryEveryoneR ==. val True
+    directoryEveryoneWritable   directory = directory^.DirectoryEveryoneW ==. val True
+    directoryEveryoneExecutable directory = directory^.DirectoryEveryoneX ==. val True
+
 
 findFile :: (MonadIO m )
       => UserAccountId -> Int64 -> Int64 -> SqlPersistT m (Result [FileInfo])

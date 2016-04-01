@@ -54,6 +54,8 @@ data DirectoryInfo   = DirectoryInfo
                        , directoryInfoUserId    :: UserAccountId
                        , directoryInfoName      :: Text
                        , directoryInfoCreated   :: UTCTime
+                       , directoryInfoModified  :: UTCTime
+                       , directoryInfoAccessed  :: UTCTime
                        , directoryInfoR         :: Bool
                        , directoryInfoW         :: Bool
                        , directoryInfoX         :: Bool
@@ -72,10 +74,18 @@ data FileInfo        = FileInfo
                        , fileInfoX             :: Bool
                        } deriving (Eq,Show)
 
+
+makeDirectoryInfo :: DirectoryId -> UserAccountId ->  Text
+                -> UTCTime -> UTCTime -> UTCTime -> Bool -> Bool -> Bool
+                -> DirectoryInfo
+makeDirectoryInfo = DirectoryInfo
+
 makeFileInfo :: FileId -> UserAccountId -> DirectoryId -> Text
                 -> UTCTime -> UTCTime -> UTCTime -> Bool -> Bool -> Bool
                 -> FileInfo
 makeFileInfo = FileInfo
+
+
 
 -- makePublicUserAccount :: UserAccount -> PublicUserAccount
 -- makePublicUserAccount _user@UserAccount { userAccountIdent = ident
