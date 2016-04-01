@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings  #-}
+
 module Handler.Home where
 
 import  Import
@@ -7,7 +9,7 @@ import  qualified Data.Text as T
 import  Data.Time.LocalTime
 import  Data.Time.Calendar.WeekDate
 import  Text.Printf
-
+import  Constructors
 
 translateWeekJp :: Int -> Char
 translateWeekJp n = ("日月火水木金土" ++ (repeat '?')) !! n
@@ -26,35 +28,18 @@ showTime tz time = let lctime    = utcToLocalTime tz time
 getHomeR :: Handler Html
 getHomeR = do
   uid <- getCurrentUser
-  efiles <- runDB $ do eids <- findExecutableFile uid 0 10
-                       case eids of
-                         Right ids -> llFile ids
-                         Left err  -> return $ Left err
+
+  efiles <- runDB $ findFile uid 0 10
   tz <- liftIO $ getCurrentTimeZone
   case efiles of
-    Right files ->   defaultLayout $ do
-      addStylesheet $ StaticR  css_normalize_css
-      setTitle "BotsNest トップ"
-      toWidget $(widgetFile "home")
-    Left err -> do
-      setMessage $ toHtml $ T.pack $ show err
-      return $ toHtml $ ("Error" :: T.Text)
+     Right files ->   defaultLayout $ do
+       addStylesheet $ StaticR  css_normalize_css
+       setTitle "BotsNest トップ"
+       toWidget $(widgetFile "home")
+     Left err -> do
+       setMessage $ toHtml $ T.pack $ show err
+       return $ toHtml $ ("Error" :: T.Text)
 
 
 getHomeBotR :: Handler Html
-getHomeBotR = do
-  uid <- getCurrentUser
-  efiles <- runDB $ do eids <- findExecutableFile uid 0 10
-                       case eids of
-                         Right ids -> llFile ids
-                         Left err  -> return $ Left err
-  tz <- liftIO $ getCurrentTimeZone
-
-  case efiles of
-    Right files ->   defaultLayout $ do
-      addStylesheet $ StaticR  css_normalize_css
-      setTitle "BitBotBed トップ"
-      toWidget $(widgetFile "home")
-    Left err -> do
-      setMessage $ toHtml $ T.pack $ show err
-      return $ toHtml $ ("Error" :: T.Text)
+getHomeBotR = redirect HomeR

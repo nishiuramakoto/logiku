@@ -5,6 +5,7 @@ module Handler.Blog  where
 import             Import
 import             Control.Monad.CC.CCCxe
 import             ContMap
+import             Constructors
 
 -------------------------------------------------------------------------------------------
 
