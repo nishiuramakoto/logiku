@@ -8,6 +8,9 @@
 /command     CommandR GET
 /bot         BotR     GET
 
+/command/edit/#FileId CommandEditR GET
+/command/run/#FileId  CommandRunR  GET
+
 
 /prolog                       PrologTestR         GET
 /prolog/execute               PrologExecuteTestR  POST

@@ -4,20 +4,31 @@
         <nav class="globalNavi">
             <ul>
                 <li class="current">
-                    <a href="@{CommandR}">  最新のコマンド
+                    <a href="@{CommandR}">  コマンド
                 <li>
-                    <a href="@{BotR}"> 最新のボット
+                    <a href="@{BotR}"> ボット
 
     <section class="articleDetailBody">
         <ul>
-            $forall file <- files
+            $forall info <- infos
                 <li>
-                    <header  class="commandItemHeader">
-                        <div class="commandItemName">
-                            #{fileInfoName file}
-                        <div class="commandItemDate">
-                            #{showPermFile file} 作成 #{showTime tz $ fileInfoCreated file}
-
+                    <div  class="commandItem">
+                      <div class="runner">
+                        <a href="@{CommandRunR (fileInfoFileId info)}">
+                          <div class="text">
+                            <div class="name">
+                              #{fileInfoName info}
+                            <div class="info">
+                              <div class="main">
+                                #{showPermFile info} #{showTime tz $ fileInfoModified info}
+                              $forall g <- fileInfoGroupPerms info
+                                <div class="group">
+                                  #{showGroupPermFile g}
+                          <div class="image">
+                            <img src="@{StaticR images_019_play_png}">
+                      <div class="editor">
+                        <a href="@{CommandEditR  (fileInfoFileId info)}">
+                          <img src="@{StaticR images_006_pencil_png}" alt="編集">
 <footer class="articleDetailFoot">
     <aside class="creditUnit">
         補足

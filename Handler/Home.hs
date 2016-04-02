@@ -28,15 +28,36 @@ showPermDirectory :: DirectoryInfo -> String
 showPermDirectory info = [r,w,x]
   where
     r = if directoryInfoR info then 'r' else '-'
-    w = if directoryInfoR info then 'w' else '-'
-    x = if directoryInfoR info then 'x' else '-'
+    w = if directoryInfoW info then 'w' else '-'
+    x = if directoryInfoX info then 'x' else '-'
 
 showPermFile :: FileInfo -> String
-showPermFile info = [r,w,x]
+showPermFile info = [or',ow',ox',ar',aw',ax']
   where
-    r = if fileInfoR info then 'r' else '-'
-    w = if fileInfoR info then 'w' else '-'
-    x = if fileInfoR info then 'x' else '-'
+    or' = if fileInfoOwnerR info then 'r' else '-'
+    ow' = if fileInfoOwnerW info then 'w' else '-'
+    ox' = if fileInfoOwnerX info then 'x' else '-'
+    ar' = if fileInfoEveryoneR info then 'r' else '-'
+    aw' = if fileInfoEveryoneW info then 'w' else '-'
+    ax' = if fileInfoEveryoneX info then 'x' else '-'
+
+
+showGroupPermFile :: (Text,Perm) -> String
+showGroupPermFile (grp, Perm r w x) = show grp ++ [gr,gw,gx]
+  where
+    gr = if r then 'r' else '-'
+    gw = if w then 'w' else '-'
+    gx = if x then 'x' else '-'
+
+
+getCommandEditR :: FileId -> Handler Html
+getCommandEditR file = do
+  return $ toHtml $ (show file)
+
+getCommandRunR :: FileId -> Handler Html
+getCommandRunR file = do
+  return $ toHtml $ (show file)
+
 
 getHomeR :: Handler Html
 getHomeR = redirect CommandR
@@ -45,10 +66,10 @@ getCommandR :: Handler Html
 getCommandR = do
   uid <- getCurrentUser
 
-  efiles <- runDB $ findFile uid 0 10
+  einfos <- runDB $ findFile uid 0 10
   tz <- liftIO $ getCurrentTimeZone
-  case efiles of
-     Right files ->   defaultLayout $ do
+  case einfos of
+     Right infos ->   defaultLayout $ do
        addStylesheet $ StaticR  css_normalize_css
        setTitle "コマンドリスト"
        toWidget $(widgetFile "top_command")

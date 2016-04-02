@@ -33,5 +33,7 @@ database:
   poolsize: "_env:PGPOOLSIZE:10"
 
 
-copyright: copyright 2016 Makoto Nishiura All rights reserved.
+# This is not nesessary under Japanese law
+copyright: ""
+
 #analytics: UA-YOURCODE
