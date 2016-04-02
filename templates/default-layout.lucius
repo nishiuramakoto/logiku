@@ -103,6 +103,7 @@ body { color: #333333; }
     text-decoration: none;
 }
 
+
 /* ページボディ */
 #pageBody {
 	margin-top: 2em;
@@ -173,21 +174,22 @@ body { color: #333333; }
 
 
 
-/* ----- メインカラム内の装飾 ----- */
+  /* ----- メインカラム内の装飾 ----- */
 
+/*
 #pageBodyMain p {
 	font-size: 14px;
 	line-height: 1.429;
 }
 
-/* リスト */
+  リスト
 #pageBodyMain ul li {
 	font-size: 14px;
 	list-style-type: square;
 	line-height: 1.429;
 }
 
-/* 表 */
+ 表
 #pageBodyMain table {
 	font-size: 14px;
 	line-height: 1.429;
@@ -208,16 +210,16 @@ body { color: #333333; }
 	font-weight: bold;
 }
 
-/* 図版 */
+   図版
 #pageBodyMain figure {
 	margin: 0;
 }
-/* 画像キャプション */
+   画像キャプション
 #pageBodyMain figcaption {
 	font-size: 12px;
 }
 
-/* 見出し */
+   見出し
 #pageBodyMain .pageTitle {
 	font-size: 1em;
 	background-color: #F2F2E5;
@@ -246,7 +248,7 @@ body { color: #333333; }
 	line-height: 1.429;
 }
 
-/* 区切り線・余白 */
+   区切り線・余白
 #pageBodyMain .articleDetailHead {
 	border-bottom: solid 1px #CCCCCC;
 	margin-bottom: 30px;
@@ -261,7 +263,7 @@ body { color: #333333; }
 	margin: 30px 0;
 }
 
-/* 撮影情報 */
+   撮影情報
 #pageBodyMain .creditUnit {
 	padding: 10px;
 	border: solid 1px #CCCCCC;
@@ -270,3 +272,4 @@ body { color: #333333; }
 	font-size: 12px;
 	line-height: 1.5;
 }
+*/

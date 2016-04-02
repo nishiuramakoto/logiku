@@ -29,6 +29,8 @@
                       <div class="editor">
                         <a href="@{CommandEditR  (fileInfoFileId info)}">
                           <img src="@{StaticR images_006_pencil_png}" alt="編集">
+
+<!--
 <footer class="articleDetailFoot">
-    <aside class="creditUnit">
-        補足
+  Footer
+-->
