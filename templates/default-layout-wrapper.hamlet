@@ -49,7 +49,9 @@ $newline never
         ^{pageBody pc}
       <footer id="pageFoot">
         <p id="copyright">
-            <small> #{appCopyright $ appSettings master}
+            Icons by <a href="https://icomoon.io">Roonas</a>, available under a  <a href="https://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International license</a>.
+
+           <!-- <small> #{appCopyright $ appSettings master} -->
 
     $maybe analytics <- appAnalytics $ appSettings master
       <script>

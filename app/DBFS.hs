@@ -76,7 +76,7 @@ module DBFS
        , lsFile
 --       , llFile
        , findDirectory
-       , findFile , findFile'
+       , findFile
        , findExecutableFile
 
        , readDirectory
@@ -114,8 +114,8 @@ import  qualified  Data.Text as T
 import             Data.Foldable hiding(null, mapM_)
 import             Control.Monad.Trans.Either
 import             Constructors
-import             Data.List (nubBy)
-import  qualified  Data.Function as F
+-- import             Data.List (nubBy)
+-- import  qualified  Data.Function as F
 
 -- Rule: Should never throw in any way from the functions in this module.
 --       Always test the validity of insert/update/delete etc. and return 'DbfsError' appropriately.
@@ -1170,7 +1170,7 @@ findDirectory uid offs lim = do
                              )
 
   return (Right $ map (\(Value directory
-                        ,Value uid
+                        ,Value _uid
                         ,Value name
                         ,Value created
                         ,Value modified
@@ -1245,25 +1245,47 @@ findFile uid offs lim = do
                              ,(file^.FileCreated)
                              ,(file^.FileModified)
                              ,(file^.FileAccessed)
-                             ,(fileReadable    file fileGroup groupMember)
-                             ,(fileWritable    file fileGroup groupMember)
-                             ,(fileExecutable  file fileGroup groupMember)
+                             ,(file^.FileOwnerR)
+                             ,(file^.FileOwnerW)
+                             ,(file^.FileOwnerX)
+                             ,(file^.FileEveryoneR)
+                             ,(file^.FileEveryoneW)
+                             ,(file^.FileEveryoneX)
                              )
 
-  return (Right $ map (\(Value file
-                        ,Value uid
-                        ,Value dir
-                        ,Value name
-                        ,Value created
-                        ,Value modified
-                        ,Value accessed
-                        ,Value r
-                        ,Value w
-                        ,Value x
-                        ) -> makeFileInfo file uid dir name created modified accessed r w x)
-          results)
-  --return (Right [])
+  is <- forM results $
+    \(Value file
+     ,Value uid'
+     ,Value dir
+     ,Value name
+     ,Value created
+     ,Value modified
+     ,Value accessed
+     ,Value or'
+     ,Value ow'
+     ,Value ox'
+     ,Value ar'
+     ,Value aw'
+     ,Value ax'
+     ) -> do
+      gs <- getGroupPerms file
+      return $ makeFileInfo file uid' dir name created modified accessed or' ow' ox' gs ar' aw' ax'
+  return $ Right is
+
   where
+    getGroupPerms :: MonadIO m => FileId -> SqlPersistT m [(Text,Perm)]
+    getGroupPerms file = do
+      results <- select $
+                 from $ \ (group' `InnerJoin` fileGroup) -> do
+                   on     (fileGroup^.FileGroupGroupId ==. group'^.GroupId)
+                   where_ (fileGroup^.FileGroupFileId  ==. val file )
+                   limit 100
+                   return (group',fileGroup)
+      return $ map (\(Entity _ group',Entity _ fileGroup) -> ( groupName group'
+                                                             , Perm { permR = fileGroupGroupR fileGroup
+                                                                    , permW = fileGroupGroupW fileGroup
+                                                                    , permX = fileGroupGroupX fileGroup
+                                                                    })) results
 
     fileReadable file fileGroup groupMember = fileOwnerReadable file
                                               ||. fileGroupReadable fileGroup groupMember
@@ -1299,74 +1321,74 @@ findFile uid offs lim = do
     fileEveryoneWritable   file = file^.FileEveryoneW ==. val True
     fileEveryoneExecutable file = file^.FileEveryoneX ==. val True
 
-findFile' :: (MonadIO m )
-      => UserAccountId -> Int64 -> Int64 -> SqlPersistT m (Result [FileInfo])
+-- findFile' :: (MonadIO m )
+--       => UserAccountId -> Int64 -> Int64 -> SqlPersistT m (Result [FileInfo])
 
-findFile' uid offs lim = do
-  prv <- isPrivileged uid
-  results <- select $
-             from $ \(file
-                      `LeftOuterJoin`
-                      (fileGroup `InnerJoin` groupMember )) -> do
-                      on (groupMember?.GroupMemberGroupId ==. fileGroup?.FileGroupGroupId)
-                      on (fileGroup?.FileGroupFileId ==. just (file^.FileId))
-                      offset offs
-                      limit lim
-                      return (file, fileGroup, groupMember)
+-- findFile' uid offs lim = do
+--   prv <- isPrivileged uid
+--   results <- select $
+--              from $ \(file
+--                       `LeftOuterJoin`
+--                       (fileGroup `InnerJoin` groupMember )) -> do
+--                       on (groupMember?.GroupMemberGroupId ==. fileGroup?.FileGroupGroupId)
+--                       on (fileGroup?.FileGroupFileId ==. just (file^.FileId))
+--                       offset offs
+--                       limit lim
+--                       return (file, fileGroup, groupMember)
 
-  return $ Right $ distinctOnFileId $ filter (accessible prv) $ flip map results $
-    \(Entity fid file , fileGroup , groupMember) ->
-    let uid  = fileUserId file
-        dir  = fileDirectoryId file
-        name = fileName file
-        created = fileCreated file
-        modified = fileModified file
-        accessed = fileAccessed file
-        r = fileReadable   file fileGroup groupMember
-        w = fileWritable   file fileGroup groupMember
-        x = fileExecutable file fileGroup groupMember
-    in makeFileInfo fid uid dir name created modified accessed r w x
+--   return $ Right $ distinctOnFileId $ filter (accessible prv) $ flip map results $
+--     \(Entity fid file , fileGroup , groupMember) ->
+--     let uid  = fileUserId file
+--         dir  = fileDirectoryId file
+--         name = fileName file
+--         created = fileCreated file
+--         modified = fileModified file
+--         accessed = fileAccessed file
+--         r = fileReadable   file fileGroup groupMember
+--         w = fileWritable   file fileGroup groupMember
+--         x = fileExecutable file fileGroup groupMember
+--     in makeFileInfo fid uid dir name created modified accessed r w x
 
-  where
-    fileReadable file fileGroup groupMember = fileOwnerReadable file
-                                              || fileGroupReadable fileGroup groupMember
-                                              || fileEveryoneReadable file
-    fileWritable file fileGroup groupMember = fileOwnerWritable file
-                                              || fileGroupWritable fileGroup groupMember
-                                              || fileEveryoneWritable file
-    fileExecutable file fileGroup groupMember = fileOwnerExecutable file
-                                              || fileGroupExecutable fileGroup groupMember
-                                              || fileEveryoneExecutable file
+--   where
+--     fileReadable file fileGroup groupMember = fileOwnerReadable file
+--                                               || fileGroupReadable fileGroup groupMember
+--                                               || fileEveryoneReadable file
+--     fileWritable file fileGroup groupMember = fileOwnerWritable file
+--                                               || fileGroupWritable fileGroup groupMember
+--                                               || fileEveryoneWritable file
+--     fileExecutable file fileGroup groupMember = fileOwnerExecutable file
+--                                               || fileGroupExecutable fileGroup groupMember
+--                                               || fileEveryoneExecutable file
 
-    fileOwnerReadable file   = fileUserId file == uid && fileOwnerR file
-    fileOwnerWritable file   = fileUserId file == uid && fileOwnerW file
-    fileOwnerExecutable file = fileUserId file == uid && fileOwnerX file
+--     fileOwnerReadable file   = fileUserId file == uid && fileOwnerR file
+--     fileOwnerWritable file   = fileUserId file == uid && fileOwnerW file
+--     fileOwnerExecutable file = fileUserId file == uid && fileOwnerX file
 
-    fileGroupReadable (Just (Entity _ fileGroup)) (Just (Entity _ groupMember)) =
-      groupMemberMember groupMember == uid  && fileGroupGroupR fileGroup
-    fileGroupReadable _ _ = False
+--     fileGroupReadable (Just (Entity _ fileGroup)) (Just (Entity _ groupMember)) =
+--       groupMemberMember groupMember == uid  && fileGroupGroupR fileGroup
+--     fileGroupReadable _ _ = False
 
-    fileGroupWritable (Just (Entity _ fileGroup)) (Just (Entity _ groupMember)) =
-      groupMemberMember groupMember == uid  && fileGroupGroupW fileGroup
-    fileGroupWritable _ _ = False
+--     fileGroupWritable (Just (Entity _ fileGroup)) (Just (Entity _ groupMember)) =
+--       groupMemberMember groupMember == uid  && fileGroupGroupW fileGroup
+--     fileGroupWritable _ _ = False
 
-    fileGroupExecutable (Just (Entity _ fileGroup)) (Just (Entity _ groupMember)) =
-      groupMemberMember groupMember == uid  && fileGroupGroupX fileGroup
-    fileGroupExecutable _ _ = False
+--     fileGroupExecutable (Just (Entity _ fileGroup)) (Just (Entity _ groupMember)) =
+--       groupMemberMember groupMember == uid  && fileGroupGroupX fileGroup
+--     fileGroupExecutable _ _ = False
 
 
-    fileEveryoneReadable   file = fileEveryoneR file
-    fileEveryoneWritable   file = fileEveryoneW file
-    fileEveryoneExecutable file = fileEveryoneX file
+--     fileEveryoneReadable   file = fileEveryoneR file
+--     fileEveryoneWritable   file = fileEveryoneW file
+--     fileEveryoneExecutable file = fileEveryoneX file
 
-    accessible :: Bool -> FileInfo -> Bool
-    accessible prv info = prv || fileInfoR info || fileInfoW info || fileInfoX info
+--     accessible :: Bool -> FileInfo -> Bool
+--     accessible prv info = prv || fileInfoR info || fileInfoW info || fileInfoX info
 
-    distinctOnFileId :: [FileInfo] -> [FileInfo]
-    distinctOnFileId = nubBy f
-      where
-        f  :: FileInfo -> FileInfo -> Bool
-        f = (==) `F.on` fileInfoFileId
+--     distinctOnFileId :: [FileInfo] -> [FileInfo]
+--     distinctOnFileId = nubBy f
+--       where
+--         f  :: FileInfo -> FileInfo -> Bool
+--         f = (==) `F.on` fileInfoFileId
 
 
 

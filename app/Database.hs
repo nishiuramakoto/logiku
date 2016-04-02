@@ -32,7 +32,7 @@ deleteEntity :: forall t (m :: * -> *).
 deleteEntity (Entity id' _) = delete id'
 
 eitherToMaybe :: Either a b -> Maybe b
-eitherToMaybe (Left  a) = Nothing
+eitherToMaybe (Left  _) = Nothing
 eitherToMaybe (Right b) = Just b
 
 
@@ -46,8 +46,8 @@ createProgram :: UserAccountId -> Text -> Text -> Text
                  -> Handler (Maybe DirectoryId)
 createProgram  uid name expl code = runDB $ fmap eitherToMaybe $ runEitherT $ do
   Entity key dir <- EitherT $ uid `opendir` name
-  EitherT $ uid `writeDirectory` Entity key dir { directoryExplanation = expl
-                                                , directoryCode = code }
+  _              <- EitherT $ uid `writeDirectory` Entity key dir { directoryExplanation = expl
+                                                                  , directoryCode = code }
   return $ key
 
 

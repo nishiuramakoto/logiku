@@ -12,12 +12,12 @@ body { color: #333333; }
 
 	    /* ページ */
 #pageHead {
-    width: 980px;
-    height: 20px;
+    width: 75em;
+    height: 2em;
     margin: 0 auto;
 }
 #page {
-	width: 980px;
+	width: 75em;
 	margin: 0 auto;
 }
 
@@ -29,7 +29,7 @@ body { color: #333333; }
 }
 
 #pageHead #statusBar #siteInfo {
-	width: 550px;
+	width: 7.5em;
 	float: left;
 	font-family: 'Schoolbell', serif ;
 	font-size: 5em;
@@ -56,9 +56,9 @@ body { color: #333333; }
 
 #pageHead #statusBar #userInfo #userInfoForm ul li a{
     display: block;
-    padding-left: 10px;
-    padding-right: 10px;
-    padding-top : 5px;
+    padding-left: 1em;
+    padding-right: 1em;
+    padding-top : 0.5em;
 //    background-color: #dddddd;
 }
 
@@ -83,25 +83,29 @@ body { color: #333333; }
 	font-family: 'Antic Didone', serif;
 }
 #pageHead #catchcopy {
-	font-size: 12px;
+	font-size: 1em;
 	line-height: 1.5;
-	margin-top: 5px;
+	margin-top: 0.5em;
 }
 
 /*ページフッター*/
 #pageFoot {
 	border-top: solid 1px #CCCCCC;
-	margin-top: 15px;
+	margin-top: 1em;
 }
 
-#pageFoot #copyright small {
-	font-size: 12px;
+#pageFoot #copyright {
+	font-size: 0.6em;
 	line-height: 1.5;
+}
+
+#pageFoot #copyright a{
+    text-decoration: none;
 }
 
 /* ページボディ */
 #pageBody {
-	margin-top: 30px;
+	margin-top: 2em;
 }
 #pageBody:after {
 	content: "";
@@ -110,12 +114,12 @@ body { color: #333333; }
 }
 
 #pageBodyMain {
-	width: 720px;
+	width: 50em;
 	float: left;
 }
 
 #pageBodySub {
-	width: 220px;
+	width: 20em;
 	float: right;
 }
 
@@ -123,15 +127,15 @@ body { color: #333333; }
 /* ----- サブカラム内の装飾 ----- */
 
 #pageBodySub iframe {
-    width:220px;
-    height:400px;
+    width:20em;
+    height:40em;
 }
 
 /* 見出し */
 #pageBodySub h2 {
-	font-size: 16px;
+	font-size: 1.5em;
 	line-height: 1.375;
-	padding: 5px;
+	padding: 0.5em;
 	margin-top: 0;
 	border-bottom: 1px solid #CCCCCC;
 }
@@ -142,9 +146,9 @@ body { color: #333333; }
 	padding: 0;
 }
 #pageBodySub .newsList ul li {
-	font-size: 12px;
+	font-size: 1em;
 	line-height: 1.5;
-	margin: 10px 5px;
+	margin: 1em 0.5em;
 }
 #pageBodySub .newsList ul li time {
 	font-weight: bold;
@@ -152,12 +156,12 @@ body { color: #333333; }
 }
 
 #pageBodySub .localNavi ul {
-    margin: 0 0 30px;
+    margin: 0 0 2em;
     padding-left: 0;
 }
 
 #pageBodySub .localNavi ul li {
-    font-size: 14px;
+    font-size: 1em;
     line-height: 1.429;
     margin-bottom: 3px;
     list-style-type: none;
