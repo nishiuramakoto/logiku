@@ -1,17 +1,22 @@
+/* ----- メインカラム内の装飾 ----- */
 
-
-
+#pageBodyMain .articleDetailHead {
+    margin: 0px 0px 0px 0px;
+//    border: 1px solid #ff6600;
+}
 
 /* Global Navigator  */
 #pageBodyMain .articleDetailHead .globalNavi {
     border: solid #CCCCCC;
     border-width: 0.5pt 0;
     padding: 0.5em 0;
+    margin: 0em;
 }
 
 #pageBodyMain .articleDetailHead .globalNavi ul {
     margin: 0;
     padding: 0;
+
 }
 
 #pageBodyMain .articleDetailHead .globalNavi ul:after {
@@ -46,7 +51,21 @@
     background-color: #F2F2E5;
 }
 
+
+#pageBodyMain .articleDetailBody {
+    margin: 0em;
+}
+
+
 /* Command List */
+
+#pageBodyMain .articleDetailBody ul {
+    margin: 0em;
+    padding: 0em;
+    // Debug
+    //background-color: #ffffcc;
+    //border: 1px solid #ff6600;
+}
 
 #pageBodyMain .articleDetailBody ul li  {
     list-style-type: none;
@@ -59,12 +78,12 @@
 
 
 #pageBodyMain .articleDetailBody .commandItem {
-    width:30em;
+    width:25em;
     clear:both;
 }
 
 #pageBodyMain .articleDetailBody .commandItem .runner  {
-    width: 22em;
+    width: 17em;
     float:left
 }
 
@@ -75,16 +94,16 @@
     text-decoration: none;
 }
 
-
-
 #pageBodyMain .articleDetailBody .commandItem .runner a .text {
-    width: 15em;
+    width: 12em;
     float: right;
+
 }
 
 #pageBodyMain .articleDetailBody .commandItem .runner a .image {
-    width: 5em;
+    width: 2.8em;
     float: left;
+
 }
 
 #pageBodyMain .articleDetailBody .commandItem .runner a .image img {
@@ -105,11 +124,13 @@
 #pageBodyMain .articleDetailBody .commandItem .editor {
     width:5em;
     float:right;
+    margin:1.5em;
 }
 
 #pageBodyMain .articleDetailBody .commandItem .editor a img {
-    width: 2.5em;
+    width: 1.0em;
     height:auto;
+    vertical-align:baseline;
 }
 
 
