@@ -37,13 +37,15 @@ import Network.Wai.Handler.WarpTLS          (tlsSettings, runTLS)
 -- Import all relevant handler modules here.
 -- Don't forget to add new modules to your cabal file!
 import Handler.Common
+import Handler.Home
+import Handler.Command
+
+import Handler.PrologTest
+import Handler.PrologProgram
 import Handler.OldHome
 import Handler.Comment
 import Handler.Blog
 
-import Handler.Home
-import Handler.PrologTest
-import Handler.PrologProgram
 import ContMap
 import SideMenu
 -- This line actually creates our YesodDispatch instance. It is the second half

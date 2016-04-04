@@ -27,7 +27,6 @@ module ContMap (
 
 import             Import.NoFoundation
 import             Text.Blaze (Markup)
-import             Data.Time.LocalTime
 import             Data.Unique
 --import             Data.IORef
 import qualified   Data.Map as Map
@@ -95,14 +94,10 @@ sendk klabel html k = do
 
 inquire :: YesodCC site => ContId -> Html -> CC (PS Html) (HandlerT site IO) Html
 inquire klabel html = do
-  ZonedTime localTime _zone  <- liftIO getZonedTime
-  lift $ $(logInfo) $ T.pack $ "ShiftP: " ++ show klabel ++ ":" ++ show localTime
-
   shiftP ps $ sendk klabel html
 
 inquireFinish :: YesodCC site => Html -> CC (PS Html) (HandlerT site IO) Html
 inquireFinish html = abortP ps $ return html
-
 
 
 inquireGet :: YesodCC site
@@ -178,14 +173,10 @@ runFormPostButtons :: (YesodCC site, Show b)
                       => [(Text,b)] -> (HandlerT site IO) (Maybe b)
 runFormPostButtons [] = return Nothing
 runFormPostButtons ((name,value):xs) = do
---  $(logInfo) ("inquireFormPostButtons" `T.append` T.pack (show name) )
   p <- lookupPostParam name
---  $(logInfo) "inquireFormPostButtons"
   case p of
-    Just _  -> do
---      $(logInfo) $ "inquireFormPostButtons" `T.append` T.pack (show value)
-      return (Just value)
-    _      -> runFormPostButtons xs
+    Just _  -> return (Just value)
+    _       -> runFormPostButtons xs
 
 
 -- answerGet :: (MonadTrans t, Monad (t AppHandler))
@@ -202,22 +193,20 @@ answerGet form error_action = do
 
 
 
-run :: (YesodCC site) => (CC (PS Html) (HandlerT site IO) Html) ->  (HandlerT site IO) Html
+run :: (YesodCC site) => CC (PS a) (HandlerT site IO) a ->  HandlerT site IO a
 run f = do
-  ZonedTime localTime _zone  <- liftIO getZonedTime
-  $(logInfo) $ T.pack $ "Running a new continuation" ++ ":" ++ show localTime
+  $(logInfo) $ T.pack $ "Running a new continuation"
 
   runCC $ pushPrompt ps f
 
 resume :: YesodCC site =>  ContId -> Html -> Html -> HandlerT site IO Html
-resume klabel cont_html not_found = do
-  ZonedTime localTime _zone  <- liftIO getZonedTime
-  $(logInfo) $ T.pack $ "resuming " ++ show klabel ++ ":" ++ show localTime
+resume klabel contHtml notFoundHtml = do
+  $(logInfo) $ T.pack $ "resuming " ++ show klabel
 
-  maybe_k <- lookupContMap klabel
-  case maybe_k of
-    Just k  -> runCC $ k cont_html
-    Nothing -> return not_found
+  mk <- lookupContMap klabel
+  case mk of
+    Just k  -> runCC $ k contHtml
+    Nothing -> return notFoundHtml
 
 ----------------------------  Yesod defs  ----------------------------
 generateCcFormGet ::  (RenderMessage (HandlerSite m) FormMessage, MonadHandler m)
@@ -233,6 +222,9 @@ generateCcFormPost form = do
   (widget, enctype) <- generateFormPost form
   klabel <- generateCcLabel
   return (klabel, widget, enctype)
+
+
+-- Now we are on a 64bit system! maxBound::Int = 9223372036854775807!
 
 generateCcLabel ::  (RenderMessage (HandlerSite m) FormMessage, MonadHandler m)
                      => m Int

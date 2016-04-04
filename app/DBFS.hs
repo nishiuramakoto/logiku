@@ -19,6 +19,7 @@ module DBFS
        , isGroupOwnerOf
        , belongs
        , userExistsBy
+       , getByUserIdent
        , getUserDisplayName
        , getDirectoryUserId
        , getDirectoryGroups
@@ -367,6 +368,16 @@ userExistsBy ident =  do existing <- P.getBy $ UniqueUserAccount ident
 userExists :: MonadIO m => UserAccountId -> SqlPersistT m Bool
 userExists uid =  do existing <- P.get $ uid
                      return $ maybe False (const True) existing
+
+
+getByUserIdent :: MonadIO m => Maybe Text -> SqlPersistT m UserAccountId
+getByUserIdent mu = do case mu of
+                         Just u -> do euid <- getUser u
+                                      case euid of
+                                        Right uid -> return uid
+                                        Left  _   -> suGuest
+
+                         Nothing -> suGuest
 
 
 getDirectoryUserId :: MonadIO m => DirectoryId -> SqlPersistT m (Result UserAccountId)

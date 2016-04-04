@@ -11,14 +11,16 @@
 body { color: #333333; }
 
 	    /* ページ */
-#pageHead {
-    width: 75em;
-    height: 2em;
-    margin: 0 auto;
-}
+
 #page {
-	width: 75em;
+	width: 70em;
 	margin: 0 auto;
+}
+
+#pageHead {
+    width: 70em;
+    height: 6em;
+    margin: 0 auto;
 }
 
 /* Status Bar  */
@@ -28,8 +30,8 @@ body { color: #333333; }
     margin-bottom: 1em;
 }
 
-#pageHead #statusBar #siteInfo {
-	width: 7.5em;
+#pageHead #statusBar #siteTitle {
+	width: 4em;
 	float: left;
 	font-family: 'Schoolbell', serif ;
 	font-size: 5em;
@@ -37,6 +39,12 @@ body { color: #333333; }
 	color: #CCCCCC;
 	background-color: #000000;
 */
+}
+
+#pageHead #statusBar #userInfo {
+	width: 50em;
+	float: right;
+	font-size: 0.8em;
 }
 
 #pageHead #statusBar #userInfo #userInfoForm {
@@ -62,16 +70,37 @@ body { color: #333333; }
 //    background-color: #dddddd;
 }
 
+#pageHead #statusBar #userInfo #userInfoForm ul li .welcomeGuest{
+    padding-left: 1em;
+    padding-right: 1em;
+    padding-top : 0.5em;
+//    background-color: #dddddd;
+}
+
+#pageHead #statusBar #userInfo #userInfoForm ul:after{
+    content: "";
+    clear: both;
+    display: block;
+}
+
+#pageHead #statusBar:after {
+    content: "";
+    clear: both;
+    display: block;
+}
+
+
 
 /* Message */
 #message {
     clear:both;
-    color: red;
+    color: blue;
 }
 
 /* Debug info */
-#debug {
-    display:none;
+#debugInfo {
+    color: red;
+    display: none;
 }
 
 
@@ -120,7 +149,7 @@ body { color: #333333; }
 }
 
 #pageBodySub {
-	width: 20em;
+	width: 15em;
 	float: right;
 }
 

@@ -1,7 +1,7 @@
 
 <header id="pageHead">
-    <small id="statusBar">
-        <div id="siteInfo">
+    <div id="statusBar">
+        <div id="siteTitle">
             Botsnest
         <div id="userInfo">
             <form id="userInfoForm" class="iconr2" method=get action="@{HomeR}">
@@ -13,7 +13,10 @@
                             <a id="logout" href="@{AuthR LogoutR}"> ログアウト
                     $nothing
                         <li>
-                            <a id="login" href="@{AuthR LoginR}"> ログイン/新規
+                            <div class="welcomeGuest">
+                                ようこそ! ゲストさん。
+                        <li>
+                            <a id="login" href="@{AuthR LoginR}"> ログインする/アカウントを作る
                     <li>
                         <input id="searchBox" placeholder="検索" type=text>
 
@@ -21,12 +24,11 @@
 $maybe msg <- mmsg
     <div #message>#{msg}
 
-<div class="debug">#{show sess}
+<div id="debugInfo">Session=#{show sess}
 
 <div id="pageBody">
     <div id="pageBodyMain">
         ^{widget}
     <div id="pageBodySub">
         <nav class="localNavi">
-            <section class="categoryTree">
-                ^{categoryTree}
+            ^{categoryTree}

@@ -3,7 +3,7 @@
 
 module Foundation where
 
-import Import.NoFoundation
+import Import.NoFoundation hiding (Unique)
 import Database.Persist.Sql (ConnectionPool, runSqlPool)
 import Text.Hamlet          (hamletFile)
 import Text.Jasmine         (minifym)
@@ -202,7 +202,8 @@ instance YesodAuth App where
     -- Where to send a user after logout
     logoutDest _ = HomeR
     -- Override the above two destinations when a Referer: header is present
-    redirectToReferer _ = True
+    -- redirectToReferer _ = True
+    redirectToReferer _ = False
 
     authenticate creds = runDB $ do
         x <- getBy $ UniqueUserAccount $ credsIdent creds

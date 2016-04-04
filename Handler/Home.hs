@@ -54,9 +54,9 @@ getCommandEditR :: FileId -> Handler Html
 getCommandEditR file = do
   return $ toHtml $ (show file)
 
-getCommandRunR :: FileId -> Handler Html
-getCommandRunR file = do
-  return $ toHtml $ (show file)
+-- getCommandRunR :: FileId -> Handler Html
+-- getCommandRunR file = do
+--   return $ toHtml $ (show file)
 
 
 getHomeR :: Handler Html

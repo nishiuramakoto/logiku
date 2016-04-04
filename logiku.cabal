@@ -32,7 +32,9 @@ library
                      DBFS
                      Constructors
                      Authentication
+                     Prolog
                      Handler.Home
+                     Handler.Command
                      Handler.Blog
                      Handler.Base
                      Handler.PrologTest
