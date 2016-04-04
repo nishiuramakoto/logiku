@@ -25,6 +25,7 @@ module ContMap (
   generateCcLabel,
   ) where
 
+import             Form
 import             Import.NoFoundation
 import             Text.Blaze (Markup)
 import             Data.Unique

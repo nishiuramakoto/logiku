@@ -5,6 +5,7 @@ module Inquire (
   where
 
 import Import
+import Form
 import ContMap
 import Control.Monad.CC.CCCxe
 import Language.Prolog2.Syntax
@@ -13,8 +14,6 @@ import qualified Data.Text as T
 
 -------------------------- Primitive forms  --------------------------
 
-data PrologInquireBoolForm = PrologInquireBoolForm Bool
-                             deriving Show
 
 prologInquireBoolForm :: Term -> Html -> MForm Handler (FormResult PrologInquireBoolForm, Widget)
 prologInquireBoolForm t = renderDivs $ PrologInquireBoolForm
