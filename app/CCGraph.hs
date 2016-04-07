@@ -28,6 +28,7 @@ module CCGraph (
   inquirePostUntilButton,
   generateCCFormGet,
   generateCCFormPost,
+  routePath
   ) where
 
 import             Import.NoFoundation
@@ -63,6 +64,23 @@ instance Show (CCNodeLabel site) where
   show (CCNodeLabel time (Just _))  = "(" ++ show time ++ ", " ++ "Just <cont>" ++ ")"
   show (CCNodeLabel time (Nothing)) = "(" ++ show time ++ ", " ++ "Nothing" ++ ")"
 
+---------------------- - Running continuations  ----------------------
+
+run ::  CC CCP (HandlerT site IO) Html ->  HandlerT site IO Html
+run f = do
+  $(logInfo) $ T.pack $ "Running a new continuation"
+
+  runCC $ pushPrompt p2R f
+
+resume ::  YesodCC site =>  CCNode -> Html -> HandlerT site IO Html
+resume node notFoundHtml = do
+  $(logInfo) $ T.pack $ "resuming " ++ show node
+  mk <- lookupCCK node
+  case mk of
+    Just k  -> runCC $ k node
+    Nothing -> do
+      $(logInfo) "Continuation not found"
+      return notFoundHtml
 
 -------------- Access to the global continuation store  --------------
 
@@ -112,7 +130,9 @@ insertCCRoot = do
 
 insertCCEdge :: (YesodCC site, FormEdge a) => CCNode -> CCNode -> FormResult a -> HandlerT site IO CCLEdge
 insertCCEdge node newNode r = do
-  modifyCCGraph f
+  edge <- modifyCCGraph f
+  $(logInfo) $ T.pack $ "insertCCEdge: " ++ show edge
+  return edge
     where
       f gr = do let newLEdge  = (node, newNode, CCEdgeLabel (formInj r))
                 return (insEdge newLEdge gr, newLEdge)
@@ -238,21 +258,6 @@ answerGet form errorAction = do
     _             -> errorAction
 
 
-run ::  CC CCP (HandlerT site IO) Html ->  HandlerT site IO Html
-run f = do
-  $(logInfo) $ T.pack $ "Running a new continuation"
-
-  runCC $ pushPrompt p2R f
-
-resume ::  YesodCC site =>  CCNode -> Html -> HandlerT site IO Html
-resume node notFoundHtml = do
-  $(logInfo) $ T.pack $ "resuming " ++ show node
-  mk <- lookupCCK node
-  case mk of
-    Just k  -> runCC $ k node
-    Nothing -> do
-      $(logInfo) "Continuation not found"
-      return notFoundHtml
 
 ----------------------------  Yesod defs  ----------------------------
 generateCCFormGet ::  (RenderMessage (HandlerSite m) FormMessage, MonadHandler m)
@@ -262,3 +267,18 @@ generateCCFormGet  form = generateFormGet' form
 generateCCFormPost ::  (RenderMessage (HandlerSite m) FormMessage, MonadHandler m)
                      =>  (Markup -> MForm m (FormResult a, xml)) -> m (xml, Enctype)
 generateCCFormPost form = generateFormPost form
+
+
+routePath :: YesodCC site => CCNode -> HandlerT site IO [CCLEdge]
+routePath node = do
+  gr <- readCCGraph
+  routePath' gr node
+
+    where
+      routePath' gr node = do
+        let ps = lpre gr node
+        case ps of
+          []    -> return []
+          ((node',la ) :_) -> do
+            route' <- routePath' gr node'
+            return $ (node', node, la) : route'

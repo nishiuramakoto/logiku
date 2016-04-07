@@ -1,5 +1,6 @@
 <article class="articleDetail">
   <header class="articleDetailHead">
+      ^{breadcrumb}
       <H1 class="pageTitle">Delimited continuations and nested transactions
       <p>  An example of delimited continuations to implement nested #
          \ transactions: a simple blog.

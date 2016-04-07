@@ -1,6 +1,7 @@
 $doctype 5
   <html>
     <head>
+      ^{breadcrumb}
       <title>Simple blog: Logout
     <body>
       <H1 ALIGN=CENTER>Delimited continuations and nested transactions
