@@ -1,7 +1,7 @@
 
 module Handler.Blog  where
 
-import             Import hiding(breadcrumb)
+import             Import hiding(breadcrumb, Form)
 import             Control.Monad.CC.CCCxe
 import qualified   Data.Text as T
 import             CCGraph
@@ -17,11 +17,16 @@ getHomeR = redirect BlogR
 getBlogR :: Handler Html
 getBlogR = do
   (root,_) <- insertCCRoot
-  run $ blog_main (root,[])
+  run $ blog_main (root,FormEmptyForm FormMissing)
 
 
 postBlogContR  :: CCNode -> Handler Html
 postBlogContR node = do
+  notFoundHtml <- defaultLayout [whamlet|Not Found|]
+  resume node notFoundHtml
+
+getBlogReplayR  :: CCNode -> Handler Html
+getBlogReplayR node = do
   notFoundHtml <- defaultLayout [whamlet|Not Found|]
   resume node notFoundHtml
 
@@ -30,18 +35,17 @@ type Username = Text
 data BlogAction = Cancel | Submit | Preview | Logout | New
                 deriving (Eq,Show)
 
-type State = (CCNode,[CCLEdge])
-pushEdge :: CCLEdge -> State -> State
-pushEdge edge (root,path) = (root, edge:path)
+type State = (CCNode, Form)
 currentNode :: State -> CCNode
-currentNode (root,[]) = root
-currentNode (_,(_,node,_):_) = node
-
+currentNode  = fst
+currentRes :: State -> Form
+currentRes  = snd
 
 ------------------------------------------------------------------------------
 
 breadcrumbWidget :: State -> Widget
-breadcrumbWidget (root,path) = do
+breadcrumbWidget st@(node,_) = do
+  path' <-  handlerToWidget $ spine node
   $(widgetFile "breadcrumb")
 
 -----------------------------------------------------------------------------
@@ -61,8 +65,8 @@ blogLoginHtml st node = do
   (widget, enctype) <- lift $ generateCCFormPost blogLoginForm
   lift $ defaultLayout $ blogLoginWidget st node widget enctype
 
-inquireBlogLogin :: State -> CC CCP Handler CCLEdge
-inquireBlogLogin st = inquirePostUntil (currentNode st) (blogLoginHtml st) blogLoginForm
+inquireBlogLogin :: State -> CC CCP Handler (CCNode,Form)
+inquireBlogLogin st = inquirePostUntil st (blogLoginHtml st) blogLoginForm
 
 ---------------------------------------------------------------------------------
 blogLogoutWidget ::  State -> CCNode -> Username -> Widget
@@ -93,9 +97,9 @@ blogNewHtml st user node = do
   (widget, enctype) <- lift $ generateCCFormPost blogNewForm
   lift $ defaultLayout $ blogNewWidget st node widget enctype (userformName user)
 
-inquireBlogNew :: State -> UserForm -> CC CCP Handler (CCLEdge, Maybe BlogAction)
+inquireBlogNew :: State -> UserForm -> CC CCP Handler ((CCNode,Form), Maybe BlogAction)
 inquireBlogNew st user = do
-  inquirePostUntilButton (currentNode st) (blogNewHtml st user) blogNewForm
+  inquirePostUntilButton  st (blogNewHtml st user) blogNewForm
     [ ("cancel", Cancel) , ("submit", Submit) , ("preview", Preview) ]
 
 ------------------------------------------------------------------------------------------
@@ -116,9 +120,9 @@ blogPreviewHtml st user blog_new_post node = do
           blogPreviewWidget st node (userformName user) (blogformBody blog_new_post) widget
 
 inquireBlogPreview :: State -> UserForm -> BlogForm
-                      -> CC CCP Handler (CCLEdge,  Maybe BlogAction)
+                      -> CC CCP Handler ((CCNode,Form),  Maybe BlogAction)
 inquireBlogPreview st user blog_new_post = do
-  inquirePostUntilButton (currentNode st) (blogPreviewHtml st user blog_new_post) emptyForm
+  inquirePostUntilButton st (blogPreviewHtml st user blog_new_post) emptyForm
     [("cancel", Cancel),("submit", Submit)]
 
 -------------------------------------------------------------------------------------------
@@ -136,9 +140,9 @@ blogViewHtml  st user blog_data node = do
   lift $ defaultLayout $ blogViewWidget st node (userformName user) blog_data widget
 
 inquireBlogView :: State -> UserForm -> Widget
-                   -> CC CCP Handler (CCLEdge, Maybe BlogAction)
+                   -> CC CCP Handler ((CCNode,Form), Maybe BlogAction)
 inquireBlogView st user blog_data = do
-  inquirePostUntilButton (currentNode st) (blogViewHtml st user blog_data) emptyForm
+  inquirePostUntilButton  st (blogViewHtml st user blog_data) emptyForm
     [("logout", Logout), ("new", New) ]
 
 ------------------------  Database handling --------------------------
@@ -179,8 +183,7 @@ validateUser (UserForm user pass) = user == pass
 blog_main :: State -> CC CCP Handler Html
 blog_main state =  do
   lift $ $(logInfo) $ T.pack $ "inquireBlogLogin" ++ show state
-  edge@(_,node', CCEdgeLabel (FormUserForm (FormSuccess user))) <- inquireBlogLogin state
-  let state' = pushEdge edge state
+  state'@(_, FormUserForm (FormSuccess user)) <- inquireBlogLogin state
 
   lift $ $(logInfo) "validateUser"
   if validateUser user
@@ -201,8 +204,8 @@ blog_main state =  do
     loop_browse :: State ->  UserForm -> CC CCP Handler State
     loop_browse state' user = do
       blogs <- readBlogs
-      (edge, maybe_action) <- inquireBlogView state' user blogs
-      let state'' = pushEdge edge state'
+      (state'', maybe_action) <- inquireBlogView state' user blogs
+
       case maybe_action of
         Just New    -> do
           state''' <- edit state'' user
@@ -212,8 +215,7 @@ blog_main state =  do
         _           -> loop_browse state'' user
 
     edit state' user  = do
-      (edge@(_,_,CCEdgeLabel (FormBlogForm (FormSuccess blog))), maybe_action) <- inquireBlogNew state' user
-      let state'' = pushEdge edge state'
+      ((state''@(_, FormBlogForm (FormSuccess blog))), maybe_action) <- inquireBlogNew state' user
       case maybe_action of
         Just Cancel  -> return state''
         Just Submit  -> submitBlog state'' user blog
@@ -222,8 +224,7 @@ blog_main state =  do
 
     preview :: State -> UserForm -> BlogForm -> CC CCP Handler State
     preview state' user blog = do
-      (edge, maybe_action) <- inquireBlogPreview state' user blog
-      let state'' = pushEdge edge state'
+      (state'', maybe_action) <- inquireBlogPreview state' user blog
       case maybe_action of
         Just Cancel -> return state''
         Just Submit -> submitBlog state'' user blog
