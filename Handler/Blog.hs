@@ -46,7 +46,12 @@ currentRes  = snd
 breadcrumbWidget :: State -> Widget
 breadcrumbWidget st@(node,_) = do
   path' <-  handlerToWidget $ spine node
+  let root = getRoot path'
   $(widgetFile "breadcrumb")
+
+  where
+    getRoot :: [CCLEdge] -> CCNode
+    getRoot ((root,_,_):_) = 0
 
 -----------------------------------------------------------------------------
 blogLoginWidget :: State -> CCNode -> Widget -> Enctype -> Widget

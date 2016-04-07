@@ -1,5 +1,7 @@
 <nav class="breadcrumb">
+    <a href="@{BlogR}">
+        #{root}
     $forall (node',node,la) <- path'
+        &gt;
         <a href="@{BlogReplayR node}">
             #{node}
-        &gt;
