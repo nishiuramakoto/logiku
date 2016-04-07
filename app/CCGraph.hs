@@ -314,7 +314,7 @@ lowerLeftPath node = do
           []    -> return []
           ((node',la ) :_) -> do
             route' <- lowerLeftPath' gr node'
-            return $ (node', node, la) : route'
+            return $ (node, node', la) : route'
 
 
 spine :: YesodCC site => CCNode -> HandlerT site IO [CCLEdge]
@@ -325,7 +325,7 @@ spine node = do
   case (upper,lower) of
     ([],_) ->   return $ lower
     (_,[]) ->   return $ reverse upper
-    (_,_)  ->   return $ reverse upper ++ tail lower
+    (_,_)  ->   return $ reverse upper ++  lower
   where
     tail (x:xs) = xs
     tail [] = []
