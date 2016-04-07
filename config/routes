@@ -37,6 +37,7 @@
 
 /blog           BlogR GET
 /blog/#CCNode   BlogContR POST
+/blog/replay/#CCNode   BlogReplayR GET
 
 
 -- /expert/leak_in_bathroom      LeakInBathroomR     GET

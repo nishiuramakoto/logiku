@@ -93,3 +93,5 @@ bitbotmaker
 botlii
 bitbotly
 botgy
+botsgrid
+botraph
