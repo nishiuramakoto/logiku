@@ -7,7 +7,7 @@
 
         <h3>Preview your submission
 
-        <form action=@{BlogContR klabel} method="POST">
+        <form action=@{BlogContR node} method="POST">
             ^{blog_preview_widget}
             <textarea name=body rows=10 cols=50 readonly>
             #{blog_new_post}

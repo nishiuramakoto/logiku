@@ -5,40 +5,42 @@ module Inquire (
   where
 
 import Import
+import CCGraph
 import Form
-import ContMap
 import Control.Monad.CC.CCCxe
 import Language.Prolog2.Syntax
 
+
 import qualified Data.Text as T
 
--------------------------- Primitive forms  --------------------------
 
-
-prologInquireBoolForm :: Term -> Html -> MForm Handler (FormResult PrologInquireBoolForm, Widget)
+prologInquireBoolForm :: Term -> Html -> MForm (HandlerT site IO) (FormResult PrologInquireBoolForm, Widget)
 prologInquireBoolForm t = renderDivs $ PrologInquireBoolForm
                           <$> areq boolField (fromString $ showU t) Nothing
 --                         <$> areq boolField (fromString $ show t) Nothing
 
-prologInquireBoolWidget ::  ContId -> Widget -> Enctype -> Widget
-prologInquireBoolWidget klabel formWidget _enctype = do
+prologInquireBoolWidget ::  CCData -> Widget -> Enctype -> Widget
+prologInquireBoolWidget ccdata formWidget _enctype = do
+  let klabel = ccLabel ccdata
   [whamlet| <form action=@{PrologExecuteTestContR klabel} method="GET">
               ^{formWidget}
               <button type="submit" value="Submit">Submit</button>
   |]
 
 
-prologInquireBoolHtml :: Term -> CC (PS Html) Handler (ContId, Html)
-prologInquireBoolHtml t = do
-  (klabel, formWidget, enctype) <- lift $ generateCcFormGet $ prologInquireBoolForm t
-  html <- lift $ defaultLayout $ prologInquireBoolWidget klabel formWidget enctype
-  return (klabel, html)
+prologInquireBoolHtml :: CCData -> Term -> CC (PS Html) (HandlerT site IO) (CCData, Html)
+prologInquireBoolHtml ccdata t = do
+  (ccdata', formWidget, enctype) <- lift $ generateCCFormGet ccdata (prologInquireBoolForm t)
+  html <- lift $ defaultLayout $ prologInquireBoolWidget ccdata' formWidget enctype
+  return (ccdata', html)
 
-inquirePrologBool :: Term -> CC (PS Html) Handler (ContId, FormResult (PrologInquireBoolForm))
-inquirePrologBool t = do
-  (klabel, html) <- prologInquireBoolHtml  t
-  answer         <- inquireGet klabel html (prologInquireBoolForm t)
-  return (klabel, answer)
+inquirePrologBool :: CCData -> Term
+                     -> CC (PS Html) (HandlerT site IO) (CCData, FormResult (PrologInquireBoolForm))
+inquirePrologBool  ccdata t = do
+  (ccdata', html) <- prologInquireBoolHtml  t ccdata
+  answer          <- inquireGet ccdata' html (prologInquireBoolForm t)
+  return (update ccdata' answer , answer)
+
 
 
 showU :: Term -> String

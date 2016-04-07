@@ -1,23 +1,28 @@
--- A temporary version, NOT THREAD SAFE
 
 module Handler.Blog  where
 
 import             Import
 import             Control.Monad.CC.CCCxe
-import             ContMap
+import             CCGraph
 import             Constructors
+import             Form
+
+
+getHomeR :: Handler Html
+getHomeR = redirect BlogR
 
 -------------------------------------------------------------------------------------------
 
 getBlogR :: Handler Html
-getBlogR = run blog_main
+getBlogR = do
+  (node,_) <- insertCCRoot
+  run $ blog_main node
 
-postBlogContR  :: Int -> Handler Html
-postBlogContR klabel = do
-  cont_html <- defaultLayout [whamlet|Continue|]
-  not_found_html <- defaultLayout [whamlet|Not Found|]
-  resume klabel cont_html not_found_html
 
+postBlogContR  :: CCNode -> Handler Html
+postBlogContR node = do
+  notFoundHtml <- defaultLayout [whamlet|Not Found|]
+  resume node notFoundHtml
 
 ------------------------------  Types --------------------------------
 type Username = Text
@@ -26,13 +31,8 @@ data BlogAction = Cancel | Submit | Preview | Logout | New
 
 ------------------------------------------------------------------------------
 
-data UserForm = UserForm
-                { userformName     :: Text
-                , userformPassword :: Text
-                } deriving Show
-
-blogLoginWidget :: ContId -> Widget -> Enctype -> Widget
-blogLoginWidget klabel blog_login_widget enctype =  do
+blogLoginWidget :: CCNode -> Widget -> Enctype -> Widget
+blogLoginWidget node blog_login_widget enctype =  do
   setTitle "Blog Login"
   $(widgetFile "blog_login")
 
@@ -41,17 +41,13 @@ blogLoginForm = renderDivs $ UserForm
                 <$> areq textField      "Enter the user name:"   Nothing
                 <*> areq passwordField  "Enter the password" Nothing
 
-blogLoginHtml :: CC (PS Html) Handler (ContId, Html)
-blogLoginHtml = do
-  (klabel, widget, enctype) <- lift $ generateCcFormPost $ blogLoginForm
-  html <- lift $ defaultLayout $ blogLoginWidget klabel widget enctype
-  return (klabel, html)
+blogLoginHtml :: CCNode -> CC CCP Handler Html
+blogLoginHtml node = do
+  (widget, enctype) <- lift $ generateCCFormPost blogLoginForm
+  lift $ defaultLayout $ blogLoginWidget node widget enctype
 
-inquireBlogLogin :: CC (PS Html) Handler (ContId, UserForm)
-inquireBlogLogin = do
-  (klabel, html) <- blogLoginHtml
-  user <- inquirePostUntil klabel html blogLoginForm
-  return (klabel, user)
+inquireBlogLogin :: CCNode -> CC CCP Handler CCLEdge
+inquireBlogLogin node = inquirePostUntil node blogLoginHtml blogLoginForm
 
 ---------------------------------------------------------------------------------
 blogLogoutWidget :: Username -> Widget
@@ -59,97 +55,74 @@ blogLogoutWidget username                =   do
   setTitle "Blog Logout"
   $(widgetFile "blog_logout")
 
-blogLogoutHtml :: UserForm -> CC (PS Html) Handler Html
+blogLogoutHtml :: UserForm -> CC CCP Handler Html
 blogLogoutHtml user = do
-  html <- lift $ defaultLayout $ blogLogoutWidget (userformName user)
-  return  html
+  lift $ defaultLayout $ blogLogoutWidget (userformName user)
 
 -----------------------------------------------------------------------------------
-data BlogForm = BlogForm { blogformTitle :: Text
-                         , blogformBody  :: Textarea
-                         } deriving Show
 
 blogNewForm :: Html -> MForm Handler (FormResult BlogForm, Widget)
 blogNewForm = renderDivs $ BlogForm
               <$> areq textField "Subject:" Nothing
               <*> areq textareaField "" Nothing
 
-blogNewWidget :: ContId -> Widget -> Enctype -> Username -> Widget
-blogNewWidget klabel blog_new_form enctype username = do
+blogNewWidget :: CCNode -> Widget -> Enctype -> Username -> Widget
+blogNewWidget node blog_new_form enctype username = do
   setTitle "Blog New"
   $(widgetFile "blog_new")
 
+blogNewHtml :: UserForm -> CCNode -> CC CCP Handler Html
+blogNewHtml user node = do
+  (widget, enctype) <- lift $ generateCCFormPost blogNewForm
+  lift $ defaultLayout $ blogNewWidget node widget enctype (userformName user)
 
-blogNewHtml :: UserForm -> CC (PS Html) Handler (ContId, Html)
-blogNewHtml user = do
-  (klabel, widget, enctype) <- lift $ generateCcFormPost $ blogNewForm
-  html <- lift $ defaultLayout $ blogNewWidget klabel widget enctype (userformName user)
-  return (klabel, html)
-
-inquireBlogNew :: UserForm -> CC (PS Html) Handler (ContId, (BlogForm, Maybe BlogAction))
-inquireBlogNew user = do
-  (klabel, html)  <- blogNewHtml user
-  (blog, action)  <- inquirePostUntilButton klabel html blogNewForm
-                     [ ("cancel", Cancel) , ("submit", Submit) , ("preview", Preview) ]
-  return (klabel, (blog, action))
-
+inquireBlogNew :: CCNode -> UserForm -> CC CCP Handler (CCLEdge, Maybe BlogAction)
+inquireBlogNew node user = do
+  inquirePostUntilButton node (blogNewHtml user) blogNewForm
+    [ ("cancel", Cancel) , ("submit", Submit) , ("preview", Preview) ]
 
 ------------------------------------------------------------------------------------------
 
-blogPreviewWidget :: ContId -> Username -> Textarea -> Widget -> Widget
-blogPreviewWidget klabel username blog_new_post blog_preview_widget = do
+blogPreviewWidget :: CCNode -> Username -> Textarea -> Widget -> Widget
+blogPreviewWidget node username blog_new_post blog_preview_widget = do
   setTitle "Blog Preview"
   $(widgetFile "blog_preview")
 
 emptyForm :: Html -> MForm Handler (FormResult (), Widget)
 emptyForm = renderDivs $ pure ()
 
-blogPreviewHtml :: UserForm -> BlogForm
-                   -> CC (PS Html) Handler (ContId, Html)
-blogPreviewHtml user blog_new_post = do
-  (klabel, widget, _enctype) <- lift $ generateCcFormPost $ emptyForm
-  html <- lift $ defaultLayout $
-          blogPreviewWidget klabel (userformName user) (blogformBody blog_new_post) widget
-  return (klabel, html)
+blogPreviewHtml ::  UserForm -> BlogForm -> CCNode -> CC CCP Handler Html
+blogPreviewHtml user blog_new_post node = do
+  (widget, _enctype) <- lift $ generateCCFormPost $ emptyForm
+  lift $ defaultLayout $
+          blogPreviewWidget node (userformName user) (blogformBody blog_new_post) widget
 
-inquireBlogPreview :: UserForm -> BlogForm
-                      -> CC (PS Html) Handler (ContId,  Maybe BlogAction)
-inquireBlogPreview user blog_new_post = do
-  (klabel, html) <- blogPreviewHtml user blog_new_post
-  (_answer, maybe_action) <- inquirePostUntilButton klabel html emptyForm
-                            [("cancel", Cancel),("submit", Submit)]
-  return (klabel, maybe_action)
+inquireBlogPreview :: CCNode -> UserForm -> BlogForm
+                      -> CC CCP Handler (CCLEdge,  Maybe BlogAction)
+inquireBlogPreview node user blog_new_post = do
+  inquirePostUntilButton node (blogPreviewHtml user blog_new_post) emptyForm
+    [("cancel", Cancel),("submit", Submit)]
 
 -------------------------------------------------------------------------------------------
 
-
-blogViewWidget :: ContId -> Username -> Widget -> Widget -> Widget
-blogViewWidget klabel username blog_data blog_view_widget = do
+blogViewWidget :: CCNode -> Username -> Widget -> Widget -> Widget
+blogViewWidget node username blog_data blog_view_widget = do
   setTitle "Blog View"
   $(widgetFile "blog_view")
 
-blogViewHtml :: UserForm -> Widget
-                -> CC (PS Html) Handler (ContId, Html)
-blogViewHtml user blog_data = do
-  (klabel, widget, _enctype) <- lift $ generateCcFormPost emptyForm
-  html   <- lift $ defaultLayout $ blogViewWidget klabel (userformName user) blog_data widget
-  return (klabel, html)
+blogViewHtml ::  UserForm -> Widget
+                -> CCNode -> CC CCP Handler  Html
+blogViewHtml  user blog_data node = do
+  (widget, _enctype) <- lift $ generateCCFormPost emptyForm
+  lift $ defaultLayout $ blogViewWidget node (userformName user) blog_data widget
 
-inquireBlogView :: UserForm -> Widget
-                   -> CC (PS Html) Handler (ContId, Maybe BlogAction)
-inquireBlogView user blog_data = do
-  (klabel, html) <- blogViewHtml user blog_data
-  lift $ $(logInfo) "inquireBlogBUtton start"
-  (_answer, maybe_action) <- inquirePostUntilButton klabel html emptyForm
-                            [("logout", Logout), ("new", New) ]
-  lift $ $(logInfo) "inquireBlogBUtton finish"
-  return (klabel, maybe_action)
-
-
-
+inquireBlogView :: CCNode -> UserForm -> Widget
+                   -> CC CCP Handler (CCLEdge, Maybe BlogAction)
+inquireBlogView node user blog_data = do
+  inquirePostUntilButton node (blogViewHtml user blog_data) emptyForm  [("logout", Logout), ("new", New) ]
 
 ------------------------  Database handling --------------------------
-readBlogs :: CC (PS Html) Handler Widget
+readBlogs :: CC CCP Handler Widget
 readBlogs = lift $ do
   users <- runDB $ selectList [] [Asc UserAccountIdent]
   ws <- mapM printUserBlog users
@@ -168,65 +141,65 @@ readBlogs = lift $ do
     concat_widgets [] =  [whamlet||]
     concat_widgets (w:ws) = w >> concat_widgets ws
 
-submitBlog :: UserForm -> BlogForm -> CC (PS Html) Handler ()
-submitBlog (UserForm name pass) (BlogForm title (Textarea body)) = lift $  do
+submitBlog ::  CCNode -> UserForm -> BlogForm -> CC CCP Handler CCNode
+submitBlog node (UserForm name pass) (BlogForm title (Textarea body)) = lift $  do
   users  <- runDB $ selectList [UserAccountIdent ==. name ] []
   time <- liftIO $ getCurrentTime
   userid <- case users of
     []     -> runDB $ insert $ (makeUserAccount name time time time) { userAccountPassword = Just pass }
     (Entity userid _user: _us) -> return userid
   _blogid <- runDB $ insert $ Blog  userid title body
-  return ()
+  return node
 
 ------------------------  Application logics  ------------------------
 
 validateUser :: UserForm -> Bool
 validateUser (UserForm user pass) = user == pass
 
-blog_main :: CC (PS Html) Handler Html
-blog_main =  do
+blog_main :: CCNode -> CC CCP Handler Html
+blog_main node =  do
   lift $ $(logInfo) "inquireBlogLogin"
-  (_klabel, user) <- inquireBlogLogin
+  (_,node', CCEdgeLabel (FormUserForm (FormSuccess user))) <- inquireBlogLogin node
+  lift $ $(logInfo) "validateUser"
   if validateUser user
-    then authSuccess user
-    else authFail user
+    then authSuccess node' user
+    else authFail node' user
 
   where
-    authSuccess user = do
-        lift $ $(logInfo) "loop_browse"
-        loop_browse user
-        lift $ $(logInfo) "loop_browse"
-        logout_html <- blogLogoutHtml user
-        inquireFinish logout_html
+    authSuccess node' user = do
+      lift $ $(logInfo) "auth success"
+      _node'' <- loop_browse node' user
+      logout_html <- blogLogoutHtml  user
+      inquireFinish logout_html
 
-    authFail _user = do
-      blog_main
+    authFail node' _user = do
+      lift $ $(logInfo) "auth fail"
+      blog_main node'
 
-    loop_browse :: UserForm -> CC (PS Html) Handler ()
-    loop_browse user = do
+    loop_browse :: CCNode -> UserForm -> CC CCP Handler CCNode
+    loop_browse node' user = do
       blogs <- readBlogs
-      (_klabel, maybe_action) <- inquireBlogView user blogs
+      ((_,node'',_), maybe_action) <- inquireBlogView node' user blogs
       case maybe_action of
         Just New    -> do
-          edit user
-          loop_browse user
-        Just Logout -> do
-          return ()
-        _           -> do
-          loop_browse user
+          node''' <- edit node'' user
+          loop_browse node''' user
 
-    edit user  = do
-      (_klabel, (blog, maybe_action)) <- inquireBlogNew user
-      case maybe_action of
-        Just Cancel  -> return ()
-        Just Submit  -> submitBlog user blog
-        Just Preview -> preview user blog
-        _ -> return ()
+        Just Logout -> return node'
+        _           -> loop_browse node' user
 
-    preview :: UserForm -> BlogForm -> CC (PS Html) Handler ()
-    preview user blog = do
-      (_klabel, maybe_action) <- inquireBlogPreview user blog
+    edit node' user  = do
+      ((_,node'',CCEdgeLabel (FormBlogForm (FormSuccess blog))), maybe_action) <- inquireBlogNew node' user
       case maybe_action of
-        Just Cancel -> return ()
-        Just Submit -> submitBlog user blog
-        _ -> return ()
+        Just Cancel  -> return node''
+        Just Submit  -> submitBlog node'' user blog
+        Just Preview -> preview node'' user blog
+        _ -> return node''
+
+    preview :: CCNode -> UserForm -> BlogForm -> CC CCP Handler CCNode
+    preview node' user blog = do
+      ((_,node'',_), maybe_action) <- inquireBlogPreview node' user blog
+      case maybe_action of
+        Just Cancel -> return node''
+        Just Submit -> submitBlog  node'' user blog
+        _ -> return node''

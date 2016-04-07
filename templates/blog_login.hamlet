@@ -8,6 +8,6 @@
     <section>
       <h2 class="heading-typeB">
         Please log in
-      <form action=@{BlogContR klabel} method="POST" enctype=#{enctype}>
+      <form action=@{BlogContR node} method="POST" enctype=#{enctype}>
         ^{blog_login_widget}
         <button>Submit

@@ -37,16 +37,16 @@ import Network.Wai.Handler.WarpTLS          (tlsSettings, runTLS)
 -- Import all relevant handler modules here.
 -- Don't forget to add new modules to your cabal file!
 import Handler.Common
-import Handler.Home
-import Handler.Command
+-- import Handler.Home
+-- import Handler.Command
 
-import Handler.PrologTest
-import Handler.PrologProgram
+-- import Handler.PrologTest
+-- import Handler.PrologProgram
 import Handler.OldHome
 import Handler.Comment
 import Handler.Blog
 
-import ContMap
+import CCGraph
 import SideMenu
 -- This line actually creates our YesodDispatch instance. It is the second half
 -- of the call to mkYesodData which occurs in Foundation.hs. Please see the
@@ -68,7 +68,7 @@ makeFoundation appSettings = do
         (if appMutableStatic appSettings then staticDevel else static)
         (appStaticDir appSettings)
 
-    appContMap <- newCcPool -- WARNING: LEAKS! needs a better handling of CC resources
+    appCCGraph <- newCCPool
     let appMenuTree = menuTree -- To be done later
 
     -- We need a log function to create a connection pool. We need a connection

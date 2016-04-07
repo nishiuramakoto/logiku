@@ -5,7 +5,7 @@ module Handler.PrologTest (
   postPrologExecuteTestR,
   getPrologExecuteTestContR,
   categoryTree,
-  prologExecuteCcMain,
+  prologExecuteCCMain,
   prologExecuteTestFinishHtml
   ) where
 
@@ -14,7 +14,7 @@ import Language.Prolog2(resolveToTerms,consultString,parseQuery,evalPrologT,Runt
 import Language.Prolog2.Syntax
 
 import qualified Data.Text as T
-import ContMap
+import CCGraph
 import Control.Monad.CC.CCCxe
 
 
@@ -38,10 +38,10 @@ getPrologTestR = do
 
 executePrologProgram :: Text -> Text -> Handler Html
 executePrologProgram progCode goalCode =
-  run $ prologExecuteCcMain progCode goalCode
+  run $ prologExecuteCCMain progCode goalCode
 
   -- case (consultString (T.unpack progCode), parseQuery (T.unpack goalCode)) of
-  -- (Right clauses, Right terms)   -> run $ prologExecuteCcMain clauses terms
+  -- (Right clauses, Right terms)   -> run $ prologExecuteCCMain clauses terms
 
   -- (Left  err, _ ) ->  defaultLayout $ [whamlet|Parse error in the program #{show err}|]
   -- (_ , Left  err) ->  defaultLayout $ [whamlet|Parse error in the goals   #{show err}|]
@@ -79,8 +79,8 @@ prologExecuteTestRuntimeErrorHtml :: RuntimeError -> CC (PS Html) Handler Html
 prologExecuteTestRuntimeErrorHtml err =
   lift $ defaultLayout $ [whamlet| #{show err}|]
 
-prologExecuteCcMain :: Text -> Text -> CC (PS Html) Handler Html
-prologExecuteCcMain progCode goalCode = do
+prologExecuteCCMain :: Text -> Text -> CC (PS Html) Handler Html
+prologExecuteCCMain progCode goalCode = do
    result <- evalPrologT $ do
         eprog <- consultString (T.unpack progCode)
         case eprog of
