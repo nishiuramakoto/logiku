@@ -3,7 +3,7 @@ module Handler.Command (
   ) where
 
 import             Import hiding (parseQuery,readFile)
-import             ContMap
+import             CCGraph
 import             Control.Monad.Trans.Either
 import             DBFS
 import             Prolog

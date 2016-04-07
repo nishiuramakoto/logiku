@@ -14,7 +14,7 @@
     <section class="articleDetailBody">
         <div class="prologProgramForm">
             <form action=@{PrologProgramContSilentR} method="POST">
-                <input type="hidden" name="_klabel" value="#{klabel}">
+                <input type="hidden" name="_node" value="#{node}">
                 ^{formWidget}
                 <div id="prologProgramEditor">
                 $if forceSave

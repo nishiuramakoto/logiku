@@ -25,31 +25,30 @@ library
                      Handler.OldHome
                      Handler.Comment
                      -- My additions
-                     Form
-                     ContMap
+                     CCGraph
                      SideMenu
                      Database
                      DBFS
                      Constructors
                      Authentication
-                     Prolog
-
-                     Handler.Home
-                     Handler.Command
+                     Form
+                     -- Prolog
+                     -- Handler.Home
+                     -- Handler.Command
                      Handler.Blog
                      Handler.Base
-                     Handler.PrologTest
-                     Handler.PrologProgram
+                     -- Handler.PrologTest
+                     -- Handler.PrologProgram
                      -- Handler.PrologResolver
                      LogicT.LogicT
                      LogicT.SRReifT
                      --
-                     Inquire
-                     Language.Prolog2
-                     Language.Prolog2.Database
-                     Language.Prolog2.Parser
-                     Language.Prolog2.Interpreter
-                     Language.Prolog2.Syntax
+                     -- Inquire
+                     -- Language.Prolog2
+                     -- Language.Prolog2.Database
+                     -- Language.Prolog2.Parser
+                     -- Language.Prolog2.Interpreter
+                     -- Language.Prolog2.Syntax
 
                      Control.Monad.CC.CCCxe
                      Control.Monad.State.UnificationExtras
@@ -153,6 +152,7 @@ library
                  , logict
                  , esqueleto        >= 2.4.3
                  , either           >= 4.4.1
+                 , fgl                >= 5.5.2.3
 executable         logiku
     if flag(library-only)
         Buildable: False

@@ -11,7 +11,7 @@ import             Control.Monad.CC.CCCxe
 import             Control.Monad.Trans.Either
 import qualified   Data.Text as T
 import             DBFS
-import             ContMap
+import             CCGraph
 
 
 type ProgramError = Either RuntimeError ParseError

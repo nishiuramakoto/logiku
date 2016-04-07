@@ -7,6 +7,6 @@ $doctype 5
 
       An example of delimited continuations to implement a simple expert system
 
-      <form action=@{LeakInBathroomContR klabel} method="POST" enctype=#{enctype}>
+      <form action=@{LeakInBathroomContR node} method="POST" enctype=#{enctype}>
         ^{bool_widget}
         <button>Submit

@@ -22,13 +22,13 @@
                     <h3 class="programGoalsHeader"> Add a Goal
 
             <form action=@{PrologProgramContSilentR} method="POST" enctype=#{enctype} id="goalEditor">
-                <input type="hidden" name="_klabel"    value="#{klabel}">
+                <input type="hidden" name="_node"    value="#{node}">
                 <input type="hidden" name="userIdent"  value="#{userIdent}">
                 ^{formWidget}
                 <input name=submit  value="Submit Goal" TYPE=Submit>
                 <input name=ajax    value="Ajax" TYPE=Button class="submitGoal">
 
-            <a href="@{PrologProgramContR klabel}?action=back">
+            <a href="@{PrologProgramContR node}?action=back">
                     Back to Program Editor
 
             <section>

@@ -6,7 +6,7 @@ module Handler.PrologProgram  where
 import             Authentication
 import             Import hiding (parseQuery)
 import             Control.Monad.CC.CCCxe
-import             ContMap
+import             CCGraph
 -- import             Data.Text(Text)
 import qualified   Data.Text as T
 import             Text.Read(reads)
@@ -84,8 +84,8 @@ runTime tag action = do
   $(logInfo) $ T.concat [ tag , ":end  : " , T.pack $ show localTime' ]
   return x
 
-runCcTime :: Text -> CC (PS Html) Handler a -> CC (PS Html) Handler a
-runCcTime tag action = do
+runCCTime :: Text -> CC (PS Html) Handler a -> CC (PS Html) Handler a
+runCCTime tag action = do
   ZonedTime localTime _zone  <- liftIO getZonedTime
   lift $ $(logInfo) $ T.concat [ tag , ":start: " , T.pack $ show localTime ]
   x <- action
@@ -202,22 +202,23 @@ directoryForm name expl code = renderDivs $ DirectoryForm
               <*> areq textareaField  "説明: "          (Just expl)
               <*> areq textareaField  "コード: "        (Just code)
 
-directoryWidget :: ContId ->  Widget -> Enctype -> Bool -> Widget
-directoryWidget klabel formWidget _enctype forceSave = do
+directoryWidget :: CCData ->  Widget -> Enctype -> Bool -> Widget
+directoryWidget ccdata formWidget _enctype forceSave = do
+  let klabel = ccLabel ccdata
   setTitle "View Prolog Program"
   addScript $ StaticR css_ace_src_noconflict_ace_js
     -- addStylesheet $ StaticR css_bootstrap_css
   $(widgetFile "prolog_program_editor")
 
 directoryHtml ::  ProgramName ->  ProgramExplanation -> ProgramCode -> Bool
-                  ->  CC (PS Html) Handler (ContId, Html)
+                  ->  CC (PS Html) Handler (CCData, Html)
 directoryHtml name expl code forceSave = do
-  (klabel, formWidget, enctype) <- lift $ generateCcFormPost $ directoryForm name expl code
+  (klabel, formWidget, enctype) <- lift $ generateCCFormPost $ directoryForm name expl code
   html   <- lift $ defaultLayout $ directoryWidget klabel  formWidget enctype forceSave
   return (klabel, html)
 
 inquireDirectory ::  ProgramName -> ProgramExplanation ->  ProgramCode -> Bool
-                        -> CC (PS Html) Handler (ContId, Maybe DirectoryAction, DirectoryForm)
+                        -> CC (PS Html) Handler (CCData, Maybe DirectoryAction, DirectoryForm)
 inquireDirectory name expl code  forceSave = do
 
   (klabel, html)         <- directoryHtml name expl code forceSave
@@ -243,24 +244,25 @@ fileEditorForm = renderDivs $ FileForm
               <*> areq textareaField  "コード:" Nothing
 
 fileEditorWidget :: UserIdent ->  ProgramName -> ProgramExplanation -> ProgramCode  -> [File]
-                       -> ContId ->  Widget -> Enctype
+                       -> CCData ->  Widget -> Enctype
                        -> Widget
 fileEditorWidget userIdent programName programExplanation programCode goals
-                       klabel  formWidget  enctype
-  = do   setTitle "Edit Prolog Goals"
-         $(widgetFile "prolog_goal_editor")
+                       ccdata  formWidget  enctype = do
+                         let klabel = ccLabel ccdata
+                         setTitle "Edit Prolog Goals"
+                         $(widgetFile "prolog_goal_editor")
 
 fileEditorHtml ::  UserIdent -> ProgramName -> ProgramExplanation -> ProgramCode -> [File]
-                         -> CC (PS Html) Handler (ContId, Html)
+                         -> CC (PS Html) Handler (CCData, Html)
 fileEditorHtml  userIdent name explanation code goals = do
-  (klabel , formWidget , enctype ) <- lift $ generateCcFormPost $ fileEditorForm
+  (klabel , formWidget , enctype ) <- lift $ generateCCFormPost $ fileEditorForm
   html  <- lift $ defaultLayout $
            fileEditorWidget userIdent name explanation code goals
                                   klabel  formWidget  enctype
   return (klabel, html)
 
 inquireFileEditor :: UserIdent -> ProgramName -> ProgramExplanation -> ProgramCode -> [File]
-                        -> CC (PS Html) Handler (ContId, Maybe DirectoryAction, FormResult FileForm)
+                        -> CC (PS Html) Handler (CCData, Maybe DirectoryAction, FormResult FileForm)
 inquireFileEditor userIdent name explanation code goals  = do
   (klabel, html)         <- fileEditorHtml userIdent name explanation code goals
   (answer, maybeAction)  <- inquirePostButton klabel html (fileEditorForm)
@@ -272,14 +274,14 @@ inquireFileEditor userIdent name explanation code goals  = do
 data DummyForm = DummyForm Bool deriving Show
 dummyForm :: Html -> MForm Handler (FormResult DummyForm, Widget)
 dummyForm = renderDivs $ DummyForm <$> areq boolField "" Nothing
-dummyWidget :: ContId -> Widget -> Enctype -> Widget
-dummyWidget klabel formWidget enctype = $(widgetFile "dummy-page")
-dummyHtml :: CC (PS Html) Handler (ContId, Html)
+dummyWidget :: CCData -> Widget -> Enctype -> Widget
+dummyWidget ccdata formWidget enctype = let klabel = ccLabel ccdata in $(widgetFile "dummy-page")
+dummyHtml :: CC (PS Html) Handler (CCData, Html)
 dummyHtml = do
-  (klabel, formWidget, enctype) <- lift $ generateCcFormPost $ dummyForm
+  (klabel, formWidget, enctype) <- lift $ generateCCFormPost $ dummyForm
   html <- lift $ defaultLayout $ dummyWidget klabel formWidget enctype
   return (klabel, html)
-inquireDummy :: CC (PS Html) Handler ContId
+inquireDummy :: CC (PS Html) Handler CCData
 inquireDummy = do
   (klabel, html) <- dummyHtml
   inquirePostButton klabel html dummyForm [ ("ok", True) ]
@@ -290,7 +292,7 @@ inquireParseError ::  ParseError -> ProgramName -> ProgramCode
                   -> CC (PS Html) Handler ()
 inquireParseError err name code = do
    lift $ $(logInfo)  $ "parse error:" ++ (T.pack (show err))
---   klabel <- generateCcLabel
+--   klabel <- generateCCLabel
 --   html   <- widgetToHtml $(widgetFile "parse_error")
 --   (answer, maybeAction) <- inquirePostButton klabel html
    return ()
@@ -520,7 +522,7 @@ getPrologGoalRunnerR = maybeNotFound $ do
 executeDirectory :: Text -> Text -> Handler Html
 executeDirectory progCode goalCode =
   case (programCheck  progCode , goalCheck goalCode) of
-  (Right clauses, Right terms)   -> run $ prologExecuteCcMain progCode goalCode
+  (Right clauses, Right terms)   -> run $ prologExecuteCCMain progCode goalCode
 
   (Left  err, _ ) ->  defaultLayout $ [whamlet|Parse error in the program #{show err}|]
   (_ , Left  err) ->  defaultLayout $ [whamlet|Parse error in the goals   #{show err}|]

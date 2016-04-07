@@ -5,38 +5,38 @@
 /robots.txt  RobotsR GET
 
 /            HomeR    GET
-/command     CommandR GET
-/bot         BotR     GET
+-- /command     CommandR GET
+-- /bot         BotR     GET
 
-/command/edit/#FileId CommandEditR GET
-/command/run/#FileId  CommandRunR  GET
+-- /command/edit/#FileId CommandEditR GET
+-- /command/run/#FileId  CommandRunR  GET
 
 
-/prolog                       PrologTestR         GET
-/prolog/execute               PrologExecuteTestR  POST
-/prolog/execute/#Int          PrologExecuteTestContR GET
+-- /prolog                       PrologTestR         GET
+-- /prolog/execute               PrologExecuteTestR  POST
+-- /prolog/execute/#CCNode       PrologExecuteTestContR GET
 
-/prolog/edit                    PrologProgramR            GET
-/prolog/edit-impl               PrologProgramImplR        GET
--- /prolog/edit/#Int            PrologProgramContR        POST
-/prolog/k/edit/browse           PrologProgramContSilentR  POST
-/prolog/k/edit/action/#Int      PrologProgramContR        GET
-/prolog/edit/runner             PrologGoalRunnerR         GET
+-- /prolog/edit                  PrologProgramR            GET
+-- /prolog/edit-impl             PrologProgramImplR        GET
+-- /prolog/edit/#Int          PrologProgramContR        POST
+-- /prolog/k/edit/browse         PrologProgramContSilentR  POST
+-- /prolog/k/edit/action/#CCNode PrologProgramContR        GET
+-- /prolog/edit/runner           PrologGoalRunnerR         GET
 
 --  Ajax resources
-/prolog/goals                   GoalR        POST
-/prolog/delete-goals            DeleteGoalR  POST
-/prolog/syntax-check            SyntaxCheckR POST
-/prolog/ajax-test               AjaxTestR    POST
+-- /prolog/goals                   GoalR        POST
+-- /prolog/delete-goals            DeleteGoalR  POST
+-- /prolog/syntax-check            SyntaxCheckR POST
+-- /prolog/ajax-test               AjaxTestR    POST
 
 
--- Lovely old home.. Now I have to go
+-- Old stuff, reserved for testing
 
-/old         OldHomeR GET POST
-/comments    CommentR POST
+/old            OldHomeR GET POST
+/comments       CommentR POST
 
-/blog        BlogR GET
-/blog/#Int   BlogContR POST
+/blog           BlogR GET
+/blog/#CCNode   BlogContR POST
 
 
 -- /expert/leak_in_bathroom      LeakInBathroomR     GET

@@ -18,7 +18,7 @@ import qualified Data.Text.Encoding as TE
 import qualified Data.Text as T
 -- import Data.Time.LocalTime
 import Authentication
-import ContMap
+import CCGraph
 import SideMenu
 import DBFS
 import Constructors
@@ -35,7 +35,7 @@ data App = App
     , appConnPool    :: ConnectionPool -- ^ Database connection pool.
     , appHttpManager :: Manager
     , appLogger      :: Logger
-    , appContMap     :: IORef (ContMap App) -- ^ Pool of continuations
+    , appCCGraph     :: MVar (CCGraph App) -- ^ Pool of continuations
     , appMenuTree    :: MenuTree
     }
 
@@ -257,8 +257,7 @@ unsafeHandler = Unsafe.fakeHandlerGetLogger appLogger
 -- https://github.com/yesodweb/yesod/wiki/i18n-messages-in-the-scaffolding
 
 instance YesodCC App where
-  getCcPool = appContMap
-
+  getCCPool = appCCGraph
 
 -- Authorization/Authentication(Should be moved to Authentication.hs) --
 
