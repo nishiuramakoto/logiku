@@ -7,6 +7,7 @@ import qualified   Data.Text as T
 import             CCGraph
 import             Constructors
 import             Form
+import             Authentication
 
 
 getHomeR :: Handler Html
@@ -20,13 +21,13 @@ getBlogR = do
   run $ blog_main (root,FormEmptyForm FormMissing)
 
 
-postBlogContR  :: CCNode -> Handler Html
-postBlogContR node = do
+postBlogContR  :: UserAccountId -> CCNode -> Handler Html
+postBlogContR uid node = do
   notFoundHtml <- defaultLayout [whamlet|Not Found|]
   resume node notFoundHtml
 
-getBlogReplayR  :: CCNode -> Handler Html
-getBlogReplayR node = do
+getBlogReplayR  :: UserAccountId -> CCNode -> Handler Html
+getBlogReplayR uid node = do
   notFoundHtml <- defaultLayout [whamlet|Not Found|]
   resume node notFoundHtml
 
@@ -43,9 +44,14 @@ currentRes  = snd
 
 ------------------------------------------------------------------------------
 
+breadcrumbWidget' :: State -> Widget
+breadcrumbWidget' st@(node,_) = do
+  [whamlet|breadcrumb|]
+
 breadcrumbWidget :: State -> Widget
 breadcrumbWidget st@(node,_) = do
-  path' <-  handlerToWidget $ spine node
+  path' <- handlerToWidget $ spine node
+  uid   <- handlerToWidget $ getUserAccountId
   let root = getRoot path'
   $(widgetFile "breadcrumb")
 
@@ -57,6 +63,7 @@ breadcrumbWidget st@(node,_) = do
 blogLoginWidget :: State -> CCNode -> Widget -> Enctype -> Widget
 blogLoginWidget st node blog_login_widget enctype =  do
   let breadcrumb = breadcrumbWidget st
+  uid   <- handlerToWidget $ getUserAccountId
   setTitle "Blog Login"
   $(widgetFile "blog_login")
 
@@ -77,6 +84,7 @@ inquireBlogLogin st = inquirePostUntil st (blogLoginHtml st) blogLoginForm
 blogLogoutWidget ::  State -> CCNode -> Username -> Widget
 blogLogoutWidget st node username = do
   let breadcrumb = breadcrumbWidget st
+  uid   <- handlerToWidget $ getUserAccountId
   setTitle "Blog Logout"
   $(widgetFile "blog_logout")
 
@@ -94,6 +102,7 @@ blogNewForm = renderDivs $ BlogForm
 blogNewWidget :: State -> CCNode -> Widget -> Enctype -> Username -> Widget
 blogNewWidget st node  blog_new_form enctype username = do
   let breadcrumb = breadcrumbWidget st
+  uid   <- handlerToWidget $ getUserAccountId
   setTitle "Blog New"
   $(widgetFile "blog_new")
 
@@ -112,6 +121,7 @@ inquireBlogNew st user = do
 blogPreviewWidget :: State -> CCNode -> Username -> Textarea -> Widget -> Widget
 blogPreviewWidget st node username blog_new_post blog_preview_widget = do
   let breadcrumb = breadcrumbWidget st
+  uid   <- handlerToWidget $ getUserAccountId
   setTitle "Blog Preview"
   $(widgetFile "blog_preview")
 
@@ -135,6 +145,7 @@ inquireBlogPreview st user blog_new_post = do
 blogViewWidget :: State -> CCNode -> Username -> Widget -> Widget -> Widget
 blogViewWidget st node username blog_data blog_view_widget = do
   let breadcrumb = breadcrumbWidget st
+  uid   <- handlerToWidget $ getUserAccountId
   setTitle "Blog View"
   $(widgetFile "blog_view")
 

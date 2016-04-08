@@ -6,7 +6,8 @@
   #-}
 
 module DBFS
-       ( DbfsError(..)
+       ( runDB
+       , DbfsError(..)
        , Perm(..)
        , UserModOption(..)
        , ChownOption(..)
@@ -1793,3 +1794,6 @@ orM (m:ms) = do x <- m
                 if x
                   then return True
                   else orM ms
+
+_test = do root <- runDB su
+           return root

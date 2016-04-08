@@ -3,6 +3,8 @@ module Handler.CCSpec(spec) where
 import TestImport
 import qualified TestImport as I
 import qualified Yesod.Test.TransversingCSS as CSS
+import Yesod.Auth
+
 import Test.QuickCheck.Monadic
 import Test.QuickCheck
 import qualified Test.HUnit
@@ -70,8 +72,10 @@ spec = withApp $ do
     login
 
   it "tests the form submission" $ do
+    let i = 250
+        i' = 2
     putTime
-    forM [0..250] $ \_ -> do
+    forM [1..i'] $ \_ -> do
       login
       logout
       login

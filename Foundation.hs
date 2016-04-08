@@ -16,12 +16,15 @@ import qualified Yesod.Core.Unsafe as Unsafe
 import qualified Data.CaseInsensitive as CI
 import qualified Data.Text.Encoding as TE
 import qualified Data.Text as T
+import           Control.Exception.Base
+
 -- import Data.Time.LocalTime
 import Authentication
 import CCGraph
 import SideMenu
 import DBFS
 import Constructors
+import User
 
 --------------------------------------------------------------------------
 
@@ -36,6 +39,7 @@ data App = App
     , appHttpManager :: Manager
     , appLogger      :: Logger
     , appCCGraph     :: MVar (CCGraph App) -- ^ Pool of continuations
+    , appUserStorage :: MVar (UserStorageMap App)
     , appMenuTree    :: MenuTree
     }
 
@@ -128,6 +132,7 @@ instance Yesod App where
       mmsg <- getMessage
 
       mName <- maybeUserIdent
+      --maid  <- maybeAuthId
       sess  <- getSession
       let categoryTree =  $(widgetFile "css-tree")
         -- let categoryTree = [whamlet|tree|]
@@ -259,31 +264,23 @@ unsafeHandler = Unsafe.fakeHandlerGetLogger appLogger
 instance YesodCC App where
   getCCPool = appCCGraph
 
--- Authorization/Authentication(Should be moved to Authentication.hs) --
+  takeCCGraph = do
+    yesod <- getYesod
+    liftIO $ takeMVar $ getCCPool yesod
+
+  readCCGraph = do
+    yesod <- getYesod
+    let mv = getCCPool yesod
+    liftIO $ readMVar mv
+
+  modifyCCGraph f = do
+    yesod <- getYesod
+    let mv = getCCPool yesod
+    liftIO $ modifyMVar mv f'
+      where f' gr = do (gr',x) <- f gr
+                       gr'' <- evaluate gr'
+                       return (gr'',x)
 
 
-myIsAuthorized :: Route App -> Bool -> HandlerT App IO  AuthResult
-myIsAuthorized _route _isWrite = return Authorized
-
-
-maybeUserId :: Handler (Maybe UserAccountId)
-maybeUserId = do
-  root <- runDB $ su
-  muident <- maybeUserIdent
-  case muident of
-    Just ident -> do euser <- runDB $ getUser ident
-                     case euser of
-                       Right uid -> return $ Just uid
-                       Left  _   -> do euser' <- runDB $ root `useradd` ident
-                                       case euser' of
-                                         Right user' -> return $ Just user'
-                                         Left  _     -> return $ Nothing
-
-    Nothing   -> Just <$> (runDB $ suGuest)
-
-getCurrentUser :: Handler UserAccountId
-getCurrentUser = do
-  muid <- maybeUserId
-  case muid of
-    Just uid -> return uid
-    Nothing  -> runDB $ suGuest
+instance YesodUserStorage App where
+  getUserStorage = appUserStorage

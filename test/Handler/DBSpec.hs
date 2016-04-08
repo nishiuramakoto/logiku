@@ -4,7 +4,7 @@
 module Handler.DBSpec (spec) where
 
 
-import DBFS
+import DBFS hiding(runDB)
 import TestImport hiding((==.), on ,get, assert)
 import qualified TestImport as I
 import Database.Esqueleto
