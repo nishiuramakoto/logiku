@@ -9,7 +9,7 @@
 
       <h3>Enter a new article
 
-      <form action=@{BlogContR node}  method="POST" enctype=#{enctype}>
+      <form id="blogNewArticleForm" action=@{BlogContR node}  method="POST" enctype=#{enctype}>
         ^{blog_new_form}
         <INPUT name=cancel  value="Cancel"    TYPE=Submit>
         <INPUT name=submit  value="Submit"    TYPE=Submit>
