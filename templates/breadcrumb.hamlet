@@ -3,5 +3,5 @@
         #{root}
     $forall (node',node,la) <- path'
         &gt;
-        <a href="@{BlogReplayR node}">
+        <a href="@{BlogReplayR uid node}">
             #{node}

@@ -35,9 +35,9 @@
 /old            OldHomeR GET POST
 /comments       CommentR POST
 
-/blog           BlogR GET
-/blog/#CCNode   BlogContR POST
-/blog/replay/#CCNode   BlogReplayR GET
+/blog                BlogR GET
+/blog/post/#UserAccountId/#CCNode   BlogContR POST
+/blog/#UserAccountId/#CCNode        BlogReplayR GET
 
 
 -- /expert/leak_in_bathroom      LeakInBathroomR     GET

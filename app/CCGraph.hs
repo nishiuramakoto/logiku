@@ -35,7 +35,6 @@ module CCGraph (
 import             Import.NoFoundation
 import             Text.Blaze (Markup)
 import             Control.Monad.CC.CCCxe
-import             Control.Exception.Base
 import qualified   Data.Text as T
 import             Data.Time.LocalTime
 import             Data.Graph.Inductive.Graph
@@ -61,6 +60,10 @@ class YesodCC site where
   newCCPool :: IO (MVar (CCGraph site))
   newCCPool = newMVar Graph.empty
 
+  takeCCGraph ::  HandlerT site IO (CCGraph site)
+  readCCGraph ::  HandlerT site IO (CCGraph site)
+  modifyCCGraph :: (CCGraph site -> IO (CCGraph site, b) ) -> HandlerT site IO b
+
 instance Show (CCNodeLabel site) where
   show (CCNodeLabel time (Just _))  = "(" ++ show time ++ ", " ++ "Just <cont>" ++ ")"
   show (CCNodeLabel time (Nothing)) = "(" ++ show time ++ ", " ++ "Nothing" ++ ")"
@@ -85,25 +88,6 @@ resume node notFoundHtml = do
 
 -------------- Access to the global continuation store  --------------
 
-takeCCGraph :: YesodCC site => HandlerT site IO  (CCGraph site)
-takeCCGraph = do
-  yesod <- getYesod
-  liftIO $ takeMVar $ getCCPool yesod
-
-readCCGraph :: YesodCC site => HandlerT site IO  (CCGraph site)
-readCCGraph = do
-  yesod <- getYesod
-  let mv = getCCPool yesod
-  liftIO $ readMVar mv
-
-modifyCCGraph :: YesodCC site => (CCGraph site -> IO (CCGraph site, b) ) -> HandlerT site IO b
-modifyCCGraph f = do
-  yesod <- getYesod
-  let mv = getCCPool yesod
-  liftIO $ modifyMVar mv f'
-    where f' gr = do (gr',x) <- f gr
-                     gr'' <- evaluate gr'
-                     return (gr'',x)
 
 insertCCNode ::  YesodCC site => CCK site Html -> HandlerT site IO (CCLNode site)
 insertCCNode k = do

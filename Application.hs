@@ -47,6 +47,7 @@ import Handler.Comment
 import Handler.Blog
 
 import CCGraph
+import User
 import SideMenu
 -- This line actually creates our YesodDispatch instance. It is the second half
 -- of the call to mkYesodData which occurs in Foundation.hs. Please see the
@@ -69,6 +70,7 @@ makeFoundation appSettings = do
         (appStaticDir appSettings)
 
     appCCGraph <- newCCPool
+    appUserStorage <- newUserStorage
     let appMenuTree = menuTree -- To be done later
 
     -- We need a log function to create a connection pool. We need a connection

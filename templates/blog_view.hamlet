@@ -11,7 +11,7 @@
 
         <pre>^{blog_data}
 
-        <form action=@{BlogContR node} method="POST">
+        <form action=@{BlogContR uid node} method="POST">
             ^{blog_view_widget}
             <INPUT name=logout value="Logout"      TYPE=Submit>
             <INPUT name=new    value="New Article" TYPE=Submit>
