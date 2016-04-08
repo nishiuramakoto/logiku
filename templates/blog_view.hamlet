@@ -4,7 +4,10 @@
     <H1 class="pageTitle">Delimited continuations and nested transactions
 
     <section class="articleDetailBody">
+
         You are logged in as #{username}.
+
+        <h3> Blog View
 
         <pre>^{blog_data}
 

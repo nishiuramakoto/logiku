@@ -4,6 +4,6 @@ $doctype 5
       ^{breadcrumb}
       <title>Simple blog: Logout
     <body>
-      <H1 ALIGN=CENTER>Delimited continuations and nested transactions
-
-      Good bye, #{username}
+        <section class="articleDetailBody">
+            <H1 ALIGN=CENTER>Delimited continuations and nested transactions
+            Good bye, #{username}

@@ -89,7 +89,7 @@ blogLogoutHtml st user = do
 blogNewForm :: Html -> MForm Handler (FormResult BlogForm, Widget)
 blogNewForm = renderDivs $ BlogForm
               <$> areq textField "Subject:" Nothing
-              <*> areq textareaField "" Nothing
+              <*> areq textareaField "Body:" Nothing
 
 blogNewWidget :: State -> CCNode -> Widget -> Enctype -> Username -> Widget
 blogNewWidget st node  blog_new_form enctype username = do
