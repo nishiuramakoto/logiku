@@ -57,7 +57,8 @@ breadcrumbWidget st@(node,_) = do
 
   where
     getRoot :: [CCLEdge] -> CCNode
-    getRoot ((root,_,_):_) = 0
+    --getRoot ((root,_,_):_) = 0
+    getRoot _ = 0
 
 -----------------------------------------------------------------------------
 blogLoginWidget :: State -> CCNode -> Widget -> Enctype -> Widget
