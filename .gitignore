@@ -26,3 +26,4 @@ test/password-test
 test/password-test.gpg
 ec2/
 com.domain.txt
+test/top.log
