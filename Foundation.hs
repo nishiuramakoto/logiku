@@ -264,17 +264,15 @@ unsafeHandler = Unsafe.fakeHandlerGetLogger appLogger
 instance YesodCC App where
   getCCPool = appCCGraph
 
-  -- takeCCGraph = do
-  --   yesod <- getYesod
-  --   usCCGraph <$> (takeMVar $ getUserStorage yesod)
-
   readCCGraph = usCCGraph <$> readUserStorage
 
-  modifyCCGraph f = modifyUserStorage f'
+  modifyCCGraph f = modifyUserStorage (liftIO . f')
     where
-      f' = liftIO . f'' . fromMaybe def
-      f'' (UserStorage gr root seq) = do (gr',b) <- f gr
-                                         return (Just (UserStorage gr' root seq),b)
+      f' Nothing = do let UserStorage gr root seq = def
+                      (gr',b) <- f gr
+                      return (Just (UserStorage gr' root seq),b)
+      f' (Just (UserStorage gr root seq)) = do (gr',b) <- f gr
+                                               return (Just (UserStorage gr' root seq),b)
 
 instance YesodUserStorage App where
   getUserStorage = appUserStorage
