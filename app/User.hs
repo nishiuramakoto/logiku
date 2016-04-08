@@ -15,9 +15,9 @@ import Data.Time.LocalTime
 import Data.Time.Clock
 import qualified Data.Map.Strict as Map
 import qualified Data.Sequence as Seq
-
-import             Data.Time.LocalTime
-import             Data.Graph.Inductive.Graph
+import qualified Data.Text as T
+import           Data.Graph.Inductive.Graph
+import           System.IO(hSetBuffering,BufferMode(..))
 
 import CCGraph
 
@@ -25,6 +25,7 @@ data UserStorage master = UserStorage { usCCGraph ::  CCGraph master
                                       , usCCRoot :: CCNode
                                       , usCCNodeQueue :: Seq.Seq (LocalTime,CCNode)
                                       }
+                          deriving Show
 
 type UserStorageMap master = Map (Maybe (AuthId master)) (MVar (UserStorage master))
 
@@ -69,15 +70,32 @@ modifyUserStorage :: (YesodAuth master, Ord (AuthId master), YesodUserStorage ma
                    => (Maybe (UserStorage master) -> HandlerT master IO (Maybe (UserStorage master), b))
                    -> HandlerT master IO b
 modifyUserStorage  f = do
+--  readUserStorage >>= putStrLn . T.pack . show
+  -- liftIO $ hSetBuffering stdout NoBuffering
+  -- liftIO $ hSetBuffering stderr NoBuffering
+  -- putStrLn $ "-----------modifyUserStorage-------------"
+  --x <- fst <$> f Nothing
+  --putStrLn . T.pack $ "Nothing -> " ++ show  x
+
   master <- getYesod
   maid   <- maybeAuthId
   let mv = getUserStorage master
   map' <- liftIO $ takeMVar mv
-
-  (mmv,b) <- f' $  Map.lookup maid map'
-  let map'' = Map.update (const mmv) maid map'
+  let mmv' = Map.lookup maid map'
+  (mmv,b) <- f' mmv'
+  let map'' = case mmv of
+        Just mv' -> Map.insert maid mv' $ Map.delete maid map'
+        Nothing  -> Map.delete maid map'
+--        Map.update (const mmv) maid map'
 
   putMVar mv $! map''
+
+  -- liftIO $ maybe (putStrLn "Nothing") dumpMVar mmv'
+  -- putStrLn $ "-->"
+  -- liftIO $ maybe (putStrLn "Nothing") dumpMVar (Map.lookup maid map'')
+  -- liftIO $ maybe (putStrLn "Nothing") dumpMVar mmv
+
+--  readUserStorage >>= putStrLn . T.pack .  show
   return b
 
   where
@@ -85,13 +103,14 @@ modifyUserStorage  f = do
       us <- takeMVar mv
       (mus,b) <- f (Just us)
       case mus of
-        Just us' -> putMVar mv us' >> return (Just mv, b)
+        Just us' -> do putMVar mv $! us'
+                       return (Just mv, b)
         Nothing  -> return (Nothing, b)
 
     f' Nothing = do
       (mus,b) <- f Nothing
       case mus of
-        Just us' -> do mv <- newMVar us'
+        Just us' -> do mv <- newMVar $! us'
                        return (Just mv, b)
         Nothing  -> return (Nothing, b)
 
@@ -103,3 +122,7 @@ modifyUserStorage  f = do
 --   case mus of
 --     Just us -> return us
 --     Nothing -> return def
+
+dumpMVar :: Show a => MVar a -> IO ()
+dumpMVar mv = do a <- readMVar mv
+                 putStrLn $ T.pack $ show a
