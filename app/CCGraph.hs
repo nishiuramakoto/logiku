@@ -9,12 +9,13 @@ module CCGraph (
   CCLEdge,
   CCGraph,
   YesodCC(..),
+  Graph.empty,
   run,
   resume,
   answerGet,
-  readCCGraph,
-  takeCCGraph,
-  modifyCCGraph,
+--  readCCGraph,
+--  takeCCGraph,
+--  modifyCCGraph,
   insertCCNode,
   insertCCRoot,
   lookupCCK,
@@ -60,7 +61,7 @@ class YesodCC site where
   newCCPool :: IO (MVar (CCGraph site))
   newCCPool = newMVar Graph.empty
 
-  takeCCGraph ::  HandlerT site IO (CCGraph site)
+--  takeCCGraph ::  HandlerT site IO (CCGraph site)
   readCCGraph ::  HandlerT site IO (CCGraph site)
   modifyCCGraph :: (CCGraph site -> IO (CCGraph site, b) ) -> HandlerT site IO b
 
