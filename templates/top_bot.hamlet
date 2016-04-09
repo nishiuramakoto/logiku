@@ -10,34 +10,26 @@
 
     <section class="articleDetailBody">
         <ul>
-            $forall directory <- directories
+            $forall info <- infos
                 <li>
-                    <header  class="commandItemHeader">
-                        <div class="commandItemName">
-                            #{directoryInfoName directory}
-                        <div class="commandItemDate">
-                            #{showPermDirectory directory} 作成 #{showTime tz $ directoryInfoCreated directory}
-                            <div class="commandItemGroup">
-                                testffffffffffffffffffffffffffffffffffffffff
-                            <div class="commandItemGroup">
-                                testffffffffffffffffffffffffffffffffffffffff
-                            <div class="commandItemGroup">
-                                testffffffffffffffffffffffffffffffffffffffff
-                            <div class="commandItemGroup">
-                                testffffffffffffffffffffffffffffffffffffffff
-                            <div class="commandItemGroup">
-                                testffffffffffffffffffffffffffffffffffffffff
-                            <div class="commandItemGroup">
-                                testffffffffffffffffffffffffffffffffffffffff
-                            <div class="commandItemGroup">
-                                testfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffl
-                            <div class="commandItemGroup">
-                                testffffffffffffffffffffffffffffffffffffffff
-                            <div class="commandItemGroup">
-                                testffffffffffffffffffffffffffffffffffffffff
-                            <div class="commandItemGroup">
-                                testffffffffffffffffffffffffffffffffffffffff
+                    <div class="botItem">
+                        <div class="editor">
+                            <a href="@{BotEditR (directoryInfoDirectoryId info)}">
+                                <div class="text">
+                                    <div class="name">
+                                        #{directoryInfoName info}
+                                    <div class="info">
+                                        <div class="main">
+                                            #{showPermDirectory info} #
+                                                #{showTime tz $ directoryInfoModified info}
+                                        $forall g <- directoryInfoGroupPerms info
+                                            <div class="group">
+                                                #{showGroupPerm g}
+                                <div class="image">
+                                    <img src="@{StaticR images_006_pencil_png}">
 
+<!--
 <footer class="articleDetailFoot">
     <aside class="creditUnit">
         補足
+-->

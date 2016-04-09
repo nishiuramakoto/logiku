@@ -42,26 +42,26 @@ eitherNotFound body = do e <- runEitherT body
                                             notFound
 
 
-prologExecuteTestFinishHtml :: [[Term]] -> CC (PS Html) Handler Html
+prologExecuteTestFinishHtml :: [[Term]] -> CC CCP Handler Html
 prologExecuteTestFinishHtml unifiers =
   lift $ defaultLayout $ [whamlet| #{show unifiers}|]
 
-prologExecuteTestSyntaxErrorHtml :: ParseError -> CC (PS Html) Handler Html
+prologExecuteTestSyntaxErrorHtml :: ParseError -> CC CCP Handler Html
 prologExecuteTestSyntaxErrorHtml err =
   lift $ defaultLayout $ [whamlet| #{show err}|]
 
-prologExecuteTestRuntimeErrorHtml :: RuntimeError -> CC (PS Html) Handler Html
+prologExecuteTestRuntimeErrorHtml :: RuntimeError -> CC CCP Handler Html
 prologExecuteTestRuntimeErrorHtml err =
   lift $ defaultLayout $ [whamlet| #{show err}|]
 
 
 
-prologExecuteCcMain :: Text -> Text -> CC (PS Html) Handler Html
-prologExecuteCcMain progCode goalCode = do
+prologExecuteCcMain :: CCState -> Text -> Text -> CC CCP Handler Html
+prologExecuteCcMain st progCode goalCode = do
    result <- evalPrologT $ runEitherT $ do
         prog <- EitherT $ consultString (T.unpack progCode)
         goal <- EitherT $ parseQuery (T.unpack goalCode)
-        lift $ resolveToTerms prog goal
+        lift $ resolveToTerms st prog goal
 
    case result of
     Left  err          ->  prologExecuteTestRuntimeErrorHtml err >>= inquireFinish

@@ -8,6 +8,7 @@ module CCGraph (
   CCLNode,
   CCLEdge,
   CCGraph,
+  CCState,
   YesodCC(..),
   Graph.empty,
   run,
@@ -30,7 +31,8 @@ module CCGraph (
   generateCCFormGet,
   generateCCFormPost,
   rootPath,
-  spine
+  spine,
+  startState
   ) where
 
 import             Import.NoFoundation
@@ -53,7 +55,7 @@ type CCLNode site        = LNode (CCNodeLabel site)
 type CCLEdge             = LEdge (CCEdgeLabel)
 type CCGraph site        = Gr (CCNodeLabel site) CCEdgeLabel
 type CCHtml site         = CCNode -> CC CCP (HandlerT site IO) Html
-
+type CCState             = (CCNode, Form)
 ----------------------  Define the type class ------------------------
 class YesodCC site where
   getCCPool :: site -> MVar (CCGraph site)
@@ -150,7 +152,7 @@ lookupCCK node = do
 
 
 ---------------------- Continuation primitives  ----------------------
-sendk ::  YesodCC site => (CCNode, Form) -> CCHtml site -> CCK site Html -> CC CCP (HandlerT site IO) Html
+sendk ::  YesodCC site => CCState -> CCHtml site -> CCK site Html -> CC CCP (HandlerT site IO) Html
 sendk (node, response) html k = do
   (new, _) <- lift $ insertCCNode k
   lift $ insertCCLEdge (node, new, CCEdgeLabel response)
@@ -158,27 +160,27 @@ sendk (node, response) html k = do
   lift $ $(logInfo) $ T.pack $ "sendk" ++ show node
   html new
 
-inquire :: YesodCC site => (CCNode, Form) -> CCHtml site -> CC CCP (HandlerT site IO) CCNode
+inquire :: YesodCC site => CCState -> CCHtml site -> CC CCP (HandlerT site IO) CCNode
 inquire (node,response) html =  shiftP p2R $ sendk (node, response) html
 
 inquireFinish ::  YesodCC site => Html -> CC CCP (HandlerT site IO) Html
 inquireFinish  html = abortP p2R $ return html
 
 inquireGet :: (YesodCC site , FormEdge a)
-              => (CCNode, Form)
+              => CCState
               -> CCHtml site
               -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
-              -> CC CCP (HandlerT site IO) (CCNode,Form)
+              -> CC CCP (HandlerT site IO) CCState
 inquireGet (node, response) html form = do
   newNode   <- inquire (node, response) html
   ((result, _widget), _enctype) <- lift $ runFormGet form
   return (newNode, formInj result)
 
 inquireGetUntil :: (YesodCC site, FormEdge a)
-                   => (CCNode, Form)
+                   => CCState
                    -> CCHtml site
                    -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
-                   -> CC CCP (HandlerT site IO) (CCNode, Form)
+                   -> CC CCP (HandlerT site IO) CCState
 inquireGetUntil (node, response) html form = do
   newNode <- inquire (node, response) html
   ((result, _widget), _enctype) <- lift $ runFormGet form
@@ -189,20 +191,20 @@ inquireGetUntil (node, response) html form = do
 
 
 inquirePost :: (YesodCC site, FormEdge a, RenderMessage site FormMessage)
-               => (CCNode, Form)
+               => CCState
                -> CCHtml site
                -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
-               -> CC CCP (HandlerT site IO) (CCNode, Form)
+               -> CC CCP (HandlerT site IO) CCState
 inquirePost (node, response) html form = do
   newNode <- inquire (node, response) html
   ((result, _widget), _enctype) <- lift $ runFormPost form
   return (newNode, formInj result)
 
 inquirePostUntil :: (YesodCC site, FormEdge a, RenderMessage site FormMessage)
-                    => (CCNode, Form)
+                    => CCState
                     -> CCHtml site
                     -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
-                    -> CC CCP (HandlerT site IO) (CCNode, Form)
+                    -> CC CCP (HandlerT site IO) CCState
 inquirePostUntil (node, response) html form = do
   newNode <- inquire (node, response)  html
   lift $ $(logInfo) $ T.pack $ "inquirePostUntil -> " ++ show newNode
@@ -223,11 +225,11 @@ runFormPostButtons ((name,value):xs) = do
 
 
 inquirePostButton :: (YesodCC site, FormEdge a, RenderMessage site FormMessage, Show a, Show b)
-                     => (CCNode, Form)
+                     => CCState
                      -> CCHtml site
                      -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
                      -> [(Text,b)]
-                     -> CC CCP (HandlerT site IO) ((CCNode, Form), Maybe b)
+                     -> CC CCP (HandlerT site IO) (CCState, Maybe b)
 inquirePostButton (node, response) html form buttons = do
   (newNode, newRes)  <- inquirePost (node, response) html form
   r <- lift $ runFormPostButtons buttons
@@ -235,11 +237,11 @@ inquirePostButton (node, response) html form buttons = do
 
 
 inquirePostUntilButton :: (YesodCC site, FormEdge a, RenderMessage site FormMessage, Show a, Show b)
-                          => (CCNode, Form)
+                          => CCState
                           -> CCHtml site
                           -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
                           -> [(Text,b)]
-                          -> CC CCP (HandlerT site IO) ((CCNode,Form), Maybe b)
+                          -> CC CCP (HandlerT site IO) (CCState, Maybe b)
 inquirePostUntilButton (node, response) html form buttons = do
   (newNode, newRes) <- inquirePostUntil (node, response) html form
   r    <- lift $ runFormPostButtons buttons
@@ -314,3 +316,7 @@ spine node = do
   where
     tail (x:xs) = xs
     tail [] = []
+
+startState :: YesodCC site => HandlerT site IO CCState
+startState = do   (root,_) <- insertCCRoot
+                  return   (root,FormEmptyForm FormMissing)

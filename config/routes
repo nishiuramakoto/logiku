@@ -5,29 +5,30 @@
 /robots.txt  RobotsR GET
 
 /            HomeR    GET
--- /command     CommandR GET
--- /bot         BotR     GET
+/command     CommandR GET
+/bot         BotR     GET
 
--- /command/edit/#FileId CommandEditR GET
--- /command/run/#FileId  CommandRunR  GET
+/command/edit/#FileId CommandEditR GET
+/command/run/#FileId  CommandRunR  GET
+
+/bot/edit/#DirectoryId BotEditR GET
 
 
--- /prolog                       PrologTestR         GET
--- /prolog/execute               PrologExecuteTestR  POST
--- /prolog/execute/#CCNode       PrologExecuteTestContR GET
+/prolog                       PrologTestR         GET
+/prolog/execute               PrologExecuteTestR  POST
+/prolog/execute/#CCNode       PrologExecuteTestContR GET
 
--- /prolog/edit                  PrologProgramR            GET
--- /prolog/edit-impl             PrologProgramImplR        GET
--- /prolog/edit/#Int          PrologProgramContR        POST
--- /prolog/k/edit/browse         PrologProgramContSilentR  POST
--- /prolog/k/edit/action/#CCNode PrologProgramContR        GET
--- /prolog/edit/runner           PrologGoalRunnerR         GET
+/prolog/edit                  PrologProgramR            GET
+/prolog/edit-impl             PrologProgramImplR        GET
+/prolog/edit/#CCNode          PrologProgramContR        POST
+/prolog/k/edit/browse         PrologProgramContSilentR  POST
+/prolog/edit/goal/runner      PrologGoalRunnerR         GET
 
 --  Ajax resources
--- /prolog/goals                   GoalR        POST
--- /prolog/delete-goals            DeleteGoalR  POST
--- /prolog/syntax-check            SyntaxCheckR POST
--- /prolog/ajax-test               AjaxTestR    POST
+/prolog/goals                   GoalR        POST
+/prolog/delete-goals            DeleteGoalR  POST
+/prolog/syntax-check            SyntaxCheckR POST
+/prolog/ajax-test               AjaxTestR    POST
 
 
 -- Old stuff, reserved for testing

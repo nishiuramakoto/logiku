@@ -1176,24 +1176,48 @@ findDirectory uid offs lim = do
                              ,(directory^.DirectoryCreated)
                              ,(directory^.DirectoryModified)
                              ,(directory^.DirectoryAccessed)
-                             ,(directoryReadable    directory directoryGroup groupMember)
-                             ,(directoryWritable    directory directoryGroup groupMember)
-                             ,(directoryExecutable  directory directoryGroup groupMember)
+                             ,(directory^.DirectoryOwnerR)
+                             ,(directory^.DirectoryOwnerW)
+                             ,(directory^.DirectoryOwnerX)
+                             ,(directory^.DirectoryEveryoneR)
+                             ,(directory^.DirectoryEveryoneW)
+                             ,(directory^.DirectoryEveryoneX)
                              )
 
-  return (Right $ map (\(Value directory
-                        ,Value _uid
-                        ,Value name
-                        ,Value created
-                        ,Value modified
-                        ,Value accessed
-                        ,Value r
-                        ,Value w
-                        ,Value x
-                        ) -> makeDirectoryInfo directory uid name created modified accessed r w x)
-          results)
-  --return (Right [])
+  is <- forM results $
+        \(Value directory
+         ,Value uid'
+         ,Value name
+         ,Value created
+         ,Value modified
+         ,Value accessed
+         ,Value or'
+         ,Value ow'
+         ,Value ox'
+         ,Value ar'
+         ,Value aw'
+         ,Value ax'
+         ) -> do
+          gs <- getGroupPerms directory
+          return $ makeDirectoryInfo directory uid' name created modified accessed or' ow' ox' gs ar' aw' ax'
+  return $ Right is
+
   where
+    getGroupPerms :: MonadIO m => DirectoryId -> SqlPersistT m [(Text,Perm)]
+    getGroupPerms dir = do
+      results <- select $
+                 from $ \ (group' `InnerJoin` dirGroup) -> do
+                   on     (dirGroup^.DirectoryGroupGroupId ==. group'^.GroupId)
+                   where_ (dirGroup^.DirectoryGroupDirectoryId  ==. val dir )
+                   limit 100
+                   return (group',dirGroup)
+      return $ map (\(Entity _ group',Entity _ dirGroup) ->
+                      ( groupName group'
+                      , Perm { permR = directoryGroupGroupR dirGroup
+                             , permW = directoryGroupGroupW dirGroup
+                             , permX = directoryGroupGroupX dirGroup
+                             })) results
+
 
     directoryReadable directory directoryGroup groupMember = directoryOwnerReadable directory
                                               ||. directoryGroupReadable directoryGroup groupMember

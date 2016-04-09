@@ -15,6 +15,7 @@ import             Language.Prolog2
 import             Database
 import             DBFS
 import             Constructors
+import             Form
 import             Text.Parsec
 import             Control.Monad.Trans.Maybe
 
@@ -22,12 +23,6 @@ import             Control.Monad.Trans.Maybe
 -- For testing
 import             Handler.PrologTest
 -------------------------- Helper functions --------------------------
-
-
-
-
-
-
 
 
 type ProgramError = Either RuntimeError ParseError
@@ -84,7 +79,7 @@ runTime tag action = do
   $(logInfo) $ T.concat [ tag , ":end  : " , T.pack $ show localTime' ]
   return x
 
-runCCTime :: Text -> CC (PS Html) Handler a -> CC (PS Html) Handler a
+runCCTime :: Text -> CC CCP Handler a -> CC CCP Handler a
 runCCTime tag action = do
   ZonedTime localTime _zone  <- liftIO getZonedTime
   lift $ $(logInfo) $ T.concat [ tag , ":start: " , T.pack $ show localTime ]
@@ -113,35 +108,29 @@ getPrologProgramR  = redirect PrologProgramImplR
 
 getPrologProgramImplR ::  Handler Html
 getPrologProgramImplR  = do
-  muid <-  maybeUserId
-  case muid of
-    Just uid ->  run $ ccMain uid
-    Nothing  ->  do
-      setMessage $ toHtml ("Login first" :: Text)
-      redirect HomeR
+  uid <-  getUserAccountId
+  st  <- startState
+  run $ ccMain st uid
 
 postPrologProgramContR  :: Int -> Handler Html
-postPrologProgramContR klabel = do
-  cont_html <- defaultLayout [whamlet|Continue|]
-  not_found_html <- defaultLayout [whamlet|Not Found|]
-  resume klabel cont_html not_found_html
+postPrologProgramContR node = do
+  not_found_html <- defaultLayout [whamlet|postPrologProgramContR: Not Found|]
+  resume node  not_found_html
 
 postPrologProgramContSilentR :: Handler Html
 postPrologProgramContSilentR = do
-  cont_html <- defaultLayout [whamlet|Continue|]
-  not_found_html <- defaultLayout [whamlet|Not Found|]
+  not_found_html <- defaultLayout [whamlet|postPrologProgramContSilentR: Not Found|]
 
   mklabel <- lookupPostParam "_klabel"
   case join $ fmap readInt mklabel of
-    Just klabel ->  resume klabel cont_html not_found_html
+    Just node ->  resume node  not_found_html
     _ ->  return not_found_html
 
 
 getPrologProgramContR :: Int -> Handler Html
-getPrologProgramContR klabel = do
-  cont_html <- defaultLayout [whamlet|Continue|]
+getPrologProgramContR node = do
   not_found_html <- defaultLayout [whamlet|Not Found|]
-  resume klabel cont_html not_found_html
+  resume node not_found_html
 
 
 -- postSyntaxCheckR :: Handler Html
@@ -189,10 +178,6 @@ type UserIdent   = Text
 
 -------------------------- Program editor  --------------------------
 
-data DirectoryForm = DirectoryForm { directoryName        :: Text
-                                           , directoryExplanation :: Textarea
-                                           , directoryProgram     :: Textarea
-                                           } deriving Show
 
 
 directoryForm ::  ProgramName ->  ProgramExplanation -> ProgramCode
@@ -202,40 +187,38 @@ directoryForm name expl code = renderDivs $ DirectoryForm
               <*> areq textareaField  "説明: "          (Just expl)
               <*> areq textareaField  "コード: "        (Just code)
 
-directoryWidget :: CCData ->  Widget -> Enctype -> Bool -> Widget
-directoryWidget ccdata formWidget _enctype forceSave = do
-  let klabel = ccLabel ccdata
+directoryWidget :: CCState -> CCNode ->  Widget -> Enctype -> Bool -> Widget
+directoryWidget st node formWidget _enctype forceSave = do
+  uid <- handlerToWidget $ getUserAccountId
   setTitle "View Prolog Program"
   addScript $ StaticR css_ace_src_noconflict_ace_js
     -- addStylesheet $ StaticR css_bootstrap_css
   $(widgetFile "prolog_program_editor")
 
-directoryHtml ::  ProgramName ->  ProgramExplanation -> ProgramCode -> Bool
-                  ->  CC (PS Html) Handler (CCData, Html)
-directoryHtml name expl code forceSave = do
-  (klabel, formWidget, enctype) <- lift $ generateCCFormPost $ directoryForm name expl code
-  html   <- lift $ defaultLayout $ directoryWidget klabel  formWidget enctype forceSave
-  return (klabel, html)
+directoryHtml ::  CCState -> ProgramName ->  ProgramExplanation -> ProgramCode -> Bool
+                  ->  CCNode -> CC CCP Handler  Html
+directoryHtml st name expl code forceSave node = do
+  (formWidget, enctype) <- lift $ generateCCFormPost $ directoryForm name expl code
+  lift $ defaultLayout $ directoryWidget st node formWidget enctype forceSave
 
-inquireDirectory ::  ProgramName -> ProgramExplanation ->  ProgramCode -> Bool
-                        -> CC (PS Html) Handler (CCData, Maybe DirectoryAction, DirectoryForm)
-inquireDirectory name expl code  forceSave = do
+inquireDirectory ::  CCState -> ProgramName -> ProgramExplanation ->  ProgramCode -> Bool
+                        -> CC CCP Handler (CCState, Maybe DirectoryAction)
+inquireDirectory st name expl code  forceSave = do
 
-  (klabel, html)         <- directoryHtml name expl code forceSave
-
-  (answer, maybeAction)  <- inquirePostUntilButton klabel html (directoryForm name expl code)
-                            [ ("save", Save) , ("next", Next) , ("prev" , Prev) , ("add_goal", AddGoal)
-                            , ("delete", Delete) , ("checkSyntax" , CheckSyntax) , ("run", Run)
-                            ]
-  return (klabel, maybeAction, answer)
+  inquirePostUntilButton st
+    (directoryHtml st name expl code forceSave)
+    (directoryForm name expl code)
+    [ ("save", Save)
+    , ("next", Next)
+    , ("prev" , Prev)
+    , ("add_goal", AddGoal)
+    , ("delete", Delete)
+    , ("checkSyntax" , CheckSyntax)
+    , ("run", Run)
+    ]
 
 -------------------------- Goal editor  --------------------------
 
-data FileForm = FileForm { goalName   ::  Text
-                                     , goalExpl   ::  Textarea
-                                     , goalCode   ::  Textarea
-                                     } deriving Show
-data PrologRunnerForm = PrologRunnerForm deriving Show
 
 fileEditorForm ::  Html -> MForm Handler (FormResult FileForm, Widget)
 fileEditorForm = renderDivs $ FileForm
@@ -243,54 +226,43 @@ fileEditorForm = renderDivs $ FileForm
               <*> areq textareaField  "説明: "  Nothing
               <*> areq textareaField  "コード:" Nothing
 
-fileEditorWidget :: UserIdent ->  ProgramName -> ProgramExplanation -> ProgramCode  -> [File]
-                       -> CCData ->  Widget -> Enctype
-                       -> Widget
-fileEditorWidget userIdent programName programExplanation programCode goals
-                       ccdata  formWidget  enctype = do
-                         let klabel = ccLabel ccdata
+fileEditorWidget :: CCState -> CCNode -> UserIdent ->  ProgramName -> ProgramExplanation -> ProgramCode
+                    -> [File] -> Widget -> Enctype  -> Widget
+fileEditorWidget st node userIdent programName programExplanation programCode goals
+                   formWidget  enctype = do
                          setTitle "Edit Prolog Goals"
                          $(widgetFile "prolog_goal_editor")
 
-fileEditorHtml ::  UserIdent -> ProgramName -> ProgramExplanation -> ProgramCode -> [File]
-                         -> CC (PS Html) Handler (CCData, Html)
-fileEditorHtml  userIdent name explanation code goals = do
-  (klabel , formWidget , enctype ) <- lift $ generateCCFormPost $ fileEditorForm
-  html  <- lift $ defaultLayout $
-           fileEditorWidget userIdent name explanation code goals
-                                  klabel  formWidget  enctype
-  return (klabel, html)
+fileEditorHtml ::  CCState -> UserIdent -> ProgramName -> ProgramExplanation -> ProgramCode -> [File]
+                   -> CCNode -> CC CCP Handler Html
+fileEditorHtml  st userIdent name explanation code goals node = do
+  (formWidget , enctype ) <- lift $ generateCCFormPost $ fileEditorForm
+  lift $ defaultLayout $
+           fileEditorWidget st node userIdent name explanation code goals  formWidget  enctype
 
-inquireFileEditor :: UserIdent -> ProgramName -> ProgramExplanation -> ProgramCode -> [File]
-                        -> CC (PS Html) Handler (CCData, Maybe DirectoryAction, FormResult FileForm)
-inquireFileEditor userIdent name explanation code goals  = do
-  (klabel, html)         <- fileEditorHtml userIdent name explanation code goals
-  (answer, maybeAction)  <- inquirePostButton klabel html (fileEditorForm)
-                            [ ("submit", Save), ("back", EditProgram) ]
-  return (klabel, maybeAction, answer)
+inquireFileEditor :: CCState -> UserIdent -> ProgramName -> ProgramExplanation -> ProgramCode -> [File]
+                        -> CC CCP Handler (CCState, Maybe DirectoryAction)
+inquireFileEditor st userIdent name explanation code goals  = do
+  inquirePostButton st  (fileEditorHtml st userIdent name explanation code goals) (fileEditorForm)
+    [ ("submit", Save), ("back", EditProgram) ]
 
 ----------------------------  Dummy page  ----------------------------
 
-data DummyForm = DummyForm Bool deriving Show
 dummyForm :: Html -> MForm Handler (FormResult DummyForm, Widget)
 dummyForm = renderDivs $ DummyForm <$> areq boolField "" Nothing
-dummyWidget :: CCData -> Widget -> Enctype -> Widget
-dummyWidget ccdata formWidget enctype = let klabel = ccLabel ccdata in $(widgetFile "dummy-page")
-dummyHtml :: CC (PS Html) Handler (CCData, Html)
-dummyHtml = do
-  (klabel, formWidget, enctype) <- lift $ generateCCFormPost $ dummyForm
-  html <- lift $ defaultLayout $ dummyWidget klabel formWidget enctype
-  return (klabel, html)
-inquireDummy :: CC (PS Html) Handler CCData
-inquireDummy = do
-  (klabel, html) <- dummyHtml
-  inquirePostButton klabel html dummyForm [ ("ok", True) ]
-  return klabel
+dummyWidget :: CCState -> CCNode -> Widget -> Enctype -> Widget
+dummyWidget st node formWidget enctype =  $(widgetFile "dummy-page")
+dummyHtml :: CCState -> CCNode -> CC CCP Handler Html
+dummyHtml st node = do
+  (formWidget, enctype) <- lift $ generateCCFormPost $ dummyForm
+  lift $ defaultLayout $ dummyWidget st node formWidget enctype
+inquireDummy :: CCState -> CC CCP Handler (CCState, Maybe Bool)
+inquireDummy st = do
+  inquirePostButton st (dummyHtml st) dummyForm [ ("ok", True) ]
 
 ---------------- inquire response to the parse error  ----------------
-inquireParseError ::  ParseError -> ProgramName -> ProgramCode
-                  -> CC (PS Html) Handler ()
-inquireParseError err name code = do
+inquireParseError :: CCState -> ParseError -> ProgramName -> ProgramCode -> CC CCP Handler ()
+inquireParseError st err name code = do
    lift $ $(logInfo)  $ "parse error:" ++ (T.pack (show err))
 --   klabel <- generateCCLabel
 --   html   <- widgetToHtml $(widgetFile "parse_error")
@@ -298,23 +270,22 @@ inquireParseError err name code = do
    return ()
 
 -- ---------------- inquire response to the parse error  ----------------
-inquireParseSuccess :: ProgramName -> ProgramCode
-                   -> CC (PS Html) Handler ()
-inquireParseSuccess name code = do
+inquireParseSuccess :: CCState -> ProgramName -> ProgramCode
+                   -> CC CCP Handler ()
+inquireParseSuccess st name code = do
    lift $ $(logInfo)  "parse success"
    return ()
 
 ------------------------------  finish  ------------------------------
-directoryFinishHtml :: CC (PS Html) Handler Html
+directoryFinishHtml :: CC CCP Handler Html
 directoryFinishHtml = lift $ redirect HomeR
-
 
 ------------------------  Application logic  ------------------------
 
 -- entityKey (Entity key _) = key
 
-ccMain :: UserAccountId -> CC (PS Html) Handler Html
-ccMain uid =  do
+ccMain :: CCState -> UserAccountId -> CC CCP Handler Html
+ccMain st uid =  do
   -- lift $ do
   --   (widget, enctype) <- generateFormPost prologTestForm
   --   defaultLayout $ prologTestWidget widget enctype
@@ -323,15 +294,13 @@ ccMain uid =  do
   -- inquireDummy
 
   mentity <- lift $ selectFirstUserProgram uid
-  loopBrowse uid (fmap entityKey mentity) False
+  loopBrowse st uid (fmap entityKey mentity) False
   directoryFinishHtml >>=  inquireFinish
 
-loopBrowse :: UserAccountId -> Maybe DirectoryId -> Bool -> CC (PS Html) Handler ()
-loopBrowse uid Nothing forceSave = do
-  (   _klabel
-    , maybeAction
-    , _newProgram@(DirectoryForm name (Textarea expl) (Textarea code)))
-               <- inquireDirectory  "" (Textarea "") (Textarea "") forceSave
+loopBrowse :: CCState -> UserAccountId -> Maybe DirectoryId -> Bool -> CC CCP Handler ()
+loopBrowse st uid Nothing forceSave = do
+  ((_, FormDirectoryForm (FormSuccess (DirectoryForm name (Textarea expl) (Textarea code))))
+    , maybeAction )  <- inquireDirectory st  "" (Textarea "") (Textarea "") forceSave
 
   case maybeAction of
     Just Save -> do
@@ -339,25 +308,25 @@ loopBrowse uid Nothing forceSave = do
       case mkey of
         Just pid ->  do mprog <- lift $ runDB $ get pid
                         case mprog of
-                          Just prog -> loopBrowse uid (Just  pid) forceSave
-                          Nothing   -> loopBrowse uid Nothing forceSave
-        Nothing  ->  loopBrowse uid Nothing forceSave
+                          Just prog -> loopBrowse st uid (Just  pid) forceSave
+                          Nothing   -> loopBrowse st uid Nothing forceSave
+        Nothing  ->  loopBrowse st uid Nothing forceSave
 
     Just Next ->   do mentity <- lift $ selectFirstUserProgram uid
-                      loopBrowse uid (entityKey <$> mentity) forceSave
+                      loopBrowse st uid (entityKey <$> mentity) forceSave
 
     Just Prev ->  do  mentity <- lift $ selectLastUserProgram uid
-                      loopBrowse uid  (entityKey <$> mentity) forceSave
-    _ -> loopBrowse uid Nothing forceSave
+                      loopBrowse st uid  (entityKey <$> mentity) forceSave
+    _ -> loopBrowse st uid Nothing forceSave
 
-loopBrowse uid (Just pid) forceSave = do
+loopBrowse st uid (Just pid) forceSave = do
   mentity <- lift $ runDB $ get pid
   case mentity of
-    Just currentProgram -> loopBrowse' currentProgram
+    Just currentProgram -> loopBrowse' st currentProgram
     Nothing -> return ()
 
   where
-    loopBrowse' currentProgram = do
+    loopBrowse' st currentProgram = do
 
       let uid' = directoryUserId currentProgram
           name = Import.directoryName   currentProgram
@@ -365,44 +334,41 @@ loopBrowse uid (Just pid) forceSave = do
           code = Import.directoryCode   currentProgram
       lift $ $(logInfo) $ T.pack $ show uid ++ show uid' ++ show name ++ show code ++ show forceSave
 
-      (   _klabel
-        , maybeAction
-        , (DirectoryForm newName (Textarea newExplanation) (Textarea newCode)))
-                  <-  inquireDirectory name (Textarea expl) (Textarea code) forceSave
+      ((_, FormDirectoryForm (FormSuccess (DirectoryForm newName (Textarea newExplanation) (Textarea newCode)))), maybeAction )  <-  inquireDirectory st name (Textarea expl) (Textarea code) forceSave
 
       if (not (elem maybeAction [Just Next, Just Prev, Just AddGoal]) &&  uid /= uid')
         then do lift $ setMessage $ toHtml $ ("他のユーザのプログラムは変更できません" :: Text)
-                loopBrowse uid (Just pid) forceSave
+                loopBrowse st uid (Just pid) forceSave
         else case maybeAction of
         Just Save -> do
           if forceSave || programOK newCode
             then do lift $ $(logInfo)  $ "saving code:" ++ T.pack (show newName)
                     newProg <- lift $ writeProgram uid newName newExplanation newCode
-                    loopBrowse uid newProg False
+                    loopBrowse st uid newProg False
 
             else do lift $ $(logInfo) $ "Enter force save mode:" ++ T.pack (show newName)
-                    loopBrowse uid (Just pid)  True
+                    loopBrowse st uid (Just pid)  True
 
         Just Next ->   do mentity <- lift $ selectNextUserProgram uid (Just pid)
-                          loopBrowse uid (entityKey <$> mentity) False
+                          loopBrowse st uid (entityKey <$> mentity) False
 
         Just Prev ->  do mentity <- lift $ selectPrevUserProgram uid  (Just pid)
-                         loopBrowse uid (entityKey <$> mentity) False
+                         loopBrowse st uid (entityKey <$> mentity) False
 
-        Just AddGoal -> do loopGoals  uid  pid
-                           loopBrowse uid  (Just pid) False
+        Just AddGoal -> do loopGoals  st uid  pid
+                           loopBrowse st uid  (Just pid) False
 
         Just Delete  -> do mentity <- lift $ selectNextUserProgram uid (Just pid)
                            -- lift $ deleteProgram pid
-                           loopBrowse uid (entityKey <$> mentity) False
+                           loopBrowse st uid (entityKey <$> mentity) False
 
-        _ -> loopBrowse uid (Just pid) forceSave
-
-
+        _ -> loopBrowse st uid (Just pid) forceSave
 
 
-loopGoals :: UserAccountId ->  DirectoryId ->  CC (PS Html) Handler ()
-loopGoals  uid pid = do
+
+
+loopGoals :: CCState -> UserAccountId ->  DirectoryId ->  CC CCP Handler ()
+loopGoals  st uid pid = do
   lift $ $(logInfo) "loopGoals"
   ment <- lift $ runDB $ get pid
   case ment of
@@ -413,12 +379,12 @@ loopGoals  uid pid = do
         goals      <- lift $ selectUserProgramGoals uid 0 0 pid -- current user
         muserIdent <- lift $ getUserIdent (directoryUserId program)  -- program owner
         case muserIdent of
-          Just userIdent -> loopGoals' userIdent pid goals
+          Just userIdent -> loopGoals' st userIdent pid goals
           Nothing        -> do lift $ setMessage "Database is broken. Please report to the maintainer."
-                               loopBrowse uid (Just pid) False
+                               loopBrowse st  uid (Just pid) False
 
-loopGoals' :: UserIdent ->  DirectoryId -> [Entity File] -> CC (PS Html) Handler ()
-loopGoals' userIdent pid goals = do
+loopGoals' :: CCState -> UserIdent ->  DirectoryId -> [Entity File] -> CC CCP Handler ()
+loopGoals' st userIdent pid goals = do
   mprog <- lift $ runDB $ get pid
   case mprog of
     Just prog -> go prog
@@ -434,17 +400,15 @@ loopGoals' userIdent pid goals = do
       lift $ setSession "userIdent"   userIdent
       lift $ setSession "programName" name
 
-      (   _klabel
-        , _maybeAction
-        , resultForm )
-         <- inquireFileEditor userIdent name  (Textarea expl) (Textarea code) (map entityToVal goals)
+      ( (_, FormFileForm resultForm) , _ )
+             <- inquireFileEditor st userIdent name  (Textarea expl) (Textarea code) (map entityToVal goals)
 
       lift $ $(logInfo) "loopGoals'"
       mval <- lift $ lookupGetParam "action"
       lift $ $(logInfo) $ T.pack $ show mval
 
       case resultForm of
-        FormSuccess _ ->  loopGoals' userIdent pid goals
+        FormSuccess _ ->  loopGoals' st userIdent pid goals
         err           ->  do lift $ defaultLayout [whamlet|show err|]
                              return ()
 
@@ -516,13 +480,14 @@ getPrologGoalRunnerR = maybeNotFound $ do
   progCode <- MaybeT $ getProgramCode  pid
   goalCode <- MaybeT $ getGoalCode gid
 
-  lift $ executeDirectory progCode goalCode
+  st <- lift startState
+  lift $ executeDirectory st progCode goalCode
   -- lift $ defaultLayout $ [whamlet|#{show (progCode,goalCode)}|]
 
-executeDirectory :: Text -> Text -> Handler Html
-executeDirectory progCode goalCode =
+executeDirectory :: CCState -> Text -> Text -> Handler Html
+executeDirectory st progCode goalCode =
   case (programCheck  progCode , goalCheck goalCode) of
-  (Right clauses, Right terms)   -> run $ prologExecuteCCMain progCode goalCode
+  (Right clauses, Right terms)   -> run $ prologExecuteCCMain st progCode goalCode
 
   (Left  err, _ ) ->  defaultLayout $ [whamlet|Parse error in the program #{show err}|]
   (_ , Left  err) ->  defaultLayout $ [whamlet|Parse error in the goals   #{show err}|]

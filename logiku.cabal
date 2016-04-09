@@ -33,23 +33,25 @@ library
                      Authentication
                      Form
                      User
-                     -- Prolog
-                     -- Handler.Home
-                     -- Handler.Command
+                     Prolog
+                     Show
+                     Handler.Home
+                     Handler.Command
+                     Handler.Bot
                      Handler.Blog
                      Handler.Base
-                     -- Handler.PrologTest
-                     -- Handler.PrologProgram
+                     Handler.PrologTest
+                     Handler.PrologProgram
                      -- Handler.PrologResolver
                      LogicT.LogicT
                      LogicT.SRReifT
                      --
-                     -- Inquire
-                     -- Language.Prolog2
-                     -- Language.Prolog2.Database
-                     -- Language.Prolog2.Parser
-                     -- Language.Prolog2.Interpreter
-                     -- Language.Prolog2.Syntax
+                     Inquire
+                     Language.Prolog2
+                     Language.Prolog2.Database
+                     Language.Prolog2.Parser
+                     Language.Prolog2.Interpreter
+                     Language.Prolog2.Syntax
 
                      Control.Monad.CC.CCCxe
                      Control.Monad.State.UnificationExtras

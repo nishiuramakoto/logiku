@@ -23,7 +23,7 @@
                                 #{showPermFile info} #{showTime tz $ fileInfoModified info}
                               $forall g <- fileInfoGroupPerms info
                                 <div class="group">
-                                  #{showGroupPermFile g}
+                                  #{showGroupPerm g}
                           <div class="image">
                             <img src="@{StaticR images_019_play_png}">
                       <div class="editor">
