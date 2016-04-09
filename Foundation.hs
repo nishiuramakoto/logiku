@@ -41,6 +41,7 @@ data App = App
     , appCCGraph     :: MVar (CCGraph App) -- ^ Pool of continuations
     , appUserStorage :: MVar (UserStorageMap App)
     , appMenuTree    :: MenuTree
+    , appGuestId     :: MVar (Maybe UserAccountId)
     }
 
 -- | Check database availability. In heroku, A database may be unavailable for a maximum of 4hr/month.
@@ -276,3 +277,27 @@ instance YesodCC App where
 
 instance YesodUserStorage App where
   getUserStorage = appUserStorage
+
+
+guestId :: Handler UserAccountId
+guestId = do
+  yesod <- getYesod
+  let mv = appGuestId yesod
+  mgid <- takeMVar mv
+
+  gid <- case mgid of
+    Just gid -> return gid
+    Nothing  -> runDB suGuest
+
+  putMVar mv (Just gid)
+  return gid
+
+getUserAccountId :: Handler UserAccountId
+getUserAccountId = do
+  -- let guest = UserAccountKey 5
+
+  mentity <-  maybeAuth
+  case mentity of
+    Just (Entity uid _) -> return uid
+    -- Nothing    -> guestId
+    Nothing    -> runDB suGuest

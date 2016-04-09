@@ -8,12 +8,14 @@ module Authentication(
   clearAuthSession,
   myIsAuthorized,
   maybeUserAccountId,
-  getUserAccountId
+  getUserAccountId'
   )  where
 
 import           Import.NoFoundation
+import           Prelude(read)
 import           Yesod.Auth.BrowserId
 import           Yesod.Auth.GoogleEmail2
+import qualified Data.Text as T
 import           DBFS
 
 
@@ -108,17 +110,25 @@ maybeUserAccountId = do
 
     Nothing   -> Just <$> (runDB $ suGuest)
 
-getUserAccountId :: (AuthId site ~ UserAccountId
+
+
+
+getUserAccountId' :: (AuthId site ~ UserAccountId
                            , AuthEntity site ~ UserAccount
                            , YesodAuthPersist site
                            , YesodPersist site
                            , YesodPersistBackend site ~ SqlBackend)
                            =>  HandlerT site IO UserAccountId
-getUserAccountId = do
+getUserAccountId' = do
+  -- let guest = UserAccountKey 5
+
   mentity <-  maybeAuth
   case mentity of
-    Just (Entity uid _) -> return uid
+    Just (Entity uid _) -> do   putStrLn $ T.pack $ show uid
+                                return uid
+
     Nothing    -> runDB $ suGuest
+
 
   -- muid <- maybeUserId
 

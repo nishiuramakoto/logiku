@@ -4,7 +4,6 @@ import TestImport
 import qualified TestImport as I
 import qualified Yesod.Test.TransversingCSS as CSS
 import Yesod.Auth
-
 import Test.QuickCheck.Monadic
 import Test.QuickCheck
 import qualified Test.HUnit
@@ -19,6 +18,9 @@ import System.IO
 
 import qualified Text.XML as XML
 import qualified Text.XML.Cursor as XMLCursor
+
+import Authentication
+import DBFS hiding(runDB)
 
 
 spec :: Spec
@@ -91,6 +93,10 @@ spec = withApp $ do
       submitPreview
 
     putTime
+
+
+
+
 ----------------------------  Login Page  ----------------------------
 login = do
     get ("http://localhost:3000/blog" :: String)
