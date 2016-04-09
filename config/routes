@@ -36,9 +36,7 @@
 /comments       CommentR POST
 
 /blog                BlogR GET
-/blog/post/#UserAccountId/#CCNode   BlogContR POST
-/blog/#UserAccountId/#CCNode        BlogReplayR GET
-
+/blog/#UserAccountId/#CCNode   BlogContR GET POST
 
 -- /expert/leak_in_bathroom      LeakInBathroomR     GET
 -- /expert/leak_in_bathroom/#Int LeakInBathroomContR POST
