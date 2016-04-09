@@ -56,9 +56,13 @@ data DirectoryInfo   = DirectoryInfo
                        , directoryInfoCreated   :: UTCTime
                        , directoryInfoModified  :: UTCTime
                        , directoryInfoAccessed  :: UTCTime
-                       , directoryInfoR         :: Bool
-                       , directoryInfoW         :: Bool
-                       , directoryInfoX         :: Bool
+                       , directoryInfoOwnerR    :: Bool
+                       , directoryInfoOwnerW    :: Bool
+                       , directoryInfoOwnerX    :: Bool
+                       , directoryInfoGroupPerms:: [(Text, Perm)]
+                       , directoryInfoEveryoneR :: Bool
+                       , directoryInfoEveryoneW :: Bool
+                       , directoryInfoEveryoneX :: Bool
                        } deriving (Eq,Show)
 
 data FileInfo        = FileInfo
@@ -80,7 +84,10 @@ data FileInfo        = FileInfo
 
 
 makeDirectoryInfo :: DirectoryId -> UserAccountId ->  Text
-                -> UTCTime -> UTCTime -> UTCTime -> Bool -> Bool -> Bool
+                -> UTCTime -> UTCTime -> UTCTime
+                -> Bool -> Bool -> Bool
+                -> [(Text,Perm)]
+                -> Bool -> Bool -> Bool
                 -> DirectoryInfo
 makeDirectoryInfo = DirectoryInfo
 
