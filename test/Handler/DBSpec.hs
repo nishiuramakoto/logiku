@@ -673,3 +673,30 @@ spec = withApp $ do
 
 
     return ()
+
+
+  it "tests getUser Performance" $ do
+    let i = 1000
+        i' = 2
+    g <- runDB $ suGuest
+    forM [1..i'] $ \_ -> do
+      Right uid <- runDB $ getUser "guest"
+      uid `shouldBe` g
+
+
+  it "tests suGuest Performance" $ do
+    let i = 1000
+        i' = 2
+    g <- runDB $ suGuest
+    forM [1..i'] $ \_ -> do
+      uid <- runDB suGuest
+      uid `shouldBe` g
+
+  it "tests get Performance" $ do
+    let i = 100000
+        i' = 2
+    g <- runDB $ suGuest
+    forM [1..i'] $ \_ -> do
+      let uid = g
+      Just user <- runDB $ get uid
+      userAccountIdent user `shouldBe` "guest"

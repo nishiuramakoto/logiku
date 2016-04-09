@@ -27,7 +27,7 @@ data UserStorage master = UserStorage { usCCGraph ::  CCGraph master
                                       }
                           deriving Show
 
-type UserStorageMap master = Map (Maybe (AuthId master)) (MVar (UserStorage master))
+type UserStorageMap master = Map (Maybe (AuthId master)) (UserStorage master)
 
 
 class YesodUserStorage master where
@@ -45,15 +45,17 @@ readUserStorage :: (YesodAuth master, Ord (AuthId master) , YesodUserStorage mas
                    => HandlerT master IO (UserStorage master)
 readUserStorage = do
   master <- getYesod
-  maid   <- maybeAuthId
+  -- maid   <- maybeAuthId
+  maid <- return Nothing
+
   let mv = getUserStorage master
 
   map' <- liftIO $ readMVar mv
   let mmv' = Map.lookup maid map'
   case mmv' of
-    Just mv' -> liftIO $ readMVar mv'
+    Just mv' -> return mv'
     Nothing  -> do
-      mv' <- newMVar def
+      let mv'   = def
       let map'' = Map.insert maid mv' map'
       _ <- liftIO $ swapMVar mv map''
       return def
@@ -78,7 +80,8 @@ modifyUserStorage  f = do
   --putStrLn . T.pack $ "Nothing -> " ++ show  x
 
   master <- getYesod
-  maid   <- maybeAuthId
+  -- maid   <- maybeAuthId
+  maid <- return Nothing
   let mv = getUserStorage master
   map' <- liftIO $ takeMVar mv
   let mmv' = Map.lookup maid map'
@@ -100,17 +103,17 @@ modifyUserStorage  f = do
 
   where
     f' (Just mv) = do
-      us <- takeMVar mv
+      let us = mv
       (mus,b) <- f (Just us)
       case mus of
-        Just us' -> do putMVar mv $! us'
+        Just us' -> do let mv = us'
                        return (Just mv, b)
         Nothing  -> return (Nothing, b)
 
     f' Nothing = do
       (mus,b) <- f Nothing
       case mus of
-        Just us' -> do mv <- newMVar $! us'
+        Just us' -> do let mv =  us'
                        return (Just mv, b)
         Nothing  -> return (Nothing, b)
 
