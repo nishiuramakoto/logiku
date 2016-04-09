@@ -23,12 +23,12 @@ getBlogR = do
 
 postBlogContR  :: UserAccountId -> CCNode -> Handler Html
 postBlogContR uid node = do
-  notFoundHtml <- defaultLayout [whamlet|Not Found|]
+  notFoundHtml <- defaultLayout [whamlet|Blog Continuation not Found!!|]
   resume node notFoundHtml
 
-getBlogReplayR  :: UserAccountId -> CCNode -> Handler Html
-getBlogReplayR uid node = do
-  notFoundHtml <- defaultLayout [whamlet|Not Found|]
+getBlogContR  :: UserAccountId -> CCNode -> Handler Html
+getBlogContR uid node = do
+  notFoundHtml <- defaultLayout [whamlet|Blog Continuation not Found!|]
   resume node notFoundHtml
 
 ------------------------------  Types --------------------------------
