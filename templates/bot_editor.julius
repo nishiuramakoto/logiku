@@ -1,0 +1,30 @@
+
+$(document).ready(function () {
+
+    var programArea = $('.botEditorContainer textarea[name="codeEditor"]');
+    var div         = $('#botEditor');
+
+    programArea.addClass('hidden');
+    div.append(programArea.val());
+
+    // Set up the Ace editor
+    var editor = ace.edit("botEditor");
+    editor.setTheme("ace/theme/textmate");
+    editor.getSession().setMode("ace/mode/prolog");
+
+    // reflect editor status to the textarea
+    $('.botEditorContainer .changeCode').click(function() {
+        programArea.val(editor.getValue());
+    });
+
+
+    // Check code modification
+    div.keyup( function () {
+        if (programArea.val() != editor.getValue()) {
+            $('.codeModification').removeClass('hidden');
+        } else {
+            $('.codeModification').addClass('hidden');
+        }
+    });
+
+});

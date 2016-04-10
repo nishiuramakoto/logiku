@@ -1,0 +1,31 @@
+<article class="articleDetail">
+  <header class="articleDetailHead">
+    <H2 class="pageTitle">Edit Bot and Commands
+
+    <H3 class="botName">
+        <textarea class="txtstuff" name="nameEditor">
+            #{name}
+
+    <div class="editorNotification">
+        <div class="codeModification hidden">
+            Program modified and not saved
+        <div class="syntaxError">
+        <div class="saveFailed">
+                Syntax error. Press "Force save" to save the code
+
+    <section class="articleDetailBody">
+        <div class="botEditorContainer">
+            <div id="botCCNode" value="#{node}">
+            <textarea class="txtstuff" name="codeEditor">
+                #{code}
+            <div id="botEditor">
+            <textarea class="txtstuff" name="explanationEditor">
+                #{expl}
+            <div class="botControl">
+                <button id="botSave"> Save
+                <button id="botCheck"> Check
+                <button id="botDelete"> Delete
+
+<footer class="articleDetailFoot">
+    <aside class="creditUnit">
+        <a href="@{HomeR}"> トップ
