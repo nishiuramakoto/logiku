@@ -9,6 +9,7 @@ import             Control.Monad.CC.CCCxe
 import             CCGraph
 -- import             Data.Text(Text)
 import qualified   Data.Text as T
+import             Data.Typeable
 import             Text.Read(reads)
 import             Data.Time.LocalTime
 import             Language.Prolog2
@@ -219,6 +220,10 @@ inquireDirectory st name expl code  forceSave = do
 
 -------------------------- Goal editor  --------------------------
 
+data FileForm = FileForm { goalName   ::  Text
+                         , goalExpl   ::  Textarea
+                         , goalCode   ::  Textarea
+                         } deriving (Eq,Ord,Show,Typeable)
 
 fileEditorForm ::  Html -> MForm Handler (FormResult FileForm, Widget)
 fileEditorForm = renderDivs $ FileForm
@@ -247,7 +252,7 @@ inquireFileEditor st userIdent name explanation code goals  = do
     [ ("submit", Save), ("back", EditProgram) ]
 
 ----------------------------  Dummy page  ----------------------------
-
+data DummyForm = DummyForm Bool deriving (Eq,Ord,Show,Typeable)
 dummyForm :: Html -> MForm Handler (FormResult DummyForm, Widget)
 dummyForm = renderDivs $ DummyForm <$> areq boolField "" Nothing
 dummyWidget :: CCState -> CCNode -> Widget -> Enctype -> Widget
@@ -299,8 +304,9 @@ ccMain st uid =  do
 
 loopBrowse :: CCState -> UserAccountId -> Maybe DirectoryId -> Bool -> CC CCP Handler ()
 loopBrowse st uid Nothing forceSave = do
-  ((_, FormDirectoryForm (FormSuccess (DirectoryForm name (Textarea expl) (Textarea code))))
-    , maybeAction )  <- inquireDirectory st  "" (Textarea "") (Textarea "") forceSave
+  ((CCState _ form), maybeAction) <- inquireDirectory st  "" (Textarea "") (Textarea "") forceSave
+
+  let Just (FormSuccess (DirectoryForm name (Textarea expl) (Textarea code))) = cast form
 
   case maybeAction of
     Just Save -> do
@@ -334,7 +340,10 @@ loopBrowse st uid (Just pid) forceSave = do
           code = Import.directoryCode   currentProgram
       lift $ $(logInfo) $ T.pack $ show uid ++ show uid' ++ show name ++ show code ++ show forceSave
 
-      ((_, FormDirectoryForm (FormSuccess (DirectoryForm newName (Textarea newExplanation) (Textarea newCode)))), maybeAction )  <-  inquireDirectory st name (Textarea expl) (Textarea code) forceSave
+      ((CCState _ form), maybeAction) <- inquireDirectory st name (Textarea expl) (Textarea code) forceSave
+
+      let Just (FormSuccess (DirectoryForm newName (Textarea newExplanation) (Textarea newCode))) = cast form
+
 
       if (not (elem maybeAction [Just Next, Just Prev, Just AddGoal]) &&  uid /= uid')
         then do lift $ setMessage $ toHtml $ ("他のユーザのプログラムは変更できません" :: Text)
@@ -400,8 +409,9 @@ loopGoals' st userIdent pid goals = do
       lift $ setSession "userIdent"   userIdent
       lift $ setSession "programName" name
 
-      ( (_, FormFileForm resultForm) , _ )
-             <- inquireFileEditor st userIdent name  (Textarea expl) (Textarea code) (map entityToVal goals)
+      ((CCState _ form),_) <- inquireFileEditor st userIdent name  (Textarea expl) (Textarea code) (map entityToVal goals)
+      let Just resultForm = cast form :: Maybe (FormResult FileForm)
+
 
       lift $ $(logInfo) "loopGoals'"
       mval <- lift $ lookupGetParam "action"

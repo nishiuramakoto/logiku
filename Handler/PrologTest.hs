@@ -51,8 +51,7 @@ executePrologProgram st progCode goalCode =
 postPrologExecuteTestR :: Handler Html
 postPrologExecuteTestR = do
   ((result, _widget), _enctype) <- runFormPost prologTestForm
-  (root,_) <- insertCCRoot
-  let st = (root,FormEmptyForm FormMissing)
+  st <- startState
 
   case result of
     FormSuccess (PrologTestForm (Textarea program) (Textarea goal)) ->
