@@ -1490,21 +1490,24 @@ readFile he file = do
 writeDirectory :: MonadIO m => UserAccountId -> Entity Directory -> SqlPersistT m (Result (Entity Directory))
 writeDirectory he directory@(Entity key v) = do
   writable <- key `isDirectoryWritableBy` he
+  let owner = directoryUserId v
   if writable
     then do repsert key v
             _<- touchDirectory key
             return (Right directory)
 
-    else return $ Left $ DirectoryDoesNotExist $ T.concat [ T.pack $ show (he,key) ]
+    else return $ Left $ PermissionError $
+         T.concat $ map T.pack [ "User=", show he,"Owner=",show owner,"Dir=",show key ]
 
 writeFile :: MonadIO m => UserAccountId -> Entity File -> SqlPersistT m (Result (Entity File))
 writeFile he file@(Entity key v) = do
   writable <- key `isFileWritableBy` he
+  let owner = fileUserId v
   if writable
     then do repsert key v
             _<- touchFile key
             return (Right file)
-    else return $ Left $ FileDoesNotExist $ T.concat [ T.pack $ show (he,key) ]
+    else return $ Left $ PermissionError $ T.concat [ T.pack $ show (he,owner,key) ]
 
 
 -- ---------------------------- rmdir/unlink ----------------------------

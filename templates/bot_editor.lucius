@@ -10,13 +10,13 @@ p {
     height: 2em;
 }
 
-.botEditor textarea {
+.botCode textarea {
     color: #444;
     padding: 0.5em;
     height: 30em;
 }
 
-.botEditor .txtstuff {
+.botCode .txtstuff {
 //    resize: none; /* remove this if you want the user to be able to resize it in modern browsers */
     overflow: hidden;
 }
@@ -46,8 +46,8 @@ p {
     display: none;
 }
 
-#botEditor {
+#botCodeEditor {
     position: relative;
-    width: 80em;
+    width: 40em;
     height: 30em;
  }

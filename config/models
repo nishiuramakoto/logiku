@@ -148,11 +148,28 @@ FileVote
   deriving Show
 
 --------------------------  JSON Entities ----------------------------
-FileJson json
+DirectoryEditRequestJson json
       name            Text
       explanation     Text
       code            Text
       deriving Show
+
+DirectoryEditResponseJson json
+      success         Bool
+      error           Text Maybe
+      deriving Show
+
+FileEditRequestJson json
+      name            Text
+      explanation     Text
+      code            Text
+      deriving Show
+
+FileEditResponseJson json
+      success         Bool
+      error           Text Maybe
+      deriving Show
+
 
 ---------------------------- For testing  ----------------------------
 

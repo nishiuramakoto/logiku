@@ -1,6 +1,8 @@
 module Handler.Bot (
   getBotR,
-  getBotEditR
+  getBotEditR,
+  postBotEditContR,
+  postBotSaveR
   ) where
 
 import             Import hiding (parseQuery,readFile)
@@ -37,11 +39,16 @@ getBotEditR dir = do
   uid <- getUserAccountId
   run $ editMain st uid dir
 
-editWidget :: CCState -> UserAccountId -> Directory -> CCNode -> Widget
-editWidget st uid dir node = do
+postBotEditContR :: Int -> Handler Html
+postBotEditContR node = do
+  not_found_html <- defaultLayout [whamlet|postBotEditContR: Not Found|]
+  resume node not_found_html
+
+editWidget :: CCState -> UserAccountId -> Entity Directory -> CCNode -> Widget
+editWidget st uid (Entity key dir) node = do
   setTitle "Bot editor"
   addScript $ StaticR css_ace_src_noconflict_ace_js
-  addStylesheet $ StaticR css_bootstrap_css
+  -- addStylesheet $ StaticR css_bootstrap_css
 
   let name = directoryName dir
       expl = directoryExplanation dir
@@ -49,11 +56,11 @@ editWidget st uid dir node = do
   $(widgetFile "bot_editor")
 
 
-editHtml :: CCState -> UserAccountId -> Directory -> CCNode -> CC CCP Handler Html
+editHtml :: CCState -> UserAccountId -> Entity Directory -> CCNode -> CC CCP Handler Html
 editHtml st uid dir node = do
   lift $ defaultLayout $ editWidget st uid dir node
 
-inquireEdit :: CCState -> UserAccountId -> Directory -> CC CCP Handler CCState
+inquireEdit :: CCState -> UserAccountId -> Entity Directory -> CC CCP Handler CCState
 inquireEdit st uid dir = do
   newNode <- inquire st (editHtml st uid dir)
   return (newNode , formInj (FormSuccess ()))
@@ -65,7 +72,7 @@ editMain :: CCState -> UserAccountId -> DirectoryId -> CC CCP Handler Html
 editMain st uid dir =  do
    edata <- lift $ runDB $ readDirectory uid dir
    case edata of
-     Right dirData -> inquireEdit st uid dirData >> return ()
+     Right dirData -> inquireEdit st uid (Entity dir dirData) >> return ()
      Left  err     -> lift $ setMessage $ toHtml $ T.pack $ show err
 
    editFinishHtml >>= inquireFinish
@@ -117,3 +124,24 @@ getEditData (FormDirectoryForm
                         (Textarea code))))
   = Just (name,expl,code)
 getEditData _ = Nothing
+
+
+postBotSaveR :: DirectoryId -> Handler Value
+postBotSaveR  key = do
+  eval <- runEitherT $ trySaveBot key
+  case eval of
+    Right val -> returnJson val
+    Left  err -> returnJson (DirectoryEditResponseJson False (Just $ T.pack $ show err))
+
+trySaveBot :: DirectoryId -> EitherT DbfsError Handler DirectoryEditResponseJson
+trySaveBot key = do
+  uid <- lift getUserAccountId
+  jsonVal@(DirectoryEditRequestJson name expl code )
+          <- lift $ (requireJsonBody :: Handler DirectoryEditRequestJson)
+  dir <- EitherT $ runDB $ uid `readDirectory` key
+  let dir' = dir { directoryName        = name
+                 , directoryExplanation = expl
+                 , directoryCode        = code }
+  EitherT $ runDB $ uid `writeDirectory` Entity key dir'
+
+  return $ DirectoryEditResponseJson True Nothing

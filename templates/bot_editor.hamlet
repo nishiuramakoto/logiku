@@ -2,29 +2,39 @@
   <header class="articleDetailHead">
     <H2 class="pageTitle">Edit Bot and Commands
 
-    <H3 class="botName">
-        <textarea class="txtstuff" name="nameEditor">
-            #{name}
-
     <div class="editorNotification">
         <div class="codeModification hidden">
-            Program modified and not saved
+            Program modified but not saved
         <div class="syntaxError">
-        <div class="saveFailed">
+            <div class="saveFailed hidden">
                 Syntax error. Press "Force save" to save the code
 
+
     <section class="articleDetailBody">
+        <div class="botName">
+            <label> 名前：
+            <textarea class="txtstuff" name="nameEditor">
+                #{name}
+
         <div class="botEditorContainer">
-            <div id="botCCNode" value="#{node}">
-            <textarea class="txtstuff" name="codeEditor">
-                #{code}
-            <div id="botEditor">
-            <textarea class="txtstuff" name="explanationEditor">
-                #{expl}
+
+            <div class="botCode">
+                <div class="botCodeStorage">
+                    <label>コード：
+                    <textarea class="txtstuff">
+                        #{code}
+                <div id="botCodeEditor">
+
+            <div class="botExplanation">
+                <label> 説明:
+                <textarea class="txtstuff">
+                    #{expl}
+
             <div class="botControl">
-                <button id="botSave"> Save
-                <button id="botCheck"> Check
-                <button id="botDelete"> Delete
+                <button class="botSave"> Save
+                <button class="botCheck"> Check
+                <button class="botDelete"> Delete
+
 
 <footer class="articleDetailFoot">
     <aside class="creditUnit">
