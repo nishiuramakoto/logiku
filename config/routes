@@ -13,7 +13,7 @@
 
 /bot/edit/#DirectoryId           BotEditR GET
 /bot/edit/node/#CCNode           BotEditContR POST
-/bot/save/#DirectoryId           BotSaveR POST -- Ajax
+/bot/save/#CCNode/#DirectoryId   BotSaveR POST -- Ajax
 
 
 /prolog                       PrologTestR         GET

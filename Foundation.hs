@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Foundation where
 
@@ -277,6 +278,8 @@ instance YesodCC App where
 
 instance YesodUserStorage App where
   getUserStorage = appUserStorage
+
+deriving instance Typeable App
 
 
 guestId :: Handler UserAccountId

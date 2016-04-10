@@ -51,18 +51,19 @@ import             Form
 type CCP                 = PP
 type CCK site w          = CCNode  -> CC CCP (HandlerT site IO) w
 type CCNode              = Graph.Node
-data CCNodeLabel site    = CCNodeLabel { ccTimestamp :: LocalTime , ccK :: Maybe (CCK site Html) }
+data CCNodeLabel site    = forall a. Typeable a
+                           => CCNodeLabel { ccTimestamp :: LocalTime , ccK :: Maybe (CCK site a) }
 data CCEdgeLabel         = forall form. (Show form, Typeable form, Eq form)
                            => CCEdgeLabel { ccResponse  :: form }
 type CCLNode site        = LNode (CCNodeLabel site)
 type CCLEdge             = LEdge (CCEdgeLabel)
 type CCGraph site        = Gr (CCNodeLabel site) CCEdgeLabel
-type CCHtml site         = CCNode -> CC CCP (HandlerT site IO) Html
+type CCHtml  site         = CCNode -> CC CCP (HandlerT site IO) Html
 data CCState             = forall a. (Show a, Eq a, Typeable a)
                            => CCState { ccsCurrentNode :: CCNode
                                       , ccsCurrentForm :: (FormResult a)}
 ----------------------  Define the type class ------------------------
-class YesodCC site where
+class Typeable site => YesodCC site where
   getCCPool :: site -> MVar (CCGraph site)
 
   newCCPool :: IO (MVar (CCGraph site))
@@ -90,13 +91,13 @@ deriving instance Typeable CCState
 
 ---------------------- - Running continuations  ----------------------
 
-run ::  CC CCP (HandlerT site IO) Html ->  HandlerT site IO Html
+run ::  Typeable a => CC CCP (HandlerT site IO) a ->  HandlerT site IO a
 run f = do
   $(logInfo) $ T.pack $ "Running a new continuation"
 
   runCC $ pushPrompt pp f
 
-resume ::  YesodCC site =>  CCNode -> Html -> HandlerT site IO Html
+resume ::  (YesodCC site, Typeable a) =>  CCNode -> a -> HandlerT site IO a
 resume node notFoundHtml = do
   $(logInfo) $ T.pack $ "resuming " ++ show node
   mk <- lookupCCK node
@@ -109,7 +110,7 @@ resume node notFoundHtml = do
 -------------- Access to the global continuation store  --------------
 
 
-insertCCNode ::  YesodCC site => CCK site Html -> HandlerT site IO (CCLNode site)
+insertCCNode ::  (YesodCC site, Typeable a) => CCK site a -> HandlerT site IO (CCLNode site)
 insertCCNode k = do
   ZonedTime time _tz <- lift $ getZonedTime
   lnode <- modifyCCGraph $ f time
@@ -120,7 +121,7 @@ insertCCNode k = do
                          newLNode  = (newNode, CCNodeLabel time (Just k))
                      return (insNode newLNode gr, newLNode)
 
-insertCCRoot :: forall site. YesodCC site => HandlerT site IO (CCLNode site)
+insertCCRoot :: forall site . YesodCC site  => HandlerT site IO (CCLNode site)
 insertCCRoot = do
   ZonedTime time _tz <- lift $ getZonedTime
   lnode <- modifyCCGraph $ f time :: HandlerT site IO (CCLNode site)
@@ -129,7 +130,7 @@ insertCCRoot = do
     where
       f :: LocalTime -> CCGraph site -> IO (CCGraph site, CCLNode site)
       f time gr = do let [newNode] = newNodes 1 gr
-                         newLNode  = (newNode, CCNodeLabel time Nothing)
+                         newLNode  = (newNode, CCNodeLabel time (Nothing :: Maybe (CCK site Html)))
                      return (insNode newLNode gr, newLNode)
 
 
@@ -162,10 +163,12 @@ delCCLEdge edge = do
 
 
 
-lookupCCK :: YesodCC site => CCNode -> HandlerT site IO (Maybe (CCK site Html))
+lookupCCK :: (YesodCC site, Typeable site, Typeable a) => CCNode -> HandlerT site IO (Maybe (CCK site a))
 lookupCCK node = do
   gr <- readCCGraph
-  return $ join $ ccK <$> Graph.lab gr node
+  case Graph.lab gr node of
+    Just (CCNodeLabel _ (Just cck)) -> return (cast cck)
+    _                               -> return Nothing
 
 
 ---------------------- Continuation primitives  ----------------------
