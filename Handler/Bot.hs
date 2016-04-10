@@ -13,7 +13,7 @@ import             DBFS
 import             Prolog
 import             CCGraph
 import             Constructors
-import             Form hiding(directoryName,directoryExplanation)
+import             Form
 import             Show
 import qualified   Data.Text as T
 
@@ -44,6 +44,9 @@ postBotEditContR node = do
   not_found_html <- defaultLayout [whamlet|postBotEditContR: Not Found|]
   resume node not_found_html
 
+
+
+
 editWidget :: CCState -> UserAccountId -> Entity Directory -> CCNode -> Widget
 editWidget st uid (Entity key dir) node = do
   setTitle "Bot editor"
@@ -63,7 +66,7 @@ editHtml st uid dir node = do
 inquireEdit :: CCState -> UserAccountId -> Entity Directory -> CC CCP Handler CCState
 inquireEdit st uid dir = do
   newNode <- inquire st (editHtml st uid dir)
-  return (newNode , formInj (FormSuccess ()))
+  return (CCState newNode (FormSuccess ()))
 
 editFinishHtml :: CC CCP Handler Html
 editFinishHtml = lift $ redirect HomeR
@@ -118,10 +121,9 @@ editMain st uid dir =  do
 
 
 
-getEditData (FormDirectoryForm
-          (FormSuccess (DirectoryForm name
+getEditData  (FormSuccess (DirectoryForm name
                         (Textarea expl)
-                        (Textarea code))))
+                        (Textarea code)))
   = Just (name,expl,code)
 getEditData _ = Nothing
 

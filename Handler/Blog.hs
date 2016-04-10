@@ -4,6 +4,7 @@ module Handler.Blog  where
 import             Import hiding(breadcrumb, Form)
 import             Control.Monad.CC.CCCxe
 import qualified   Data.Text as T
+import             Data.Typeable
 import             CCGraph
 import             Constructors
 import             Form
@@ -35,19 +36,15 @@ type Username = Text
 data BlogAction = Cancel | Submit | Preview | Logout | New
                 deriving (Eq,Show)
 
-currentNode :: CCState -> CCNode
-currentNode  = fst
-currentRes :: CCState -> Form
-currentRes  = snd
 
 ------------------------------------------------------------------------------
 
 breadcrumbWidget' :: CCState -> Widget
-breadcrumbWidget' st@(node,_) = do
+breadcrumbWidget' st@(CCState node _) = do
   [whamlet|breadcrumb|]
 
 breadcrumbWidget :: CCState -> Widget
-breadcrumbWidget st@(node,_) = do
+breadcrumbWidget st@(CCState node _) = do
   path' <- handlerToWidget $ spine node
   uid   <- handlerToWidget $ getUserAccountId
   let root = getRoot path'
@@ -59,6 +56,11 @@ breadcrumbWidget st@(node,_) = do
     getRoot _ = 0
 
 -----------------------------------------------------------------------------
+data UserForm = UserForm
+                { userformName     :: Text
+                , userformPassword :: Text
+                } deriving (Eq,Ord,Show,Typeable)
+
 blogLoginWidget :: CCState -> CCNode -> Widget -> Enctype -> Widget
 blogLoginWidget st node blog_login_widget enctype =  do
   let breadcrumb = breadcrumbWidget st
@@ -76,7 +78,7 @@ blogLoginHtml st node = do
   (widget, enctype) <- lift $ generateCCFormPost blogLoginForm
   lift $ defaultLayout $ blogLoginWidget st node widget enctype
 
-inquireBlogLogin :: CCState -> CC CCP Handler (CCNode,Form)
+inquireBlogLogin :: CCState -> CC CCP Handler CCState
 inquireBlogLogin st = inquirePostUntil st (blogLoginHtml st) blogLoginForm
 
 ---------------------------------------------------------------------------------
@@ -89,9 +91,13 @@ blogLogoutWidget st node username = do
 
 blogLogoutHtml :: CCState -> UserForm -> CC CCP Handler Html
 blogLogoutHtml st user = do
-  lift $ defaultLayout $ blogLogoutWidget st (currentNode st) (userformName user)
+  lift $ defaultLayout $ blogLogoutWidget st (ccsCurrentNode st) (userformName user)
 
 -----------------------------------------------------------------------------------
+
+data BlogForm = BlogForm { blogformTitle :: Text
+                         , blogformBody  :: Textarea
+                         } deriving (Eq,Ord,Show,Typeable)
 
 blogNewForm :: Html -> MForm Handler (FormResult BlogForm, Widget)
 blogNewForm = renderDivs $ BlogForm
@@ -134,7 +140,7 @@ blogPreviewHtml st user blog_new_post node = do
           blogPreviewWidget st node (userformName user) (blogformBody blog_new_post) widget
 
 inquireBlogPreview :: CCState -> UserForm -> BlogForm
-                      -> CC CCP Handler ((CCNode,Form),  Maybe BlogAction)
+                      -> CC CCP Handler (CCState,  Maybe BlogAction)
 inquireBlogPreview st user blog_new_post = do
   inquirePostUntilButton st (blogPreviewHtml st user blog_new_post) emptyForm
     [("cancel", Cancel),("submit", Submit)]
@@ -155,7 +161,7 @@ blogViewHtml  st user blog_data node = do
   lift $ defaultLayout $ blogViewWidget st node (userformName user) blog_data widget
 
 inquireBlogView :: CCState -> UserForm -> Widget
-                   -> CC CCP Handler ((CCNode,Form), Maybe BlogAction)
+                   -> CC CCP Handler (CCState, Maybe BlogAction)
 inquireBlogView st user blog_data = do
   inquirePostUntilButton  st (blogViewHtml st user blog_data) emptyForm
     [("logout", Logout), ("new", New) ]
@@ -198,7 +204,8 @@ validateUser (UserForm user pass) = user == pass
 blog_main :: CCState -> CC CCP Handler Html
 blog_main state =  do
   lift $ $(logInfo) $ T.pack $ "inquireBlogLogin" ++ show state
-  state'@(_, FormUserForm (FormSuccess user)) <- inquireBlogLogin state
+  state'@(CCState _  (FormSuccess a)) <- inquireBlogLogin state
+  let Just user = cast a
 
   lift $ $(logInfo) "validateUser"
   if validateUser user
@@ -206,12 +213,14 @@ blog_main state =  do
     else authFail     state' user
 
   where
+    authSuccess :: CCState -> UserForm -> CC CCP Handler Html
     authSuccess state' user = do
       lift $ $(logInfo) "auth success"
       state'' <- loop_browse state' user
       logout_html <- blogLogoutHtml state'' user
       inquireFinish logout_html
 
+    authFail :: CCState -> UserForm -> CC CCP Handler Html
     authFail state' _user = do
       lift $ $(logInfo) "auth fail"
       blog_main  state'
@@ -230,7 +239,8 @@ blog_main state =  do
         _           -> loop_browse state'' user
 
     edit state' user  = do
-      ((state''@(_, FormBlogForm (FormSuccess blog))), maybe_action) <- inquireBlogNew state' user
+      ((state''@(CCState _ (FormSuccess a))), maybe_action) <- inquireBlogNew state' user
+      let Just blog = cast a
       case maybe_action of
         Just Cancel  -> return state''
         Just Submit  -> submitBlog state'' user blog
