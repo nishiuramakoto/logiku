@@ -35,6 +35,7 @@
                 <button class="botCheck"> Check
                 <button class="botDelete"> Delete
 
+    <aside class="articleAside">
 
 <footer class="articleDetailFoot">
     <aside class="creditUnit">

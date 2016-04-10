@@ -27,7 +27,7 @@ function setupAjax() {
 //	window.alert("request ajax:" + requestData.code);
 
         $.ajax({
-            url: '@{BotSaveR key}',
+            url: '@{BotSaveR node key}',
             type: 'POST',
             contentType: "application/json",
             data: JSON.stringify(requestData) ,

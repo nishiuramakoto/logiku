@@ -128,8 +128,13 @@ getEditData  (FormSuccess (DirectoryForm name
 getEditData _ = Nothing
 
 
-postBotSaveR :: DirectoryId -> Handler Value
-postBotSaveR  key = do
+postBotSaveR :: CCNode -> DirectoryId ->  Handler Value
+postBotSaveR node dir = do
+  resume node undefined
+
+
+postBotSaveR' :: CCNode -> DirectoryId -> Handler Value
+postBotSaveR'  node key = do
   eval <- runEitherT $ trySaveBot key
   case eval of
     Right val -> returnJson val

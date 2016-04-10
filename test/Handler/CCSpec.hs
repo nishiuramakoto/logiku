@@ -60,9 +60,11 @@ spec = withApp $ do
     liftIO $ I.unpack action `shouldStartWith` "/blog/"
 
     let req = do setMethod methodPost
+                 --setUrl $ "http://localhost:3000" ++ I.unpack action
                  setUrl $ "http://localhost:3000" ++ I.unpack action
                  byLabel "Enter the user name:" "root"
                  byLabel "Enter the password" "root"
+                 addPostParam "_formid" "userForm"
                  addToken
     I.request req
     statusIs 200
@@ -70,14 +72,14 @@ spec = withApp $ do
     bodyContains "You are logged in as root."
 
 
-  it "tests the form submission" $ do
+  it "tests the login form" $ do
     login
 
-  it "tests the form submission" $ do
+  it "benchmarks the continuation" $ do
     let i = 250
         i' = 2
     putTime
-    forM [1..i] $ \_ -> do
+    forM [1..i'] $ \_ -> do
       login
       logout
       login
@@ -102,6 +104,8 @@ login = do
     get ("http://localhost:3000/blog" :: String)
     statusIs 200
 
+    bodyContains "Please log in"
+
     action <- formActionValue "#blogLoginForm"
     liftIO $ I.unpack action `shouldStartWith` "/blog/"
 
@@ -109,6 +113,7 @@ login = do
                  setUrl $ "http://localhost:3000" ++ I.unpack action
                  byLabel "Enter the user name:" "root"
                  byLabel "Enter the password" "root"
+                 addPostParam "_formid" "userForm"
                  addToken
     I.request req
     statusIs 200
