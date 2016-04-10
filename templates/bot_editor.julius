@@ -1,30 +1,72 @@
+var editor;
 
-$(document).ready(function () {
 
-    var programArea = $('.botEditorContainer textarea[name="codeEditor"]');
-    var div         = $('#botEditor');
+function setupSaveSuccessMessage(data) {
+//    window.alert("response ajax" + data);
 
-    programArea.addClass('hidden');
-    div.append(programArea.val());
+    if (data.success) {
+        $('.editorNotification').text("Saved");
+    } else {
+        $('.editorNotification').text("Error:" + data.error);
+    }
+};
+
+
+function setupAjax() {
+
+    // AJAX Request
+    $('.botSave').click(function (event) {
+//	window.alert("request ajax" + event);
+
+        event.preventDefault();
+	var requestData = { name        : $('.botName textarea').val(),
+			    code        : editor.getValue(),
+			    explanation : $('.botExplanation textarea').val()
+			  };
+
+//	window.alert("request ajax:" + requestData.code);
+
+        $.ajax({
+            url: '@{BotSaveR key}',
+            type: 'POST',
+            contentType: "application/json",
+            data: JSON.stringify(requestData) ,
+            success: setupSaveSuccessMessage ,
+            error: function (data) {
+                console.log("Error creating comment: " + data);
+            },
+        });
+    });
+
+}
+
+
+
+function setupAce(editorDivSelector, editorTASelector) {
+    var div         = $(editorDivSelector);
+    var ta          = $(editorTASelector);
+
+    ta.addClass('hidden');
+    div.append(ta.val());
 
     // Set up the Ace editor
-    var editor = ace.edit("botEditor");
+    // var editor = ace.edit("botCodeEditor");
+    editor = ace.edit(div.attr('id')); // Must be ID not class!
     editor.setTheme("ace/theme/textmate");
     editor.getSession().setMode("ace/mode/prolog");
 
-    // reflect editor status to the textarea
-    $('.botEditorContainer .changeCode').click(function() {
-        programArea.val(editor.getValue());
-    });
-
-
     // Check code modification
-    div.keyup( function () {
-        if (programArea.val() != editor.getValue()) {
+    editor.on('change',function(e) {
+        if (ta.val() != editor.getValue()) {
             $('.codeModification').removeClass('hidden');
         } else {
             $('.codeModification').addClass('hidden');
         }
     });
+}
 
+$(document).ready(function () {
+    // MUST Set the ID attribute for the div!
+    setupAce('#botCodeEditor','.botCodeStorage textarea');
+    setupAjax();
 });

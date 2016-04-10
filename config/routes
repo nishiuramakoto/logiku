@@ -11,7 +11,9 @@
 /command/edit/#FileId CommandEditR GET
 /command/run/#FileId  CommandRunR  GET
 
-/bot/edit/#DirectoryId BotEditR GET
+/bot/edit/#DirectoryId           BotEditR GET
+/bot/edit/node/#CCNode           BotEditContR POST
+/bot/save/#DirectoryId           BotSaveR POST -- Ajax
 
 
 /prolog                       PrologTestR         GET

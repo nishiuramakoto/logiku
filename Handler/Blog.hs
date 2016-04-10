@@ -67,7 +67,7 @@ blogLoginWidget st node blog_login_widget enctype =  do
   $(widgetFile "blog_login")
 
 blogLoginForm :: Html -> MForm Handler (FormResult UserForm, Widget)
-blogLoginForm = renderDivs $ UserForm
+blogLoginForm = identifyForm "userForm" $ renderDivs $ UserForm
                 <$> areq textField      "Enter the user name:"   Nothing
                 <*> areq passwordField  "Enter the password" Nothing
 

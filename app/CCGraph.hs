@@ -46,7 +46,7 @@ import             Data.Graph.Inductive.PatriciaTree
 import             Form
 
 -- type AppHandler = HandlerT App IO
-type CCP                 = P2 CCNode Html
+type CCP                 = PP
 type CCK site w          = CCNode  -> CC CCP (HandlerT site IO) w
 type CCNode              = Graph.Node
 data CCNodeLabel site    = CCNodeLabel { ccTimestamp :: LocalTime , ccK :: Maybe (CCK site Html) }
@@ -77,7 +77,7 @@ run ::  CC CCP (HandlerT site IO) Html ->  HandlerT site IO Html
 run f = do
   $(logInfo) $ T.pack $ "Running a new continuation"
 
-  runCC $ pushPrompt p2R f
+  runCC $ pushPrompt pp f
 
 resume ::  YesodCC site =>  CCNode -> Html -> HandlerT site IO Html
 resume node notFoundHtml = do
@@ -161,10 +161,10 @@ sendk (node, response) html k = do
   html new
 
 inquire :: YesodCC site => CCState -> CCHtml site -> CC CCP (HandlerT site IO) CCNode
-inquire (node,response) html =  shiftP p2R $ sendk (node, response) html
+inquire (node,response) html =  shiftP pp $ sendk (node, response) html
 
 inquireFinish ::  YesodCC site => Html -> CC CCP (HandlerT site IO) Html
-inquireFinish  html = abortP p2R $ return html
+inquireFinish  html = abortP pp $ return html
 
 inquireGet :: (YesodCC site , FormEdge a)
               => CCState

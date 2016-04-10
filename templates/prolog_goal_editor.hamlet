@@ -21,7 +21,7 @@
                 <header>
                     <h3 class="programGoalsHeader"> Add a Goal
 
-            <form action=@{PrologProgramContSilentR} method="POST" enctype=#{enctype} id="goalEditor">
+            <form action="@{PrologProgramContSilentR}" method="POST" enctype=#{enctype} id="goalEditor">
                 <input type="hidden" name="_node"    value="#{node}">
                 <input type="hidden" name="userIdent"  value="#{userIdent}">
                 ^{formWidget}
