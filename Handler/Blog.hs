@@ -19,17 +19,20 @@ import             Authentication
 getBlogR :: Handler Html
 getBlogR = do
   st <- startState
-  run $ blog_main st
+  CCTypeHtml html <- run $ blog_main st
+  return html
 
 postBlogContR  :: UserAccountId -> CCNode -> Handler Html
 postBlogContR uid node = do
   notFoundHtml <- defaultLayout [whamlet|Blog Continuation not Found!!|]
-  resume node notFoundHtml
+  CCTypeHtml html <- resume (node, const $ return $ CCTypeHtml notFoundHtml) (CCTypeHtml notFoundHtml)
+  return html
 
 getBlogContR  :: UserAccountId -> CCNode -> Handler Html
 getBlogContR uid node = do
   notFoundHtml <- defaultLayout [whamlet|Blog Continuation not Found!|]
-  resume node notFoundHtml
+  CCTypeHtml html <- resume (node, const $ return $ CCTypeHtml notFoundHtml) (CCTypeHtml notFoundHtml)
+  return html
 
 ------------------------------  Types --------------------------------
 type Username = Text
@@ -73,10 +76,10 @@ blogLoginForm = identifyForm "userForm" $ renderDivs $ UserForm
                 <$> areq textField      "Enter the user name:"   Nothing
                 <*> areq passwordField  "Enter the password" Nothing
 
-blogLoginHtml :: CCState -> CCNode -> CC CCP Handler Html
+blogLoginHtml :: CCState -> CCContentTypeM App
 blogLoginHtml st node = do
   (widget, enctype) <- lift $ generateCCFormPost blogLoginForm
-  lift $ defaultLayout $ blogLoginWidget st node widget enctype
+  lift $ (CCTypeHtml <$> (defaultLayout $ blogLoginWidget st node widget enctype))
 
 inquireBlogLogin :: CCState -> CC CCP Handler CCState
 inquireBlogLogin st = inquirePostUntil st (blogLoginHtml st) blogLoginForm
@@ -111,10 +114,10 @@ blogNewWidget st node  blog_new_form enctype username = do
   setTitle "Blog New"
   $(widgetFile "blog_new")
 
-blogNewHtml :: CCState -> UserForm -> CCNode -> CC CCP Handler Html
+blogNewHtml :: CCState -> UserForm -> CCContentTypeM App
 blogNewHtml st user node = do
   (widget, enctype) <- lift $ generateCCFormPost blogNewForm
-  lift $ defaultLayout $ blogNewWidget st node widget enctype (userformName user)
+  CCTypeHtml <$> (lift $ defaultLayout $ blogNewWidget st node widget enctype (userformName user))
 
 inquireBlogNew :: CCState -> UserForm -> CC CCP Handler (CCState, Maybe BlogAction)
 inquireBlogNew st user = do
@@ -133,11 +136,11 @@ blogPreviewWidget st node username blog_new_post blog_preview_widget = do
 emptyForm :: Html -> MForm Handler (FormResult (), Widget)
 emptyForm = renderDivs $ pure ()
 
-blogPreviewHtml ::  CCState -> UserForm -> BlogForm -> CCNode -> CC CCP Handler Html
+blogPreviewHtml ::  CCState -> UserForm -> BlogForm -> CCContentTypeM App
 blogPreviewHtml st user blog_new_post node = do
   (widget, _enctype) <- lift $ generateCCFormPost $ emptyForm
-  lift $ defaultLayout $
-          blogPreviewWidget st node (userformName user) (blogformBody blog_new_post) widget
+  CCTypeHtml <$> (lift $ defaultLayout $
+                  blogPreviewWidget st node (userformName user) (blogformBody blog_new_post) widget)
 
 inquireBlogPreview :: CCState -> UserForm -> BlogForm
                       -> CC CCP Handler (CCState,  Maybe BlogAction)
@@ -154,11 +157,10 @@ blogViewWidget st node username blog_data blog_view_widget = do
   setTitle "Blog View"
   $(widgetFile "blog_view")
 
-blogViewHtml ::  CCState -> UserForm -> Widget
-                -> CCNode -> CC CCP Handler  Html
+blogViewHtml ::  CCState -> UserForm -> Widget -> CCContentTypeM App
 blogViewHtml  st user blog_data node = do
   (widget, _enctype) <- lift $ generateCCFormPost emptyForm
-  lift $ defaultLayout $ blogViewWidget st node (userformName user) blog_data widget
+  CCTypeHtml <$> (lift $ defaultLayout $ blogViewWidget st node (userformName user) blog_data widget)
 
 inquireBlogView :: CCState -> UserForm -> Widget
                    -> CC CCP Handler (CCState, Maybe BlogAction)
@@ -201,7 +203,7 @@ submitBlog st (UserForm name pass) (BlogForm title (Textarea body)) = lift $  do
 validateUser :: UserForm -> Bool
 validateUser (UserForm user pass) = user == pass
 
-blog_main :: CCState -> CC CCP Handler Html
+blog_main :: CCState -> CC CCP Handler CCContentType
 blog_main state =  do
   lift $ $(logInfo) $ T.pack $ "inquireBlogLogin" ++ show state
   state'@(CCState _  (FormSuccess a)) <- inquireBlogLogin state
@@ -213,14 +215,14 @@ blog_main state =  do
     else authFail     state' user
 
   where
-    authSuccess :: CCState -> UserForm -> CC CCP Handler Html
+    authSuccess :: CCState -> UserForm -> CC CCP Handler CCContentType
     authSuccess state' user = do
       lift $ $(logInfo) "auth success"
       state'' <- loop_browse state' user
       logout_html <- blogLogoutHtml state'' user
-      inquireFinish logout_html
+      inquireFinish (CCTypeHtml logout_html)
 
-    authFail :: CCState -> UserForm -> CC CCP Handler Html
+    authFail :: CCState -> UserForm -> CC CCP Handler CCContentType
     authFail state' _user = do
       lift $ $(logInfo) "auth fail"
       blog_main  state'

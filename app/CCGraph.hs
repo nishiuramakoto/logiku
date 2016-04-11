@@ -2,6 +2,9 @@
 {-# LANGUAGE StandaloneDeriving  #-}
 module CCGraph (
   CCK,
+  CCContentType(..),
+  CCContentTypeM,
+  CCKArg,
   CCP,
   CCNode,
   CCNodeLabel(..),
@@ -47,18 +50,19 @@ import             Data.Graph.Inductive.PatriciaTree
 import             Data.Typeable
 import             Form
 
--- type AppHandler = HandlerT App IO
 type CCP                 = PP
-type CCK site w          = CCNode  -> CC CCP (HandlerT site IO) w
 type CCNode              = Graph.Node
-data CCNodeLabel site    = forall a. Typeable a
-                           => CCNodeLabel { ccTimestamp :: LocalTime , ccK :: Maybe (CCK site a) }
+data CCContentType       = CCTypeHtml Html | CCTypeValue Value
+type CCContentTypeM site = CCNode -> CC CCP (HandlerT site IO) CCContentType
+type CCKArg site         = (CCNode,CCContentTypeM site)
+type CCK site w          = CCKArg site -> CC CCP (HandlerT site IO) w
+data CCNodeLabel site    = CCNodeLabel { ccTimestamp :: LocalTime , ccK :: Maybe (CCK site CCContentType) }
 data CCEdgeLabel         = forall form. (Show form, Typeable form, Eq form)
                            => CCEdgeLabel { ccResponse  :: form }
 type CCLNode site        = LNode (CCNodeLabel site)
 type CCLEdge             = LEdge (CCEdgeLabel)
 type CCGraph site        = Gr (CCNodeLabel site) CCEdgeLabel
-type CCHtml  site         = CCNode -> CC CCP (HandlerT site IO) Html
+
 data CCState             = forall a. (Show a, Eq a, Typeable a)
                            => CCState { ccsCurrentNode :: CCNode
                                       , ccsCurrentForm :: (FormResult a)}
@@ -97,20 +101,21 @@ run f = do
 
   runCC $ pushPrompt pp f
 
-resume ::  (YesodCC site, Typeable a) =>  CCNode -> a -> HandlerT site IO a
-resume node notFoundHtml = do
-  $(logInfo) $ T.pack $ "resuming " ++ show node
+resume ::  (YesodCC site) =>  CCKArg site -> CCContentType -> HandlerT site IO CCContentType
+resume (node,content) notFoundHtml = do
+  $(logInfo) $ T.pack $ "resuming:" ++ show node
   mk <- lookupCCK node
   case mk of
-    Just k  -> runCC $ k node
+    Just k  -> runCC $ k (node,content)
     Nothing -> do
       $(logInfo) "Continuation not found"
       return notFoundHtml
 
+
 -------------- Access to the global continuation store  --------------
 
 
-insertCCNode ::  (YesodCC site, Typeable a) => CCK site a -> HandlerT site IO (CCLNode site)
+insertCCNode ::  (YesodCC site) => CCK site CCContentType -> HandlerT site IO (CCLNode site)
 insertCCNode k = do
   ZonedTime time _tz <- lift $ getZonedTime
   lnode <- modifyCCGraph $ f time
@@ -130,7 +135,7 @@ insertCCRoot = do
     where
       f :: LocalTime -> CCGraph site -> IO (CCGraph site, CCLNode site)
       f time gr = do let [newNode] = newNodes 1 gr
-                         newLNode  = (newNode, CCNodeLabel time (Nothing :: Maybe (CCK site Html)))
+                         newLNode  = (newNode, CCNodeLabel time (Nothing :: Maybe (CCK site CCContentType)))
                      return (insNode newLNode gr, newLNode)
 
 
@@ -163,46 +168,59 @@ delCCLEdge edge = do
 
 
 
-lookupCCK :: (YesodCC site, Typeable site, Typeable a) => CCNode -> HandlerT site IO (Maybe (CCK site a))
+--lookupCCK :: (YesodCC site, Typeable site, Typeable a) => CCNode -> HandlerT site IO (Maybe (CCK site a))
+lookupCCK :: (YesodCC site, Typeable site) => CCNode -> HandlerT site IO (Maybe (CCK site CCContentType))
 lookupCCK node = do
   gr <- readCCGraph
   case Graph.lab gr node of
-    Just (CCNodeLabel _ (Just cck)) -> return (cast cck)
+    Just (CCNodeLabel _ (Just cck)) -> return (Just cck)
     _                               -> return Nothing
 
 
 ---------------------- Continuation primitives  ----------------------
-sendk ::  YesodCC site => CCState -> CCHtml site -> CCK site Html -> CC CCP (HandlerT site IO) Html
-sendk (CCState node response) html k = do
+sendk ::  (YesodCC site)
+          => CCState -> CCContentTypeM site -> CCK site CCContentType
+          -> CC CCP (HandlerT site IO) CCContentType
+sendk (CCState node response) content k = do
+  lift $ $(logInfo) $ T.pack $ "sendk"
+
   (new, _) <- lift $ insertCCNode k
   lift $ insertCCLEdge (node, new, CCEdgeLabel response)
 
-  lift $ $(logInfo) $ T.pack $ "sendk" ++ show node
-  html new
+  lift $ $(logInfo) $ T.pack $ "sendk:" ++ show node
 
-inquire :: YesodCC site => CCState -> CCHtml site -> CC CCP (HandlerT site IO) CCNode
-inquire st html =  shiftP pp $ sendk st html
+  x <- content new
+  case cast x of
+    Just x' -> return x'
+    Nothing -> lift $ notFound
 
-inquireFinish ::  YesodCC site => Html -> CC CCP (HandlerT site IO) Html
-inquireFinish  html = abortP pp $ return html
+inquire :: YesodCC site => CCState -> CCContentTypeM site -> CC CCP (HandlerT site IO) (CCKArg site)
+inquire st content = do
+  lift $ $(logInfo) $ T.pack $ "inquire:" ++ show st
+  x <- shiftP pp $ sendk st content
+  lift $ $(logInfo) $ T.pack $ "inquire:" ++ show st
+  return x
+
+inquireFinish ::  YesodCC site => CCContentType -> CC CCP (HandlerT site IO) CCContentType
+inquireFinish  content = abortP pp $ return content
 
 inquireGet :: (YesodCC site , Eq a, Show a, Typeable a)
               => CCState
-              -> CCHtml site
+              -> CCContentTypeM site
               -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
               -> CC CCP (HandlerT site IO) CCState
 inquireGet st html form = do
-  newNode   <- inquire st html
+  (newNode, content)   <- inquire st html
   ((result, _widget), _enctype) <- lift $ runFormGet form
   return (CCState newNode  result)
 
 inquireGetUntil :: (YesodCC site, Eq a,Show a,Typeable a)
                    => CCState
-                   -> CCHtml site
+                   -> CCContentTypeM site
                    -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
                    -> CC CCP (HandlerT site IO) CCState
 inquireGetUntil st html form = do
-  newNode <- inquire st html
+  (newNode, content) <- inquire st html
   ((result, _widget), _enctype) <- lift $ runFormGet form
 
   case result of
@@ -213,22 +231,22 @@ inquireGetUntil st html form = do
 inquirePost :: (YesodCC site,  RenderMessage site FormMessage
                , Eq a, Show a, Typeable a )
                => CCState
-               -> CCHtml site
+               -> CCContentTypeM site
                -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
                -> CC CCP (HandlerT site IO) CCState
 inquirePost st html form = do
-  newNode <- inquire st html
+  (newNode, content) <- inquire st html
   ((result, _widget), _enctype) <- lift $ runFormPost form
   return (CCState newNode  result)
 
 inquirePostUntil :: (YesodCC site, RenderMessage site FormMessage
                     , Eq a, Show a, Typeable a)
                     => CCState
-                    -> CCHtml site
+                    -> CCContentTypeM site
                     -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
                     -> CC CCP (HandlerT site IO) CCState
 inquirePostUntil st html form = do
-  newNode <- inquire st  html
+  (newNode, content) <- inquire st  html
   lift $ $(logInfo) $ T.pack $ "inquirePostUntil -> " ++ show newNode
   ((result, _widget), _enctype) <- lift $ runFormPost form
 
@@ -249,7 +267,7 @@ runFormPostButtons ((name,value):xs) = do
 inquirePostButton :: (YesodCC site, RenderMessage site FormMessage
                      , Show a, Eq a, Typeable a, Show b)
                      => CCState
-                     -> CCHtml site
+                     -> CCContentTypeM site
                      -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
                      -> [(Text,b)]
                      -> CC CCP (HandlerT site IO) (CCState, Maybe b)
@@ -262,7 +280,7 @@ inquirePostButton st html form buttons = do
 inquirePostUntilButton :: (YesodCC site,  RenderMessage site FormMessage
                           , Eq a, Typeable a, Show a, Show b)
                           => CCState
-                          -> CCHtml site
+                          -> CCContentTypeM site
                           -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
                           -> [(Text,b)]
                           -> CC CCP (HandlerT site IO) (CCState, Maybe b)

@@ -56,7 +56,7 @@ prologExecuteTestRuntimeErrorHtml err =
 
 
 
-prologExecuteCcMain :: CCState -> Text -> Text -> CC CCP Handler Html
+prologExecuteCcMain :: CCState -> Text -> Text -> CC CCP Handler CCContentType
 prologExecuteCcMain st progCode goalCode = do
    result <- evalPrologT $ runEitherT $ do
         prog <- EitherT $ consultString (T.unpack progCode)
@@ -64,6 +64,6 @@ prologExecuteCcMain st progCode goalCode = do
         lift $ resolveToTerms st prog goal
 
    case result of
-    Left  err          ->  prologExecuteTestRuntimeErrorHtml err >>= inquireFinish
-    Right (Left err)   ->  prologExecuteTestSyntaxErrorHtml err >>= inquireFinish
-    Right (Right tss)  ->  prologExecuteTestFinishHtml tss >>= inquireFinish
+    Left  err          ->  (CCTypeHtml <$> prologExecuteTestRuntimeErrorHtml err) >>= inquireFinish
+    Right (Left err)   ->  (CCTypeHtml <$> prologExecuteTestSyntaxErrorHtml err) >>= inquireFinish
+    Right (Right tss)  ->  (CCTypeHtml <$> prologExecuteTestFinishHtml tss) >>= inquireFinish

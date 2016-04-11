@@ -111,12 +111,14 @@ getPrologProgramImplR ::  Handler Html
 getPrologProgramImplR  = do
   uid <-  getUserAccountId
   st  <- startState
-  run $ ccMain st uid
+  CCTypeHtml html <- run $ ccMain st uid
+  return html
 
 postPrologProgramContR  :: Int -> Handler Html
 postPrologProgramContR node = do
   not_found_html <- defaultLayout [whamlet|postPrologProgramContR: Not Found|]
-  resume node  not_found_html
+  CCTypeHtml html <- resume (node, const $ return $ CCTypeHtml not_found_html)  (CCTypeHtml not_found_html)
+  return html
 
 postPrologProgramContSilentR :: Handler Html
 postPrologProgramContSilentR = do
@@ -124,14 +126,16 @@ postPrologProgramContSilentR = do
 
   mklabel <- lookupPostParam "_klabel"
   case join $ fmap readInt mklabel of
-    Just node ->  resume node  not_found_html
-    _ ->  return not_found_html
+    Just node ->  do CCTypeHtml html <- resume (node, const $ return $ CCTypeHtml not_found_html)  (CCTypeHtml not_found_html)
+                     return html
+    _         ->  return not_found_html
 
 
 getPrologProgramContR :: Int -> Handler Html
 getPrologProgramContR node = do
   not_found_html <- defaultLayout [whamlet|Not Found|]
-  resume node not_found_html
+  CCTypeHtml html <- resume (node, const $ return $ CCTypeHtml not_found_html) (CCTypeHtml not_found_html)
+  return html
 
 
 -- postSyntaxCheckR :: Handler Html
@@ -197,10 +201,10 @@ directoryWidget st node formWidget _enctype forceSave = do
   $(widgetFile "prolog_program_editor")
 
 directoryHtml ::  CCState -> ProgramName ->  ProgramExplanation -> ProgramCode -> Bool
-                  ->  CCNode -> CC CCP Handler  Html
+                  ->  CCContentTypeM App
 directoryHtml st name expl code forceSave node = do
   (formWidget, enctype) <- lift $ generateCCFormPost $ directoryForm name expl code
-  lift $ defaultLayout $ directoryWidget st node formWidget enctype forceSave
+  CCTypeHtml <$> (lift $ defaultLayout $ directoryWidget st node formWidget enctype forceSave)
 
 inquireDirectory ::  CCState -> ProgramName -> ProgramExplanation ->  ProgramCode -> Bool
                         -> CC CCP Handler (CCState, Maybe DirectoryAction)
@@ -239,11 +243,11 @@ fileEditorWidget st node userIdent programName programExplanation programCode go
                          $(widgetFile "prolog_goal_editor")
 
 fileEditorHtml ::  CCState -> UserIdent -> ProgramName -> ProgramExplanation -> ProgramCode -> [File]
-                   -> CCNode -> CC CCP Handler Html
+                   -> CCContentTypeM App
 fileEditorHtml  st userIdent name explanation code goals node = do
   (formWidget , enctype ) <- lift $ generateCCFormPost $ fileEditorForm
-  lift $ defaultLayout $
-           fileEditorWidget st node userIdent name explanation code goals  formWidget  enctype
+  CCTypeHtml <$> (lift $ defaultLayout $
+                  fileEditorWidget st node userIdent name explanation code goals  formWidget  enctype)
 
 inquireFileEditor :: CCState -> UserIdent -> ProgramName -> ProgramExplanation -> ProgramCode -> [File]
                         -> CC CCP Handler (CCState, Maybe DirectoryAction)
@@ -257,10 +261,10 @@ dummyForm :: Html -> MForm Handler (FormResult DummyForm, Widget)
 dummyForm = renderDivs $ DummyForm <$> areq boolField "" Nothing
 dummyWidget :: CCState -> CCNode -> Widget -> Enctype -> Widget
 dummyWidget st node formWidget enctype =  $(widgetFile "dummy-page")
-dummyHtml :: CCState -> CCNode -> CC CCP Handler Html
+dummyHtml :: CCState -> CCContentTypeM App
 dummyHtml st node = do
   (formWidget, enctype) <- lift $ generateCCFormPost $ dummyForm
-  lift $ defaultLayout $ dummyWidget st node formWidget enctype
+  CCTypeHtml <$> (lift $ defaultLayout $ dummyWidget st node formWidget enctype)
 inquireDummy :: CCState -> CC CCP Handler (CCState, Maybe Bool)
 inquireDummy st = do
   inquirePostButton st (dummyHtml st) dummyForm [ ("ok", True) ]
@@ -289,7 +293,7 @@ directoryFinishHtml = lift $ redirect HomeR
 
 -- entityKey (Entity key _) = key
 
-ccMain :: CCState -> UserAccountId -> CC CCP Handler Html
+ccMain :: CCState -> UserAccountId -> CC CCP Handler CCContentType
 ccMain st uid =  do
   -- lift $ do
   --   (widget, enctype) <- generateFormPost prologTestForm
@@ -300,7 +304,7 @@ ccMain st uid =  do
 
   mentity <- lift $ selectFirstUserProgram uid
   loopBrowse st uid (fmap entityKey mentity) False
-  directoryFinishHtml >>=  inquireFinish
+  (CCTypeHtml <$> directoryFinishHtml) >>=  inquireFinish
 
 loopBrowse :: CCState -> UserAccountId -> Maybe DirectoryId -> Bool -> CC CCP Handler ()
 loopBrowse st uid Nothing forceSave = do
@@ -497,7 +501,8 @@ getPrologGoalRunnerR = maybeNotFound $ do
 executeDirectory :: CCState -> Text -> Text -> Handler Html
 executeDirectory st progCode goalCode =
   case (programCheck  progCode , goalCheck goalCode) of
-  (Right clauses, Right terms)   -> run $ prologExecuteCCMain st progCode goalCode
+  (Right clauses, Right terms)   -> do CCTypeHtml html <- run $ prologExecuteCCMain st progCode goalCode
+                                       return html
 
   (Left  err, _ ) ->  defaultLayout $ [whamlet|Parse error in the program #{show err}|]
   (_ , Left  err) ->  defaultLayout $ [whamlet|Parse error in the goals   #{show err}|]

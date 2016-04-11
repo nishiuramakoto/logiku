@@ -38,8 +38,9 @@ getPrologTestR = do
   defaultLayout $ prologTestWidget widget enctype
 
 executePrologProgram :: CCState -> Text -> Text -> Handler Html
-executePrologProgram st progCode goalCode =
-  run $ prologExecuteCCMain st progCode goalCode
+executePrologProgram st progCode goalCode = do
+  CCTypeHtml html <- run $ prologExecuteCCMain st progCode goalCode
+  return html
 
   -- case (consultString (T.unpack progCode), parseQuery (T.unpack goalCode)) of
   -- (Right clauses, Right terms)   -> run $ prologExecuteCCMain clauses terms
@@ -62,7 +63,8 @@ postPrologExecuteTestR = do
 getPrologExecuteTestContR :: CCNode -> Handler Html
 getPrologExecuteTestContR node = do
   not_found_html <- defaultLayout [whamlet|PrologExecuteTestContR: cont not found|]
-  resume node not_found_html
+  CCTypeHtml html <- resume (node, const $ return $ CCTypeHtml not_found_html) (CCTypeHtml not_found_html)
+  return html
 
 
 categoryTree :: Widget
@@ -81,7 +83,7 @@ prologExecuteTestRuntimeErrorHtml :: RuntimeError -> CC CCP Handler Html
 prologExecuteTestRuntimeErrorHtml err =
   lift $ defaultLayout $ [whamlet| #{show err}|]
 
-prologExecuteCCMain :: CCState -> Text -> Text -> CC CCP Handler Html
+prologExecuteCCMain :: CCState -> Text -> Text -> CC CCP Handler CCContentType
 prologExecuteCCMain st progCode goalCode = do
    result <- evalPrologT $ do
         eprog <- consultString (T.unpack progCode)
@@ -93,6 +95,6 @@ prologExecuteCCMain st progCode goalCode = do
                              Right goal -> do Right <$>  resolveToTerms st prog goal
 
    case result of
-    Left  err         ->  prologExecuteTestRuntimeErrorHtml err >>= inquireFinish
-    Right (Left err)  ->  prologExecuteTestSyntaxErrorHtml err >>= inquireFinish
-    Right (Right tss) ->  prologExecuteTestFinishHtml tss >>= inquireFinish
+    Left  err         ->  (CCTypeHtml <$> prologExecuteTestRuntimeErrorHtml err) >>= inquireFinish
+    Right (Left err)  ->  (CCTypeHtml <$> prologExecuteTestSyntaxErrorHtml err) >>= inquireFinish
+    Right (Right tss) ->  (CCTypeHtml <$> prologExecuteTestFinishHtml tss) >>= inquireFinish

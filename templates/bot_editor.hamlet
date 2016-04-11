@@ -36,7 +36,7 @@
                 <button class="botDelete"> Delete
 
     <aside class="articleAside">
-
+        <a href="@{BotEditNewR node}"> Create New
 <footer class="articleDetailFoot">
     <aside class="creditUnit">
         <a href="@{HomeR}"> トップ
