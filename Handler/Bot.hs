@@ -1,7 +1,7 @@
 module Handler.Bot (
   getBotR,
   getBotEditR,
-  postBotEditContR,
+  getBotEditNewR,
   postBotSaveR
   ) where
 
@@ -37,13 +37,21 @@ getBotEditR :: DirectoryId -> Handler Html
 getBotEditR dir = do
   st <- startState
   uid <- getUserAccountId
-  run $ editMain st uid dir
+  CCTypeHtml html <- run $ editMain st uid dir
+  return html
 
-postBotEditContR :: Int -> Handler Html
-postBotEditContR node = do
-  not_found_html <- defaultLayout [whamlet|postBotEditContR: Not Found|]
-  resume node not_found_html
+editMain :: CCState -> UserAccountId -> DirectoryId -> CC CCP Handler CCContentType
+editMain st uid dir = do
+  result <- runEitherT $ do
+    dirData <- EitherT $ lift $ runDB $ readDirectory uid dir
+    lift $ inquireEdit st uid (editHtml st uid (Entity dir dirData))
+    return ()
 
+  case result of
+    Right _   -> return ()
+    Left  err -> lift $ setMessage $ toHtml $ T.pack $ show err
+
+  (CCTypeHtml <$> editFinishHtml) >>= inquireFinish
 
 
 
@@ -59,65 +67,17 @@ editWidget st uid (Entity key dir) node = do
   $(widgetFile "bot_editor")
 
 
-editHtml :: CCState -> UserAccountId -> Entity Directory -> CCNode -> CC CCP Handler Html
+editHtml :: CCState -> UserAccountId -> Entity Directory -> CCContentTypeM App
 editHtml st uid dir node = do
-  lift $ defaultLayout $ editWidget st uid dir node
+  CCTypeHtml <$> (lift $ defaultLayout $ editWidget st uid dir node)
 
-inquireEdit :: CCState -> UserAccountId -> Entity Directory -> CC CCP Handler CCState
-inquireEdit st uid dir = do
-  newNode <- inquire st (editHtml st uid dir)
+inquireEdit :: CCState -> UserAccountId -> CCContentTypeM App -> CC CCP Handler CCState
+inquireEdit st uid html = do
+  (newNode, content) <- inquire st html
   return (CCState newNode (FormSuccess ()))
 
 editFinishHtml :: CC CCP Handler Html
 editFinishHtml = lift $ redirect HomeR
-
-editMain :: CCState -> UserAccountId -> DirectoryId -> CC CCP Handler Html
-editMain st uid dir =  do
-   edata <- lift $ runDB $ readDirectory uid dir
-   case edata of
-     Right dirData -> inquireEdit st uid (Entity dir dirData) >> return ()
-     Left  err     -> lift $ setMessage $ toHtml $ T.pack $ show err
-
-   editFinishHtml >>= inquireFinish
-
--- loopEdit :: CCState -> UserAccountId -> DirectoryId -> Bool -> CC CCP Handler ()
--- loopEdit st uid dir forceSave = do
---   edata <- lift $ runDB $ readDirectory uid dir
---   case edata of
---     Right dirData -> loopEdit' dirData
---     Left  err    -> do
---       setMessage $ toHtml $ T.pack $ show err
---       return ()
-
---   where
---     loopEdit' :: Directory -> CC CCP Handler ()
---     loopEdit' dirData = do
---       let uid' = directoryUserId dirData
---           name = directoryName   dirData
---           expl = directoryExplanation dirData
---           code = directoryCode   dirData
-
---       (st', mact) <- inquireDirectory st name expl code forceSave
-
---       case (mact, getEditData st') of
---         (Just Save, Just (newName,newExpl,newCode)) -> do
---           write st' uid dirData { directoryName = newName
---                                 , directoryExplanation = newExpl
---                                 , directoryCode = newCode
---                                 }
---             forceSave
---         _ -> loopEdit st' uid dir forceSave
-
---     write st uid dirData forceSave = do
---       if forceSave || programOK newCode
---         then do runDB $ writeDirectory uid dirData
---                 loopEdit st uid dirData forceSave
---           else
---   ((node, form), mact) <- inquireDirectory st  "" (Textarea "") (Textarea "") forceSave
---   let mdata = getEditData form
---   case (mact, mdata) of
---     (Just Save, Just (expl,code)) -> save st uid dir (expl,code) forceSave
---     _ loopEdit st uid dir forceSave
 
 
 
@@ -130,7 +90,18 @@ getEditData _ = Nothing
 
 postBotSaveR :: CCNode -> DirectoryId ->  Handler Value
 postBotSaveR node dir = do
-  resume node undefined
+  eval  <- runEitherT $ trySaveBot dir
+  notFoundValue <- returnJson (DirectoryEditResponseJson False (Just $ "Not Found"))
+  let notFoundM node = return $ CCTypeValue $ notFoundValue
+  case eval of
+    Right val ->  do jsonval <-  returnJson val
+                     CCTypeValue val <- resume (node, notFoundM) (CCTypeValue jsonval)
+                     return val
+
+    Left  err ->  do jsonval <- returnJson ( DirectoryEditResponseJson False (Just $ T.pack $ show err))
+                     CCTypeValue val <- resume (node, notFoundM) (CCTypeValue jsonval)
+                     return val
+
 
 
 postBotSaveR' :: CCNode -> DirectoryId -> Handler Value
@@ -152,3 +123,15 @@ trySaveBot key = do
   EitherT $ runDB $ uid `writeDirectory` Entity key dir'
 
   return $ DirectoryEditResponseJson True Nothing
+
+
+-- runEitherTSetMessage :: Show err => EitherT err (CC CCP Handler) Html -> CC CCP Handler ()
+-- runEitherTSetMessage m = do
+--   e <- runEitherT m
+--   case e of
+--     Right x  -> return x
+--     Left err -> lift $ setMessage $ toHtml $ T.pack $ show err
+
+
+getBotEditNewR :: CCNode -> Handler Html
+getBotEditNewR ccnode = redirect HomeR

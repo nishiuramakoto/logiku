@@ -45,7 +45,8 @@ getCommandRunR file = eitherNotFound $ do
 runCommand :: CCState -> Text -> Text -> Handler Html
 runCommand st botCode commandCode =
   case (programCheck  botCode , goalCheck commandCode) of
-  (Right clauses, Right terms)   -> run $ prologExecuteCcMain st  botCode commandCode
+  (Right clauses, Right terms)   -> do CCTypeHtml html <- run $ prologExecuteCcMain st  botCode commandCode
+                                       return html
 
   (Left  err, _ ) ->  defaultLayout $ [whamlet|Parse error in bot code #{show err}|]
   (_ , Left  err) ->  defaultLayout $ [whamlet|Parse error in command code  #{show err}|]
