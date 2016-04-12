@@ -37,7 +37,7 @@ getBotEditR :: DirectoryId -> Handler Html
 getBotEditR dir = do
   st <- startState
   uid <- getUserAccountId
-  CCTypeHtml html <- run $ editMain st uid dir
+  CCContentHtml html <- run $ editMain st uid dir
   return html
 
 editMain :: CCState -> UserAccountId -> DirectoryId -> CC CCP Handler CCContentType
@@ -51,7 +51,7 @@ editMain st uid dir = do
     Right _   -> return ()
     Left  err -> lift $ setMessage $ toHtml $ T.pack $ show err
 
-  (CCTypeHtml <$> editFinishHtml) >>= inquireFinish
+  (CCContentHtml <$> editFinishHtml) >>= inquireFinish
 
 
 
@@ -69,7 +69,7 @@ editWidget st uid (Entity key dir) node = do
 
 editHtml :: CCState -> UserAccountId -> Entity Directory -> CCContentTypeM App
 editHtml st uid dir node = do
-  CCTypeHtml <$> (lift $ defaultLayout $ editWidget st uid dir node)
+  CCContentHtml <$> (lift $ defaultLayout $ editWidget st uid dir node)
 
 inquireEdit :: CCState -> UserAccountId -> CCContentTypeM App -> CC CCP Handler CCState
 inquireEdit st uid html = do
@@ -92,14 +92,14 @@ postBotSaveR :: CCNode -> DirectoryId ->  Handler Value
 postBotSaveR node dir = do
   eval  <- runEitherT $ trySaveBot dir
   notFoundValue <- returnJson (DirectoryEditResponseJson False (Just $ "Not Found"))
-  let notFoundM node = return $ CCTypeValue $ notFoundValue
+  let notFoundM node = return $ CCContentJson $ notFoundValue
   case eval of
     Right val ->  do jsonval <-  returnJson val
-                     CCTypeValue val <- resume (node, notFoundM) (CCTypeValue jsonval)
+                     CCContentJson val <- resume (node, Nothing) (CCContentJson jsonval)
                      return val
 
     Left  err ->  do jsonval <- returnJson ( DirectoryEditResponseJson False (Just $ T.pack $ show err))
-                     CCTypeValue val <- resume (node, notFoundM) (CCTypeValue jsonval)
+                     CCContentJson val <- resume (node, Nothing) (CCContentJson jsonval)
                      return val
 
 

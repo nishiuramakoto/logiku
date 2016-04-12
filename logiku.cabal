@@ -191,7 +191,6 @@ test-suite test
                 TupleSections
 
     other-modules: TestImport
-                   Handler.DBSpec
 
     build-depends: base
                  , logiku

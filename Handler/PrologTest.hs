@@ -39,7 +39,7 @@ getPrologTestR = do
 
 executePrologProgram :: CCState -> Text -> Text -> Handler Html
 executePrologProgram st progCode goalCode = do
-  CCTypeHtml html <- run $ prologExecuteCCMain st progCode goalCode
+  CCContentHtml html <- run $ prologExecuteCCMain st progCode goalCode
   return html
 
   -- case (consultString (T.unpack progCode), parseQuery (T.unpack goalCode)) of
@@ -63,7 +63,7 @@ postPrologExecuteTestR = do
 getPrologExecuteTestContR :: CCNode -> Handler Html
 getPrologExecuteTestContR node = do
   not_found_html <- defaultLayout [whamlet|PrologExecuteTestContR: cont not found|]
-  CCTypeHtml html <- resume (node, const $ return $ CCTypeHtml not_found_html) (CCTypeHtml not_found_html)
+  CCContentHtml html <- resume (node, Nothing) (CCContentHtml not_found_html)
   return html
 
 
@@ -95,6 +95,6 @@ prologExecuteCCMain st progCode goalCode = do
                              Right goal -> do Right <$>  resolveToTerms st prog goal
 
    case result of
-    Left  err         ->  (CCTypeHtml <$> prologExecuteTestRuntimeErrorHtml err) >>= inquireFinish
-    Right (Left err)  ->  (CCTypeHtml <$> prologExecuteTestSyntaxErrorHtml err) >>= inquireFinish
-    Right (Right tss) ->  (CCTypeHtml <$> prologExecuteTestFinishHtml tss) >>= inquireFinish
+    Left  err         ->  (CCContentHtml <$> prologExecuteTestRuntimeErrorHtml err) >>= inquireFinish
+    Right (Left err)  ->  (CCContentHtml <$> prologExecuteTestSyntaxErrorHtml err) >>= inquireFinish
+    Right (Right tss) ->  (CCContentHtml <$> prologExecuteTestFinishHtml tss) >>= inquireFinish

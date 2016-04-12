@@ -36,7 +36,7 @@ prologInquireBoolWidget st node formWidget _enctype = do
 prologInquireBoolHtml :: CCState ->  Term -> CCContentTypeM App
 prologInquireBoolHtml st t node = do
   (formWidget, enctype) <- lift $ generateCCFormGet (prologInquireBoolForm t)
-  CCTypeHtml <$> (lift $ defaultLayout $ prologInquireBoolWidget st node formWidget enctype)
+  CCContentHtml <$> (lift $ defaultLayout $ prologInquireBoolWidget st node formWidget enctype)
 
 inquirePrologBool :: CCState -> Term -> CC CCP Handler CCState
 inquirePrologBool  st t = do
