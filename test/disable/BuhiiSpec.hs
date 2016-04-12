@@ -23,7 +23,11 @@ import qualified Text.XML.Cursor as XMLCursor
 spec :: Spec
 spec = withApp $ do
   it "tests the connection" $ do
-    get ("http://kienizer.com/download/291519" :: String)
+    let req = do
+          setMethod methodGet
+          addRequestHeader (hAccept, "*/*")
+          setUrl ("http://kienizer.com/download/291519" :: String)
+    request req
     statusIs 200
 
 
