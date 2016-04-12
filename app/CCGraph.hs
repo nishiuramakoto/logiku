@@ -50,11 +50,11 @@ import             Data.Graph.Inductive.PatriciaTree
 import             Data.Typeable
 import             Form
 
-data CCFormResponse   = forall a xml. (Typeable a, Typeable xml) =>
+data CCFormResponse   = forall a xml. (Show a, Show xml, Typeable a, Typeable xml) =>
                         CCResponsePost (FormResult a) xml Enctype
-                      | forall a. (Typeable a) =>
+                      | forall a. (Show a, Typeable a) =>
                         CCResponseGet  a Enctype
-                      deriving Typeable
+                      deriving (Typeable)
 
 type CCP                 = PP
 type CCNode              = Graph.Node
@@ -63,7 +63,10 @@ type CCContentTypeM site = CCNode -> CC CCP (HandlerT site IO) CCContentType
 
 type CCKArg site         = (CCNode,Maybe CCFormResponse)
 type CCK site w          = CCKArg site -> CC CCP (HandlerT site IO) w
-data CCNodeLabel site    = CCNodeLabel { ccTimestamp :: LocalTime , ccK :: Maybe (CCK site CCContentType) }
+data CCNodeLabel site    = CCNodeLabel { ccTimestamp :: LocalTime
+                                       , ccK :: Maybe (CCK site CCContentType)
+                                       , ccKArg  :: CCKArg site
+                                       }
 data CCEdgeLabel         = forall form. (Show form, Typeable form, Eq form)
                            => CCEdgeLabel { ccResponse  :: form }
 type CCLNode site        = LNode (CCNodeLabel site)
@@ -85,8 +88,8 @@ class Typeable site => YesodCC site where
   modifyCCGraph :: (CCGraph site -> IO (CCGraph site, b) ) -> HandlerT site IO b
 
 instance Show (CCNodeLabel site) where
-  show (CCNodeLabel time (Just _))  = "(" ++ show time ++ ", " ++ "Just <cont>" ++ ")"
-  show (CCNodeLabel time (Nothing)) = "(" ++ show time ++ ", " ++ "Nothing" ++ ")"
+  show (CCNodeLabel time (Just _) res)  = show (time, "Just <cont>",res)
+  show (CCNodeLabel time (Nothing) res) = show (time, "Nothing", res)
 
 deriving instance Show CCEdgeLabel
 instance Eq   CCEdgeLabel where
@@ -99,6 +102,8 @@ instance Eq CCState where
   CCState node a == CCState node' a' = node == node' && cast a == Just a'
 deriving instance Typeable CCState
 
+deriving instance Show Enctype
+deriving instance Show CCFormResponse
 
 ---------------------- - Running continuations  ----------------------
 
@@ -122,15 +127,16 @@ resume (node,content) notFoundHtml = do
 -------------- Access to the global continuation store  --------------
 
 
-insertCCNode ::  (YesodCC site) => CCK site CCContentType -> HandlerT site IO (CCLNode site)
+insertCCNode :: forall site. (YesodCC site) => CCK site CCContentType -> HandlerT site IO (CCLNode site)
 insertCCNode k = do
   ZonedTime time _tz <- lift $ getZonedTime
   lnode <- modifyCCGraph $ f time
   $(logInfo) $ T.pack $ "insertCCNode: " ++ show lnode
   return lnode
     where
+      f :: LocalTime -> CCGraph site -> IO (CCGraph site, CCLNode site)
       f time gr = do let [newNode] = newNodes 1 gr
-                         newLNode  = (newNode, CCNodeLabel time (Just k))
+                         newLNode  = (newNode, CCNodeLabel time (Just k) (newNode, Nothing))
                      return (insNode newLNode gr, newLNode)
 
 insertCCRoot :: forall site . YesodCC site  => HandlerT site IO (CCLNode site)
@@ -142,7 +148,8 @@ insertCCRoot = do
     where
       f :: LocalTime -> CCGraph site -> IO (CCGraph site, CCLNode site)
       f time gr = do let [newNode] = newNodes 1 gr
-                         newLNode  = (newNode, CCNodeLabel time (Nothing :: Maybe (CCK site CCContentType)))
+                         newLNode  = (newNode, CCNodeLabel time (Nothing :: Maybe (CCK site CCContentType))
+                                               (newNode, Nothing))
                      return (insNode newLNode gr, newLNode)
 
 
@@ -175,14 +182,27 @@ delCCLEdge edge = do
 
 
 
---lookupCCK :: (YesodCC site, Typeable site, Typeable a) => CCNode -> HandlerT site IO (Maybe (CCK site a))
 lookupCCK :: (YesodCC site, Typeable site) => CCNode -> HandlerT site IO (Maybe (CCK site CCContentType))
 lookupCCK node = do
   gr <- readCCGraph
   case Graph.lab gr node of
-    Just (CCNodeLabel _ (Just cck)) -> return (Just cck)
-    _                               -> return Nothing
+    Just (CCNodeLabel _ (Just cck) _) -> return (Just cck)
+    _                                 -> return Nothing
 
+updateCCKArg :: (YesodCC site, Typeable site) => CCKArg site -> HandlerT site IO (Maybe (CCNodeLabel site))
+updateCCKArg (node, marg) =
+  case marg of
+  Just arg ->  modifyCCGraph f
+  Nothing  ->  return Nothing
+  where
+    f :: CCGraph site -> IO (CCGraph site, Maybe (CCNodeLabel site))
+    f gr = do
+      case Graph.match node gr of
+        (Just (in', node' , lab' , out'), gr') -> do let lab'' = lab' { ccKArg = (node, marg) }
+                                                         cxt'' = (in',node',lab'',out')
+                                                         gr''  = cxt'' & gr'
+                                                     return (gr'', Just lab'')
+        _ -> return (gr,Nothing)
 
 ---------------------- Continuation primitives  ----------------------
 sendk ::  (YesodCC site)
@@ -203,10 +223,11 @@ sendk (CCState node response) content k = do
 
 inquire :: YesodCC site => CCState -> CCContentTypeM site -> CC CCP (HandlerT site IO) (CCKArg site)
 inquire st content = do
-  lift $ $(logInfo) $ T.pack $ "inquire:" ++ show st
-  x <- shiftP pp $ sendk st content
-  lift $ $(logInfo) $ T.pack $ "inquire:" ++ show st
-  return x
+  (node, marg) <- shiftP pp $ sendk st content
+  lift $ $(logInfo) $ T.pack $ "inquire:" ++ show (st,node,marg)
+
+  lift $ updateCCKArg (node, marg)
+  return (node,marg)
 
 inquireFinish ::  YesodCC site => CCContentType -> CC CCP (HandlerT site IO) CCContentType
 inquireFinish  content = abortP pp $ return content
