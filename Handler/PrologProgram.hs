@@ -111,13 +111,13 @@ getPrologProgramImplR ::  Handler Html
 getPrologProgramImplR  = do
   uid <-  getUserAccountId
   st  <- startState
-  CCTypeHtml html <- run $ ccMain st uid
+  CCContentHtml html <- run $ ccMain st uid
   return html
 
 postPrologProgramContR  :: Int -> Handler Html
 postPrologProgramContR node = do
   not_found_html <- defaultLayout [whamlet|postPrologProgramContR: Not Found|]
-  CCTypeHtml html <- resume (node, const $ return $ CCTypeHtml not_found_html)  (CCTypeHtml not_found_html)
+  CCContentHtml html <- resume (node, Nothing)  (CCContentHtml not_found_html)
   return html
 
 postPrologProgramContSilentR :: Handler Html
@@ -126,7 +126,7 @@ postPrologProgramContSilentR = do
 
   mklabel <- lookupPostParam "_klabel"
   case join $ fmap readInt mklabel of
-    Just node ->  do CCTypeHtml html <- resume (node, const $ return $ CCTypeHtml not_found_html)  (CCTypeHtml not_found_html)
+    Just node ->  do CCContentHtml html <- resume (node, Nothing)  (CCContentHtml not_found_html)
                      return html
     _         ->  return not_found_html
 
@@ -134,7 +134,7 @@ postPrologProgramContSilentR = do
 getPrologProgramContR :: Int -> Handler Html
 getPrologProgramContR node = do
   not_found_html <- defaultLayout [whamlet|Not Found|]
-  CCTypeHtml html <- resume (node, const $ return $ CCTypeHtml not_found_html) (CCTypeHtml not_found_html)
+  CCContentHtml html <- resume (node, Nothing) (CCContentHtml not_found_html)
   return html
 
 
@@ -204,7 +204,7 @@ directoryHtml ::  CCState -> ProgramName ->  ProgramExplanation -> ProgramCode -
                   ->  CCContentTypeM App
 directoryHtml st name expl code forceSave node = do
   (formWidget, enctype) <- lift $ generateCCFormPost $ directoryForm name expl code
-  CCTypeHtml <$> (lift $ defaultLayout $ directoryWidget st node formWidget enctype forceSave)
+  CCContentHtml <$> (lift $ defaultLayout $ directoryWidget st node formWidget enctype forceSave)
 
 inquireDirectory ::  CCState -> ProgramName -> ProgramExplanation ->  ProgramCode -> Bool
                         -> CC CCP Handler (CCState, Maybe DirectoryAction)
@@ -246,7 +246,7 @@ fileEditorHtml ::  CCState -> UserIdent -> ProgramName -> ProgramExplanation -> 
                    -> CCContentTypeM App
 fileEditorHtml  st userIdent name explanation code goals node = do
   (formWidget , enctype ) <- lift $ generateCCFormPost $ fileEditorForm
-  CCTypeHtml <$> (lift $ defaultLayout $
+  CCContentHtml <$> (lift $ defaultLayout $
                   fileEditorWidget st node userIdent name explanation code goals  formWidget  enctype)
 
 inquireFileEditor :: CCState -> UserIdent -> ProgramName -> ProgramExplanation -> ProgramCode -> [File]
@@ -264,7 +264,7 @@ dummyWidget st node formWidget enctype =  $(widgetFile "dummy-page")
 dummyHtml :: CCState -> CCContentTypeM App
 dummyHtml st node = do
   (formWidget, enctype) <- lift $ generateCCFormPost $ dummyForm
-  CCTypeHtml <$> (lift $ defaultLayout $ dummyWidget st node formWidget enctype)
+  CCContentHtml <$> (lift $ defaultLayout $ dummyWidget st node formWidget enctype)
 inquireDummy :: CCState -> CC CCP Handler (CCState, Maybe Bool)
 inquireDummy st = do
   inquirePostButton st (dummyHtml st) dummyForm [ ("ok", True) ]
@@ -304,7 +304,7 @@ ccMain st uid =  do
 
   mentity <- lift $ selectFirstUserProgram uid
   loopBrowse st uid (fmap entityKey mentity) False
-  (CCTypeHtml <$> directoryFinishHtml) >>=  inquireFinish
+  (CCContentHtml <$> directoryFinishHtml) >>=  inquireFinish
 
 loopBrowse :: CCState -> UserAccountId -> Maybe DirectoryId -> Bool -> CC CCP Handler ()
 loopBrowse st uid Nothing forceSave = do
@@ -501,7 +501,7 @@ getPrologGoalRunnerR = maybeNotFound $ do
 executeDirectory :: CCState -> Text -> Text -> Handler Html
 executeDirectory st progCode goalCode =
   case (programCheck  progCode , goalCheck goalCode) of
-  (Right clauses, Right terms)   -> do CCTypeHtml html <- run $ prologExecuteCCMain st progCode goalCode
+  (Right clauses, Right terms)   -> do CCContentHtml html <- run $ prologExecuteCCMain st progCode goalCode
                                        return html
 
   (Left  err, _ ) ->  defaultLayout $ [whamlet|Parse error in the program #{show err}|]

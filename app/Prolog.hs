@@ -64,6 +64,6 @@ prologExecuteCcMain st progCode goalCode = do
         lift $ resolveToTerms st prog goal
 
    case result of
-    Left  err          ->  (CCTypeHtml <$> prologExecuteTestRuntimeErrorHtml err) >>= inquireFinish
-    Right (Left err)   ->  (CCTypeHtml <$> prologExecuteTestSyntaxErrorHtml err) >>= inquireFinish
-    Right (Right tss)  ->  (CCTypeHtml <$> prologExecuteTestFinishHtml tss) >>= inquireFinish
+    Left  err          ->  (CCContentHtml <$> prologExecuteTestRuntimeErrorHtml err) >>= inquireFinish
+    Right (Left err)   ->  (CCContentHtml <$> prologExecuteTestSyntaxErrorHtml err) >>= inquireFinish
+    Right (Right tss)  ->  (CCContentHtml <$> prologExecuteTestFinishHtml tss) >>= inquireFinish

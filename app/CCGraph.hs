@@ -50,11 +50,18 @@ import             Data.Graph.Inductive.PatriciaTree
 import             Data.Typeable
 import             Form
 
+data CCFormResponse   = forall a xml. (Typeable a, Typeable xml) =>
+                        CCResponsePost (FormResult a) xml Enctype
+                      | forall a. (Typeable a) =>
+                        CCResponseGet  a Enctype
+                      deriving Typeable
+
 type CCP                 = PP
 type CCNode              = Graph.Node
-data CCContentType       = CCTypeHtml Html | CCTypeValue Value
+data CCContentType       = CCContentHtml Html | CCContentJson Value
 type CCContentTypeM site = CCNode -> CC CCP (HandlerT site IO) CCContentType
-type CCKArg site         = (CCNode,CCContentTypeM site)
+
+type CCKArg site         = (CCNode,Maybe CCFormResponse)
 type CCK site w          = CCKArg site -> CC CCP (HandlerT site IO) w
 data CCNodeLabel site    = CCNodeLabel { ccTimestamp :: LocalTime , ccK :: Maybe (CCK site CCContentType) }
 data CCEdgeLabel         = forall form. (Show form, Typeable form, Eq form)
