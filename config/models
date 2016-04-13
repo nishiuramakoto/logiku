@@ -4,7 +4,7 @@
 -- 'user' is a reserved name in postgres...
 UserAccount
     ident       Text
-    privileged  Bool
+    privileged  Bool default=FALSE
     password    Text Maybe
     displayName Text Maybe
     created     UTCTime default=CURRENT_TIMESTAMP
@@ -12,17 +12,18 @@ UserAccount
     accessed    UTCTime default=CURRENT_TIMESTAMP
     accessCount Int     default=0
 
-    umaskOwnerR    Bool
-    umaskOwnerW    Bool
-    umaskOwnerX    Bool
-    umaskGroupR    Bool
-    umaskGroupW    Bool
-    umaskGroupX    Bool
-    umaskEveryoneR Bool
-    umaskEveryoneW Bool
-    umaskEveryoneX Bool
+    umaskOwnerR    Bool default=False
+    umaskOwnerW    Bool default=False
+    umaskOwnerX    Bool default=False
+    umaskGroupR    Bool default=False
+    umaskGroupW    Bool default=True
+    umaskGroupX    Bool default=False
+    umaskEveryoneR Bool default=False
+    umaskEveryoneW Bool default=True
+    umaskEveryoneX Bool default=False
 
     UniqueUserAccount ident
+    UniqueDisplayName displayName !force -- Multiple Nulls, unique Justs
     deriving Show Typeable
 
 
