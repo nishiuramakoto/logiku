@@ -55,7 +55,7 @@ import             Form
 --                      deriving (Eq,Show,Typeable)
 
 data CCFormResult   = forall a. (Show a, Eq a, Typeable a) =>
-                      CCFormResult a
+                      CCFormResult (FormResult a)
 
 type CCP                 = PP
 type CCNode              = Graph.Node
@@ -99,6 +99,7 @@ deriving instance Typeable CCEdgeLabel
 
 instance Eq CCFormResult where
   CCFormResult a == CCFormResult a' =  cast a == Just a'
+
 
 deriving instance Show     CCFormResult
 deriving instance Typeable CCFormResult

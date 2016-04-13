@@ -1,5 +1,5 @@
 var editor;
-
+// botSaveUrl is defined elsewhere
 
 function setupSaveSuccessMessage(data) {
 //    window.alert("response ajax" + data);
@@ -67,4 +67,5 @@ $(document).ready(function () {
     // MUST Set the ID attribute for the div!
     setupAce('#botCodeEditor','.botCodeStorage textarea');
     setupAjax();
+    autosize($('textarea'));
 });

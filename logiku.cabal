@@ -39,6 +39,7 @@ library
                      Handler.Command
                      Handler.Bot
                      Handler.Blog
+                     Handler.UserProfile
                      Handler.Base
                      Handler.PrologTest
                      Handler.PrologProgram

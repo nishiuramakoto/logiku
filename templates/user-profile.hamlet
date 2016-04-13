@@ -1,0 +1,9 @@
+
+<article class="userProfile">
+    <header class="userProfileHeader">
+        Profile of #{userAccountIdent user}
+
+    <div class="userProfileEditor">
+        <form method="POST" action="@{UserProfileR}" enctype=#{enctype}>
+            ^{editorWidget}
+            <button> Submit

@@ -46,8 +46,124 @@ p {
     display: none;
 }
 
+
+
+
+
+.articleDetail {
+    width: 54em;
+}
+
+.articleDetailBody {
+    width: 54em;
+}
+
+.botEditorHeader {
+    float: left;
+    width: 40em ;
+    height: 2em;
+    margin-bottom: 1em;
+}
+
+.botEditorHeader .botName {
+    float: left;
+    height: 10em;
+}
+
+.botEditorHeader .botName .txtstuff {
+    //height: 10em;
+    width: 10em;
+    //background-color: #CCCCCC;
+}
+
+.botEditorHeader .botExplanation {
+    float: right;
+    width: 25em;
+    height: 1.5em;
+}
+
+.botEditorHeader .botExplanation .txtstuff {
+    //height: 1em;
+    width: 15em;
+}
+
+.botEditorHeader:after {
+    content: "";
+    clear: both;
+    display: block;
+}
+
+
+.botCode {
+    float: left;
+    width: 40em;
+    float: left;
+}
+
 #botCodeEditor {
     position: relative;
     width: 40em;
     height: 30em;
  }
+
+.botControl {
+    float: right;
+//    width: 10em;
+}
+
+.botControl .largeButton a {
+    font-size:1.5em;
+    font-weight: bold;
+    text-decoration: none;
+    color: #FFFFFF;
+    background-color: #058BA9;
+    padding: 1em 2em;
+    border-radius: 0.5em;
+    background-image: linear-gradient(to bottom, #92CDDB, #058BA9);
+    border: 1px solid #058BA9;
+    //box-shadow: 1px 1px 0 #9DDDED inset;
+    //text-shadow: 0px -1px 0 #333333;
+}
+
+.botControl .largeButton a:hover {
+    opacity: 0.7
+}
+
+.botControl .largeButton {
+    text-align: right;
+}
+
+
+.articleDetail:after {
+    content: "";
+    clear: both;
+    display: block;
+}
+
+.botControl .smallButton button {
+    font-size:1.0em;
+    font-weight: bold;
+    text-decoration: none;
+    color: #FFFFFF;
+    background-color: #058BA9;
+    padding: 0.5em 1em;
+    border-radius: 0.25em;
+    background-image: linear-gradient(to bottom, #92CDDB, #058BA9);
+    border: 1px solid #058BA9;
+    //box-shadow: 1px 1px 0 #9DDDED inset;
+    //text-shadow: 0px -1px 0 #333333;
+}
+
+
+.botControl .saveButton {
+    margin-top:2em;
+    margin-bottom: 0.5em;
+}
+
+.botControl .deleteButton {
+    margin-bottom: 0.5em;
+}
+
+.botControl .checkButton {
+    margin-bottom: 0.5em;
+}
