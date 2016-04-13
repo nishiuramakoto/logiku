@@ -60,6 +60,7 @@ data CCFormResult   = forall a. (Show a, Eq a, Typeable a) =>
 type CCP                 = PP
 type CCNode              = Graph.Node
 data CCContentType       = CCContentHtml Html | CCContentJson Value
+
 type CCContentTypeM site = CCNode -> CC CCP (HandlerT site IO) CCContentType
 
 data CCState             = CCState { ccsCurrentNode :: CCNode
@@ -231,7 +232,9 @@ inquire st content = do
   return st'
 
 inquireFinish ::  YesodCC site => CCContentType -> CC CCP (HandlerT site IO) CCContentType
-inquireFinish  content = abortP pp $ return content
+inquireFinish  content = do
+  lift $ $logInfo $ T.pack $ "inquireFinish:"
+  abortP pp $ return content
 
 inquireGet :: (YesodCC site , Eq a, Show a, Typeable a)
               => CCState
