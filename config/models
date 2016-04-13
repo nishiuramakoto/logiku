@@ -152,23 +152,23 @@ DirectoryEditRequestJson json
       name            Text
       explanation     Text
       code            Text
-      deriving Show
+      deriving Show Eq
 
 DirectoryEditResponseJson json
       success         Bool
       error           Text Maybe
-      deriving Show
+      deriving Show Eq
 
 FileEditRequestJson json
       name            Text
       explanation     Text
       code            Text
-      deriving Show
+      deriving Show Eq
 
 FileEditResponseJson json
       success         Bool
       error           Text Maybe
-      deriving Show
+      deriving Show Eq
 
 
 ---------------------------- For testing  ----------------------------

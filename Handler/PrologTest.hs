@@ -62,8 +62,7 @@ postPrologExecuteTestR = do
 
 getPrologExecuteTestContR :: CCNode -> Handler Html
 getPrologExecuteTestContR node = do
-  not_found_html <- defaultLayout [whamlet|PrologExecuteTestContR: cont not found|]
-  CCContentHtml html <- resume (node, Nothing) (CCContentHtml not_found_html)
+  CCContentHtml html <- resume (CCState node Nothing)
   return html
 
 

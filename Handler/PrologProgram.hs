@@ -116,25 +116,21 @@ getPrologProgramImplR  = do
 
 postPrologProgramContR  :: Int -> Handler Html
 postPrologProgramContR node = do
-  not_found_html <- defaultLayout [whamlet|postPrologProgramContR: Not Found|]
-  CCContentHtml html <- resume (node, Nothing)  (CCContentHtml not_found_html)
+  CCContentHtml html <- resume (CCState node Nothing)
   return html
 
 postPrologProgramContSilentR :: Handler Html
 postPrologProgramContSilentR = do
-  not_found_html <- defaultLayout [whamlet|postPrologProgramContSilentR: Not Found|]
-
   mklabel <- lookupPostParam "_klabel"
   case join $ fmap readInt mklabel of
-    Just node ->  do CCContentHtml html <- resume (node, Nothing)  (CCContentHtml not_found_html)
+    Just node ->  do CCContentHtml html <- resume (CCState node Nothing)
                      return html
-    _         ->  return not_found_html
+    _         ->  invalidArgs ["_klabel is not specified"]
 
 
 getPrologProgramContR :: Int -> Handler Html
 getPrologProgramContR node = do
-  not_found_html <- defaultLayout [whamlet|Not Found|]
-  CCContentHtml html <- resume (node, Nothing) (CCContentHtml not_found_html)
+  CCContentHtml html <- resume (CCState node Nothing)
   return html
 
 

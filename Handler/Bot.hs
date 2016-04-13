@@ -9,6 +9,7 @@ import             Import hiding (parseQuery,readFile)
 import             Control.Monad.Trans.Either
 import             Control.Monad.CC.CCCxe
 import             Data.Time.LocalTime
+import             Data.Typeable
 import             DBFS
 import             Prolog
 import             CCGraph
@@ -16,6 +17,11 @@ import             Constructors
 import             Form
 import             Show
 import qualified   Data.Text as T
+
+data Action = EditNew
+            | Save DirectoryEditResponseJson
+              deriving (Show,Eq,Typeable)
+
 
 getBotR :: Handler Html
 getBotR = do
@@ -44,14 +50,34 @@ editMain :: CCState -> UserAccountId -> DirectoryId -> CC CCP Handler CCContentT
 editMain st uid dir = do
   result <- runEitherT $ do
     dirData <- EitherT $ lift $ runDB $ readDirectory uid dir
-    lift $ inquireEdit st uid (editHtml st uid (Entity dir dirData))
-    return ()
+    st'@(CCState _ (Just (CCFormResult result))) <- lift $ inquire st (editHtml st uid (Entity dir dirData))
+
+    case (cast result) of
+      Just EditNew -> do
+        lift $ lift $ $logInfo $ "edit new"
+        lift $ editMain st' uid dir
+
+      Just (Save editResult) -> do
+        st'' <- lift $ inquireSave st' editResult
+        lift $ editMain st'' uid dir
+      Nothing -> do
+        lift $ lift $ $logInfo $ T.pack $ show "no known response" ++ show result
+        lift $ (CCContentHtml <$> editFinishHtml) >>= inquireFinish
 
   case result of
-    Right _   -> return ()
-    Left  err -> lift $ setMessage $ toHtml $ T.pack $ show err
+    Right content   -> return content
+    Left  err -> do
+      lift $ $logInfo $ T.pack $ show st
+      lift $ setMessage $ toHtml $ T.pack $ show err
+      (CCContentHtml <$> editFinishHtml) >>= inquireFinish
 
-  (CCContentHtml <$> editFinishHtml) >>= inquireFinish
+
+
+inquireSave :: CCState -> DirectoryEditResponseJson -> CC CCP Handler CCState
+inquireSave st res = do
+  lift $ $logInfo $ T.pack $ show "save:" ++ show res
+  json <- returnJson res
+  inquire st (const $ return $ CCContentJson json)
 
 
 
@@ -73,12 +99,12 @@ editHtml st uid dir node = do
 
 inquireEdit :: CCState -> UserAccountId -> CCContentTypeM App -> CC CCP Handler CCState
 inquireEdit st uid html = do
-  (newNode, content) <- inquire st html
-  return (CCState newNode (FormSuccess ()))
+  st' <- inquire st html
+  lift $ $logInfo $ T.pack $ "inquireEdit:" ++ show st'
+  return st'
 
 editFinishHtml :: CC CCP Handler Html
 editFinishHtml = lift $ redirect HomeR
-
 
 
 getEditData  (FormSuccess (DirectoryForm name
@@ -90,16 +116,14 @@ getEditData _ = Nothing
 
 postBotSaveR :: CCNode -> DirectoryId ->  Handler Value
 postBotSaveR node dir = do
-  eval  <- runEitherT $ trySaveBot dir
-  notFoundValue <- returnJson (DirectoryEditResponseJson False (Just $ "Not Found"))
-  let notFoundM node = return $ CCContentJson $ notFoundValue
-  case eval of
-    Right val ->  do jsonval <-  returnJson val
-                     CCContentJson val <- resume (node, Nothing) (CCContentJson jsonval)
+  eres  <- runEitherT $ trySaveBot dir
+  case eres of
+    Right res ->  do CCContentJson val <- resume (CCState node (Just $ CCFormResult (FormSuccess res)))
                      return val
 
-    Left  err ->  do jsonval <- returnJson ( DirectoryEditResponseJson False (Just $ T.pack $ show err))
-                     CCContentJson val <- resume (node, Nothing) (CCContentJson jsonval)
+    Left  err ->  do CCContentJson val <- resume (CCState node
+                                                  (Just $ CCFormResult
+                                                   (FormFailure [T.pack $ show err] :: FormResult DirectoryEditResponseJson)))
                      return val
 
 
@@ -133,5 +157,10 @@ trySaveBot key = do
 --     Left err -> lift $ setMessage $ toHtml $ T.pack $ show err
 
 
+
 getBotEditNewR :: CCNode -> Handler Html
-getBotEditNewR ccnode = redirect HomeR
+getBotEditNewR node = do
+  content <- resume (CCState node (Just (CCFormResult EditNew )))
+  case content of
+    CCContentHtml html -> return html
+    _ -> error "Content type mismatch"
