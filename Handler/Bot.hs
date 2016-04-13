@@ -23,6 +23,14 @@ data Action = EditNew
             | Save DirectoryEditResponseJson
               deriving (Show,Eq,Typeable)
 
+-- Just an idea:
+-- resume :: YesodCC site
+--           => CCState Action -> HandlerT site IO CCContentType
+-- resume = CCGraph.resume
+-- inquire :: YesodCC site
+--            => CCState Action -> CCContentTypeM site -> CC CCP (HandlerT site IO) (CCState Action)
+-- inquire = CCGraph.inquire
+
 
 getBotR :: Handler Html
 getBotR = do
@@ -65,6 +73,7 @@ editMain st uid mdir = do
             lift $ editMain st' uid Nothing
 
           Just (FormSuccess (Save editResult)) -> do
+            lift $ lift $ $logInfo $ T.pack $ show "save:" ++ show editResult
             st'' <- lift $ inquireSave st' editResult
             lift $ editMain st'' uid mdir
 
@@ -97,11 +106,34 @@ inquireSave st res = do
 
 
 
+directoryUserDisplayName (Entity key dirData) = do
+  let diruid = directoryUserId dirData
+  mdiru <- get diruid
+  case mdiru of
+    Just diru -> return $ userAccountDisplayName diru
+    Nothing   -> return Nothing
+
+
+eitherToMaybe (Right x) = Just x
+eitherToMaybe (Left _) = Nothing
+
 editWidget :: CCState -> UserAccountId -> Maybe (Entity Directory) -> CCNode -> Widget
 editWidget st uid mdir node = do
   setTitle "Bot editor"
+  addScript $ StaticR js_autosize_js
   addScript $ StaticR css_ace_src_noconflict_ace_js
   -- addStylesheet $ StaticR css_bootstrap_css
+
+  minfo <- case mdir of
+    Just (Entity dir _) ->  eitherToMaybe <$> (handlerToWidget $ runDB $ llDirectory uid dir)
+    Nothing             ->  return Nothing
+
+  muserDisplayName <- case mdir of
+    Just dir ->  handlerToWidget $ runDB $ directoryUserDisplayName dir
+    Nothing  ->  return Nothing
+
+  Just u     <- handlerToWidget $ runDB $ get uid
+  tz         <- liftIO $ getCurrentTimeZone
 
   case mdir of
     Just (Entity key dir) -> do let name = directoryName dir
@@ -139,6 +171,8 @@ getEditData _ = Nothing
 
 postBotSaveR :: CCNode -> DirectoryId ->  Handler Value
 postBotSaveR node dir = do
+  $logInfo $ T.pack $ show "postBotSave"
+
   eres  <- runEitherT $ trySaveBot (Just dir)
   case eres of
     Right res ->  do CCContentJson val <- resume (CCState node (Just $ CCFormResult (FormSuccess (Save res))))
@@ -147,6 +181,7 @@ postBotSaveR node dir = do
     Left  err ->  do let res = DirectoryEditResponseJson False (Just $ T.pack $ show err)
                      CCContentJson val <- resume (CCState node (Just $ CCFormResult (FormSuccess (Save res))))
                      return val
+
 
 
 postBotSaveNewR :: CCNode ->  Handler Value

@@ -76,6 +76,7 @@ module DBFS
 
        , lsDirectory
        , lsFile
+       , llDirectory
 --       , llFile
        , findDirectory
        , findFile
@@ -1147,6 +1148,109 @@ lsFile uid dir offs lim = do
 --                         case mf of
 --                           Just f  -> return $ Just $ makePublicFile f
 --                           Nothing -> return Nothing
+
+llDirectory :: MonadIO m
+               => UserAccountId -> DirectoryId -> SqlPersistT m (Result DirectoryInfo)
+llDirectory uid dir = do
+  prv <- isPrivileged uid
+  results <- select $
+             from $ \(directory
+                      `LeftOuterJoin`
+                      (directoryGroup `InnerJoin` groupMember )) ->
+                    distinctOn [don (directory^.DirectoryId) ] $ do
+                      on (groupMember?.GroupMemberGroupId ==. directoryGroup?.DirectoryGroupGroupId)
+                      on (directoryGroup?.DirectoryGroupDirectoryId ==. just (directory^.DirectoryId))
+                      where_ (( directoryReadable        directory directoryGroup groupMember
+                               ||. directoryWritable    directory directoryGroup groupMember
+                               ||. directoryExecutable  directory directoryGroup groupMember
+                               ||. val prv ==. val True
+                              ) &&. directory^.DirectoryId ==. val dir)
+
+                      return ((directory^.DirectoryId)
+                             ,(directory^.DirectoryUserId)
+                             ,(directory^.DirectoryName)
+                             ,(directory^.DirectoryCreated)
+                             ,(directory^.DirectoryModified)
+                             ,(directory^.DirectoryAccessed)
+                             ,(directory^.DirectoryOwnerR)
+                             ,(directory^.DirectoryOwnerW)
+                             ,(directory^.DirectoryOwnerX)
+                             ,(directory^.DirectoryEveryoneR)
+                             ,(directory^.DirectoryEveryoneW)
+                             ,(directory^.DirectoryEveryoneX)
+                             )
+
+  is <- forM results $
+        \(Value directory
+         ,Value uid'
+         ,Value name
+         ,Value created
+         ,Value modified
+         ,Value accessed
+         ,Value or'
+         ,Value ow'
+         ,Value ox'
+         ,Value ar'
+         ,Value aw'
+         ,Value ax'
+         ) -> do
+          gs <- getGroupPerms directory
+          return $ makeDirectoryInfo directory uid' name created modified accessed or' ow' ox' gs ar' aw' ax'
+  case is of
+    [info] -> return $ Right info
+    _      -> return $ Left  $ DirectoryDoesNotExist $ T.pack $ show dir
+
+  where
+    getGroupPerms :: MonadIO m => DirectoryId -> SqlPersistT m [(Text,Perm)]
+    getGroupPerms dir = do
+      results <- select $
+                 from $ \ (group' `InnerJoin` dirGroup) -> do
+                   on     (dirGroup^.DirectoryGroupGroupId ==. group'^.GroupId)
+                   where_ (dirGroup^.DirectoryGroupDirectoryId  ==. val dir )
+                   limit 100
+                   return (group',dirGroup)
+      return $ map (\(Entity _ group',Entity _ dirGroup) ->
+                      ( groupName group'
+                      , Perm { permR = directoryGroupGroupR dirGroup
+                             , permW = directoryGroupGroupW dirGroup
+                             , permX = directoryGroupGroupX dirGroup
+                             })) results
+
+
+    directoryReadable directory directoryGroup groupMember = directoryOwnerReadable directory
+                                              ||. directoryGroupReadable directoryGroup groupMember
+                                              ||. directoryEveryoneReadable  directory
+
+    directoryWritable directory directoryGroup groupMember =  directoryOwnerWritable  directory
+                                               ||. directoryGroupWritable  directoryGroup groupMember
+                                               ||. directoryEveryoneWritable  directory
+
+    directoryExecutable directory directoryGroup groupMember = directoryOwnerExecutable  directory
+                                                ||. directoryGroupExecutable directoryGroup groupMember
+                                                ||. directoryEveryoneExecutable  directory
+
+
+    directoryOwnerReadable   directory = directory^.DirectoryUserId ==. val uid &&. directory^.DirectoryOwnerR ==. val True
+    directoryOwnerWritable   directory = directory^.DirectoryUserId ==. val uid &&. directory^.DirectoryOwnerW ==. val True
+    directoryOwnerExecutable directory = directory^.DirectoryUserId ==. val uid &&. directory^.DirectoryOwnerX ==. val True
+
+    directoryGroupReadable   directoryGroup groupMember =  not_ (isNothing (groupMember?.GroupMemberMember))
+                                                 &&. not_ (isNothing (directoryGroup?.DirectoryGroupGroupR))
+                                                 &&. groupMember?.GroupMemberMember ==. just (val uid)
+                                                 &&. directoryGroup?.DirectoryGroupGroupR ==. just (val True)
+    directoryGroupWritable   directoryGroup groupMember =  not_ (isNothing (groupMember?.GroupMemberMember))
+                                                 &&. not_ (isNothing (directoryGroup?.DirectoryGroupGroupW))
+                                                 &&. groupMember?.GroupMemberMember ==. just (val uid)
+                                                 &&. directoryGroup?.DirectoryGroupGroupW ==. just (val True)
+    directoryGroupExecutable directoryGroup groupMember =  not_ (isNothing (groupMember?.GroupMemberMember))
+                                                 &&. not_ (isNothing (directoryGroup?.DirectoryGroupGroupX))
+                                                 &&. groupMember?.GroupMemberMember ==. just (val uid)
+                                                 &&. directoryGroup?.DirectoryGroupGroupX ==. just (val True)
+
+    directoryEveryoneReadable   directory = directory^.DirectoryEveryoneR ==. val True
+    directoryEveryoneWritable   directory = directory^.DirectoryEveryoneW ==. val True
+    directoryEveryoneExecutable directory = directory^.DirectoryEveryoneX ==. val True
+
 
 -------------------------------- Find --------------------------------
 

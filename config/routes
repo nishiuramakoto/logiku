@@ -17,6 +17,8 @@
 /bot/edit/#CCNode/save-new            BotSaveNewR POST -- Ajax
 
 
+/user                                 UserProfileR GET POST
+
 /prolog                       PrologTestR         GET
 /prolog/execute               PrologExecuteTestR  POST
 /prolog/execute/#CCNode       PrologExecuteTestContR GET

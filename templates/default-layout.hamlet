@@ -8,17 +8,20 @@
                 <ul>
                     $maybe name <- mName
                         <li>
-                            <!-- <a id="userName" href="@{PrologProgramR}"> #{name}のプロフィール -->
+                              <a id="userName" href="@{UserProfileR}"> #{name}のプロフィール
                         <li>
-                            <a id="logout" href="@{AuthR LogoutR}"> ログアウト
+                              <a id="logout" href="@{AuthR LogoutR}"> ログアウト
+
                     $nothing
                         <li>
                             <div class="welcomeGuest">
-                                ようこそ! ゲストさん。
-                        <li>
-                            <a id="login" href="@{AuthR LoginR}"> ログインする/アカウントを作る
-                    <li>
+                                  ようこそ! ゲストさん。
+                            <li>
+                              <a id="login" href="@{AuthR LoginR}"> ログインする/アカウントを作る
+                     <li>
                         <input id="searchBox" placeholder="検索" type=text>
+
+
 
 
 $maybe msg <- mmsg
@@ -29,6 +32,9 @@ $maybe msg <- mmsg
 <div id="pageBody">
     <div id="pageBodyMain">
         ^{widget}
+
+<!--
     <div id="pageBodySub">
         <nav class="localNavi">
             ^{categoryTree}
+-->

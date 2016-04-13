@@ -27,7 +27,7 @@ body { color: #333333; }
 #pageHead #statusBar {
     font-size: 1.0em;
     line-height: 1.5;
-    margin-bottom: 1em;
+    //margin-bottom: 1em;
 }
 
 #pageHead #statusBar #siteTitle {
@@ -135,7 +135,7 @@ body { color: #333333; }
 
 /* ページボディ */
 #pageBody {
-	margin-top: 2em;
+//	margin-top: 2em;
 }
 #pageBody:after {
 	content: "";

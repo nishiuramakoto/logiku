@@ -1,6 +1,5 @@
 <article class="articleDetail">
   <header class="articleDetailHead">
-    <H2 class="pageTitle">Edit Bot and Commands
 
     <div class="editorNotification">
         <div class="codeModification hidden">
@@ -11,32 +10,51 @@
 
 
     <section class="articleDetailBody">
-        <div class="botName">
-            <label> 名前：
-            <textarea class="txtstuff" name="nameEditor">
-                #{name}
+        <header class="botEditorHeader">
+            <div class="botInfo">
+                $maybe dname <- muserDisplayName
+                    <div class="userDisplayName"> #{dname}
+                $nothing
+                    <div class="userDisplayName"> (No display name)
+                $maybe info <- minfo
+                    #{showPermDirectory info} #
+                          #{showTime tz $ directoryInfoModified info}
+                              $forall g <- directoryInfoGroupPerms info
+                                  <div class="group">
+                                      #{showGroupPerm g}
 
-        <div class="botEditorContainer">
 
-            <div class="botCode">
-                <div class="botCodeStorage">
-                    <label>コード：
-                    <textarea class="txtstuff">
-                        #{code}
-                <div id="botCodeEditor">
-
-            <div class="botExplanation">
+            <div class="botName">
+                <label> 名前：
+                <textarea class="txtstuff" name="nameEditor">
+                    #{name}
+            <div class="botEnxplanation">
                 <label> 説明:
                 <textarea class="txtstuff">
                     #{expl}
 
-            <div class="botControl">
-                <button class="botSave"> Save
-                <button class="botCheck"> Check
-                <button class="botDelete"> Delete
+        <div class="botCode">
+            <div class="botCodeStorage">
+                <label>コード：
+                <textarea class="txtstuff">
+                    #{code}
+            <div id="botCodeEditor">
+
+
+        <div class="botControl">
+            <p class="largeButton">
+                <a href="@{BotEditNewR node}"> 新規作成
+            <p class="saveButton smallButton">
+                <button class="botSave"> セーブ
+            <p class="deleteButton smallButton">
+                <button class="botDelete"> 削除
+            <p class="checkButton smallButton">
+                <button class="botCheck"> 文法チェック
+
 
     <aside class="articleAside">
-        <a href="@{BotEditNewR node}"> Create New
+
+
 <footer class="articleDetailFoot">
     <aside class="creditUnit">
         <a href="@{HomeR}"> トップ

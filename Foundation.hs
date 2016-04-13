@@ -136,7 +136,7 @@ instance Yesod App where
       mName <- maybeUserIdent
       --maid  <- maybeAuthId
       sess  <- getSession
-      let categoryTree =  $(widgetFile "css-tree")
+      -- let categoryTree =  $(widgetFile "css-tree")
         -- let categoryTree = [whamlet|tree|]
 
 
@@ -304,3 +304,10 @@ getUserAccountId = do
     Just (Entity uid _) -> return uid
     -- Nothing    -> guestId
     Nothing    -> runDB suGuest
+
+-- getUserIdent :: Handler Text
+-- getUserIdent = do
+--   uid <- getUserAccountId
+--   mu  <- get uid
+--   case mu of
+--     Just u -> Right <$> return (userAccountI

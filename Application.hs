@@ -40,6 +40,7 @@ import Handler.Common
 import Handler.Home
 import Handler.Command
 import Handler.Bot
+import Handler.UserProfile
 
 import Handler.PrologTest
 import Handler.PrologProgram
