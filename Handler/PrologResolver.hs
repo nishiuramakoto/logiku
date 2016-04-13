@@ -14,9 +14,7 @@ getPrologResolverR = do
 
 getPrologResolverContR :: Int -> Handler Html
 getPrologResolverContR klabel = do
-  cont_html <- defaultLayout [whamlet|Continue|]
-  not_found_html <- defaultLayout [whamlet|Not Found|]
-  resume klabel cont_html not_found_html
+  resume klabel
 
 ------------------------  Application logic --------------------------
 

@@ -4,7 +4,7 @@ module CCGraph (
   CCK,
   CCContentType(..),
   CCContentTypeM,
-  CCKArg,
+  CCFormResult(..),
   CCP,
   CCNode,
   CCNodeLabel(..),
@@ -50,32 +50,34 @@ import             Data.Graph.Inductive.PatriciaTree
 import             Data.Typeable
 import             Form
 
-data CCFormResponse   = forall a xml. (Show a, Show xml, Typeable a, Typeable xml) =>
-                        CCResponsePost (FormResult a) xml Enctype
-                      | forall a. (Show a, Typeable a) =>
-                        CCResponseGet  a Enctype
-                      deriving (Typeable)
+-- data CCFormResult a  = CCFormResultPost (FormResult a)
+--                      | CCFormResultGet  a
+--                      deriving (Eq,Show,Typeable)
+
+data CCFormResult   = forall a. (Show a, Eq a, Typeable a) =>
+                      CCFormResult a
 
 type CCP                 = PP
 type CCNode              = Graph.Node
 data CCContentType       = CCContentHtml Html | CCContentJson Value
 type CCContentTypeM site = CCNode -> CC CCP (HandlerT site IO) CCContentType
 
-type CCKArg site         = (CCNode,Maybe CCFormResponse)
-type CCK site w          = CCKArg site -> CC CCP (HandlerT site IO) w
+data CCState             = CCState { ccsCurrentNode :: CCNode
+                                   , ccsCurrentForm :: Maybe CCFormResult}
+                           deriving (Eq,Show,Typeable)
+
+type CCK site w          = CCState -> CC CCP (HandlerT site IO) w
 data CCNodeLabel site    = CCNodeLabel { ccTimestamp :: LocalTime
-                                       , ccK :: Maybe (CCK site CCContentType)
-                                       , ccKArg  :: CCKArg site
+                                       , ccK         :: Maybe (CCK site CCContentType)
+                                       , ccKArg      :: CCState
                                        }
-data CCEdgeLabel         = forall form. (Show form, Typeable form, Eq form)
-                           => CCEdgeLabel { ccResponse  :: form }
+data CCEdgeLabel         = CCEdgeLabel { ccResponse  :: Maybe CCFormResult }
+                           deriving (Eq,Show,Typeable)
 type CCLNode site        = LNode (CCNodeLabel site)
 type CCLEdge             = LEdge (CCEdgeLabel)
 type CCGraph site        = Gr (CCNodeLabel site) CCEdgeLabel
 
-data CCState             = forall a. (Show a, Eq a, Typeable a)
-                           => CCState { ccsCurrentNode :: CCNode
-                                      , ccsCurrentForm :: (FormResult a)}
+
 ----------------------  Define the type class ------------------------
 class Typeable site => YesodCC site where
   getCCPool :: site -> MVar (CCGraph site)
@@ -91,19 +93,16 @@ instance Show (CCNodeLabel site) where
   show (CCNodeLabel time (Just _) res)  = show (time, "Just <cont>",res)
   show (CCNodeLabel time (Nothing) res) = show (time, "Nothing", res)
 
-deriving instance Show CCEdgeLabel
-instance Eq   CCEdgeLabel where
-  CCEdgeLabel form == CCEdgeLabel form' = cast form == Just form'
 
 deriving instance Typeable CCEdgeLabel
 
-deriving instance Show CCState
-instance Eq CCState where
-  CCState node a == CCState node' a' = node == node' && cast a == Just a'
-deriving instance Typeable CCState
+instance Eq CCFormResult where
+  CCFormResult a == CCFormResult a' =  cast a == Just a'
 
-deriving instance Show Enctype
-deriving instance Show CCFormResponse
+deriving instance Show     CCFormResult
+deriving instance Typeable CCFormResult
+
+
 
 ---------------------- - Running continuations  ----------------------
 
@@ -113,15 +112,16 @@ run f = do
 
   runCC $ pushPrompt pp f
 
-resume ::  (YesodCC site) =>  CCKArg site -> CCContentType -> HandlerT site IO CCContentType
-resume (node,content) notFoundHtml = do
-  $(logInfo) $ T.pack $ "resuming:" ++ show node
-  mk <- lookupCCK node
+resume ::  (YesodCC site) =>  CCState -> HandlerT site IO CCContentType
+resume st = do
+  $(logInfo) $ T.pack $ "resuming:" ++ show st
+  mk <- lookupCCK (ccsCurrentNode st)
   case mk of
-    Just k  -> runCC $ k (node,content)
+    Just k  -> runCC $ k st
     Nothing -> do
       $(logInfo) "Continuation not found"
-      return notFoundHtml
+      setMessage $ toHtml $ T.pack  $ "Continuation has expired"
+      notFound
 
 
 -------------- Access to the global continuation store  --------------
@@ -136,7 +136,7 @@ insertCCNode k = do
     where
       f :: LocalTime -> CCGraph site -> IO (CCGraph site, CCLNode site)
       f time gr = do let [newNode] = newNodes 1 gr
-                         newLNode  = (newNode, CCNodeLabel time (Just k) (newNode, Nothing))
+                         newLNode  = (newNode, CCNodeLabel time (Just k) (CCState newNode  Nothing))
                      return (insNode newLNode gr, newLNode)
 
 insertCCRoot :: forall site . YesodCC site  => HandlerT site IO (CCLNode site)
@@ -149,18 +149,18 @@ insertCCRoot = do
       f :: LocalTime -> CCGraph site -> IO (CCGraph site, CCLNode site)
       f time gr = do let [newNode] = newNodes 1 gr
                          newLNode  = (newNode, CCNodeLabel time (Nothing :: Maybe (CCK site CCContentType))
-                                               (newNode, Nothing))
+                                               (CCState newNode Nothing))
                      return (insNode newLNode gr, newLNode)
 
 
-insertCCEdge :: (YesodCC site, Eq a,Typeable a, Show a)
-                => CCNode -> CCNode -> FormResult a -> HandlerT site IO CCLEdge
+insertCCEdge :: (YesodCC site)
+                => CCNode -> CCNode -> CCFormResult -> HandlerT site IO CCLEdge
 insertCCEdge node newNode r = do
   edge <- modifyCCGraph f
   $(logInfo) $ T.pack $ "insertCCEdge: " ++ show edge
   return edge
     where
-      f gr = do let newLEdge  = (node, newNode, CCEdgeLabel r)
+      f gr = do let newLEdge  = (node, newNode, CCEdgeLabel (Just r))
                 return (insEdge newLEdge gr, newLEdge)
 
 insertCCLEdge :: (YesodCC site) => CCLEdge -> HandlerT site IO CCLEdge
@@ -189,8 +189,8 @@ lookupCCK node = do
     Just (CCNodeLabel _ (Just cck) _) -> return (Just cck)
     _                                 -> return Nothing
 
-updateCCKArg :: (YesodCC site, Typeable site) => CCKArg site -> HandlerT site IO (Maybe (CCNodeLabel site))
-updateCCKArg (node, marg) =
+updateCCKArg :: (YesodCC site, Typeable site) => CCState -> HandlerT site IO (Maybe (CCNodeLabel site))
+updateCCKArg (CCState node marg) =
   case marg of
   Just arg ->  modifyCCGraph f
   Nothing  ->  return Nothing
@@ -198,7 +198,7 @@ updateCCKArg (node, marg) =
     f :: CCGraph site -> IO (CCGraph site, Maybe (CCNodeLabel site))
     f gr = do
       case Graph.match node gr of
-        (Just (in', node' , lab' , out'), gr') -> do let lab'' = lab' { ccKArg = (node, marg) }
+        (Just (in', node' , lab' , out'), gr') -> do let lab'' = lab' { ccKArg = CCState node marg }
                                                          cxt'' = (in',node',lab'',out')
                                                          gr''  = cxt'' & gr'
                                                      return (gr'', Just lab'')
@@ -221,13 +221,14 @@ sendk (CCState node response) content k = do
     Just x' -> return x'
     Nothing -> lift $ notFound
 
-inquire :: YesodCC site => CCState -> CCContentTypeM site -> CC CCP (HandlerT site IO) (CCKArg site)
+inquire :: YesodCC site => CCState -> CCContentTypeM site -> CC CCP (HandlerT site IO) CCState
 inquire st content = do
-  (node, marg) <- shiftP pp $ sendk st content
-  lift $ $(logInfo) $ T.pack $ "inquire:" ++ show (st,node,marg)
+  st' <- shiftP pp $ sendk st content
 
-  lift $ updateCCKArg (node, marg)
-  return (node,marg)
+  lift $ $(logInfo) $ T.pack $ "inquire:" ++ show st'
+
+  lift $ updateCCKArg st'
+  return st'
 
 inquireFinish ::  YesodCC site => CCContentType -> CC CCP (HandlerT site IO) CCContentType
 inquireFinish  content = abortP pp $ return content
@@ -238,9 +239,9 @@ inquireGet :: (YesodCC site , Eq a, Show a, Typeable a)
               -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
               -> CC CCP (HandlerT site IO) CCState
 inquireGet st html form = do
-  (newNode, content)   <- inquire st html
+  (CCState newNode _result)   <- inquire st html
   ((result, _widget), _enctype) <- lift $ runFormGet form
-  return (CCState newNode  result)
+  return (CCState newNode  (Just $ CCFormResult result))
 
 inquireGetUntil :: (YesodCC site, Eq a,Show a,Typeable a)
                    => CCState
@@ -248,12 +249,12 @@ inquireGetUntil :: (YesodCC site, Eq a,Show a,Typeable a)
                    -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
                    -> CC CCP (HandlerT site IO) CCState
 inquireGetUntil st html form = do
-  (newNode, content) <- inquire st html
+  (CCState newNode _result) <- inquire st html
   ((result, _widget), _enctype) <- lift $ runFormGet form
 
   case result of
-    FormSuccess _ -> return (CCState newNode result)
-    _             -> inquireGetUntil (CCState newNode result) html form
+    FormSuccess _ -> return (CCState newNode (Just $ CCFormResult result))
+    _             -> inquireGetUntil (CCState newNode (Just $ CCFormResult result)) html form
 
 
 inquirePost :: (YesodCC site,  RenderMessage site FormMessage
@@ -263,9 +264,9 @@ inquirePost :: (YesodCC site,  RenderMessage site FormMessage
                -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
                -> CC CCP (HandlerT site IO) CCState
 inquirePost st html form = do
-  (newNode, content) <- inquire st html
+  (CCState newNode _result) <- inquire st html
   ((result, _widget), _enctype) <- lift $ runFormPost form
-  return (CCState newNode  result)
+  return (CCState newNode  (Just $ CCFormResult result))
 
 inquirePostUntil :: (YesodCC site, RenderMessage site FormMessage
                     , Eq a, Show a, Typeable a)
@@ -274,13 +275,13 @@ inquirePostUntil :: (YesodCC site, RenderMessage site FormMessage
                     -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
                     -> CC CCP (HandlerT site IO) CCState
 inquirePostUntil st html form = do
-  (newNode, content) <- inquire st  html
+  (CCState newNode _result) <- inquire st  html
   lift $ $(logInfo) $ T.pack $ "inquirePostUntil -> " ++ show newNode
   ((result, _widget), _enctype) <- lift $ runFormPost form
 
   case result of
-    FormSuccess _ -> return (CCState newNode result)
-    _             -> inquirePostUntil (CCState newNode result) html form
+    FormSuccess _ -> return (CCState newNode (Just $ CCFormResult result))
+    _             -> inquirePostUntil (CCState newNode (Just $ CCFormResult result)) html form
 
 
 runFormPostButtons :: (Show b) => [(Text,b)] -> (HandlerT site IO) (Maybe b)
@@ -389,4 +390,4 @@ spine node = do
 
 startState :: YesodCC site => HandlerT site IO CCState
 startState = do   (root,_) <- insertCCRoot
-                  return   (CCState root (FormMissing :: FormResult ()))
+                  return   (CCState root Nothing)

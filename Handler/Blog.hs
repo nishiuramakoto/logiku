@@ -24,14 +24,12 @@ getBlogR = do
 
 postBlogContR  :: UserAccountId -> CCNode -> Handler Html
 postBlogContR uid node = do
-  notFoundHtml <- defaultLayout [whamlet|Blog Continuation not Found!!|]
-  CCContentHtml html <- resume (node, Nothing) (CCContentHtml notFoundHtml)
+  CCContentHtml html <- resume (CCState node Nothing)
   return html
 
 getBlogContR  :: UserAccountId -> CCNode -> Handler Html
 getBlogContR uid node = do
-  notFoundHtml <- defaultLayout [whamlet|Blog Continuation not Found!|]
-  CCContentHtml html <- resume (node, Nothing) (CCContentHtml notFoundHtml)
+  CCContentHtml html <- resume (CCState node Nothing)
   return html
 
 ------------------------------  Types --------------------------------
@@ -206,8 +204,8 @@ validateUser (UserForm user pass) = user == pass
 blog_main :: CCState -> CC CCP Handler CCContentType
 blog_main state =  do
   lift $ $(logInfo) $ T.pack $ "inquireBlogLogin" ++ show state
-  state'@(CCState _  (FormSuccess a)) <- inquireBlogLogin state
-  let Just user = cast a
+  state'@(CCState _  (Just (CCFormResult a))) <- inquireBlogLogin state
+  let Just (FormSuccess user) = cast a
 
   lift $ $(logInfo) "validateUser"
   if validateUser user
@@ -241,8 +239,8 @@ blog_main state =  do
         _           -> loop_browse state'' user
 
     edit state' user  = do
-      ((state''@(CCState _ (FormSuccess a))), maybe_action) <- inquireBlogNew state' user
-      let Just blog = cast a
+      ((state''@(CCState _ (Just (CCFormResult res)))), maybe_action) <- inquireBlogNew state' user
+      let Just (FormSuccess blog) = cast res
       case maybe_action of
         Just Cancel  -> return state''
         Just Submit  -> submitBlog state'' user blog
