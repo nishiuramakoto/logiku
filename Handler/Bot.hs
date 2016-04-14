@@ -6,6 +6,7 @@ module Handler.Bot (
   postBotSaveNewR
   ) where
 
+
 import             Import hiding (parseQuery,readFile)
 import             Control.Monad.Trans.Either
 import             Control.Monad.CC.CCCxe
@@ -114,9 +115,6 @@ directoryUserDisplayName (Entity key dirData) = do
     Nothing   -> return Nothing
 
 
-eitherToMaybe (Right x) = Just x
-eitherToMaybe (Left _) = Nothing
-
 editWidget :: CCState -> UserAccountId -> Maybe (Entity Directory) -> CCNode -> Widget
 editWidget st uid mdir node = do
   setTitle "Bot editor"
@@ -171,30 +169,32 @@ getEditData _ = Nothing
 
 postBotSaveR :: CCNode -> DirectoryId ->  Handler Value
 postBotSaveR node dir = do
-  $logInfo $ T.pack $ show "postBotSave"
-
   eres  <- runEitherT $ trySaveBot (Just dir)
-  case eres of
-    Right res ->  do CCContentJson val <- resume (CCState node (Just $ CCFormResult (FormSuccess (Save res))))
-                     return val
+  botSave node eres
+
+botSave :: CCNode -> Either DbfsError DirectoryEditResponseJson -> Handler Value
+botSave node eres = do
+  $logInfo $ T.pack $ show "botSave"
+
+  content <- case eres of
+    Right res ->  do resume (CCState node (Just $ CCFormResult (FormSuccess (Save res))))
 
     Left  err ->  do let res = DirectoryEditResponseJson False (Just $ T.pack $ show err)
-                     CCContentJson val <- resume (CCState node (Just $ CCFormResult (FormSuccess (Save res))))
-                     return val
+                     resume (CCState node (Just $ CCFormResult (FormSuccess (Save res))))
+
+  case content of
+    CCContentHtml _ -> do let res = DirectoryEditResponseJson False (Just $ T.pack $ show "Html was returned")
+                          returnJson res
+    CCContentJson val -> do   $logInfo $ T.pack $ show "botSave"
+                              return val
+
 
 
 
 postBotSaveNewR :: CCNode ->  Handler Value
 postBotSaveNewR node = do
   eres  <- runEitherT $ trySaveBot Nothing
-  case eres of
-    Right res ->  do CCContentJson val <- resume (CCState node (Just $ CCFormResult (FormSuccess (Save res))))
-                     return val
-
-    Left  err ->  do let res = DirectoryEditResponseJson False (Just $ T.pack $ show err)
-                     CCContentJson val <- resume (CCState node (Just $ CCFormResult (FormSuccess (Save res))))
-                     return val
-
+  botSave node eres
 
 
 -- postBotSaveR' :: CCNode -> DirectoryId -> Handler Value
@@ -206,6 +206,7 @@ postBotSaveNewR node = do
 
 trySaveBot :: Maybe DirectoryId -> EitherT DbfsError Handler DirectoryEditResponseJson
 trySaveBot mkey = do
+  lift $ $logInfo $ T.pack $ show "trySaveBot"
   uid <- lift getUserAccountId
   jsonVal@(DirectoryEditRequestJson name expl code )
           <- lift $ (requireJsonBody :: Handler DirectoryEditRequestJson)

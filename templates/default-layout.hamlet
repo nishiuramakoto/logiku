@@ -8,7 +8,10 @@
                 <ul>
                     $maybe name <- mName
                         <li>
-                              <a id="userName" href="@{UserProfileR}"> #{name}のプロフィール
+                            $maybe dname <- mDName
+                                <a id="userName" href="@{UserProfileR}"> #{dname}のプロフィール
+                            $nothing
+                                <a id="userName" href="@{UserProfileR}"> 名無しさんのプロフィール
                         <li>
                               <a id="logout" href="@{AuthR LogoutR}"> ログアウト
 

@@ -20,11 +20,21 @@
                                         #{directoryInfoName info}
                                     <div class="info">
                                         <div class="main">
-                                            #{showPermDirectory info} #
-                                                #{showTime tz $ directoryInfoModified info}
-                                        $forall g <- directoryInfoGroupPerms info
-                                            <div class="group">
-                                                #{showGroupPerm g}
+                                            <table class="lsTable">
+                                                <tr>
+                                                    <td> #{showPermDirectory info}
+                                                    $maybe user <- directoryInfoUser info
+                                                       $maybe dname <- userAccountDisplayName user
+                                                          <td class="userName"> #{dname}
+                                                       $nothing
+                                                          <td class="userName"> 名無しさん
+                                                    $nothing
+                                                       <td class="userName"> 退会されたユーザー
+
+                                                    <td> #{showTime tz $ directoryInfoModified info}
+                                                $forall g <- directoryInfoGroupPerms info
+                                                   <tr class="group">
+                                                      <td> #{showGroupPerm g}
                                 <div class="image">
                                     <img src="@{StaticR images_006_pencil_png}">
 

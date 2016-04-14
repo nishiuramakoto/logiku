@@ -134,6 +134,7 @@ instance Yesod App where
       mmsg <- getMessage
 
       mName <- maybeUserIdent
+      mDName <- maybeUserDisplayName
       --maid  <- maybeAuthId
       sess  <- getSession
       -- let categoryTree =  $(widgetFile "css-tree")
@@ -305,9 +306,11 @@ getUserAccountId = do
     -- Nothing    -> guestId
     Nothing    -> runDB suGuest
 
--- getUserIdent :: Handler Text
--- getUserIdent = do
---   uid <- getUserAccountId
---   mu  <- get uid
---   case mu of
---     Just u -> Right <$> return (userAccountI
+eitherToMaybe :: Either a b -> Maybe b
+eitherToMaybe (Right x) = Just x
+eitherToMaybe (Left _) = Nothing
+
+maybeUserDisplayName :: Handler (Maybe Text)
+maybeUserDisplayName = do
+  uid <- getUserAccountId
+  join <$> eitherToMaybe <$> (runDB $ getUserDisplayName uid)

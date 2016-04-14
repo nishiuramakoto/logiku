@@ -51,7 +51,7 @@ data UserAccountInfo = UserAccountInfo
 
 data DirectoryInfo   = DirectoryInfo
                        { directoryInfoDirectoryId  :: DirectoryId
-                       , directoryInfoUserId    :: UserAccountId
+                       , directoryInfoUser      :: Maybe UserAccount
                        , directoryInfoName      :: Text
                        , directoryInfoCreated   :: UTCTime
                        , directoryInfoModified  :: UTCTime
@@ -67,7 +67,7 @@ data DirectoryInfo   = DirectoryInfo
 
 data FileInfo        = FileInfo
                        { fileInfoFileId        :: FileId
-                       , fileInfoUserId        :: UserAccountId
+                       , fileInfoUser          :: Maybe UserAccount
                        , fildInfoDirectoryId   :: DirectoryId
                        , fileInfoName          :: Text
                        , fileInfoCreated       :: UTCTime
@@ -83,7 +83,7 @@ data FileInfo        = FileInfo
                        } deriving (Eq,Show)
 
 
-makeDirectoryInfo :: DirectoryId -> UserAccountId ->  Text
+makeDirectoryInfo :: DirectoryId -> Maybe UserAccount ->  Text
                 -> UTCTime -> UTCTime -> UTCTime
                 -> Bool -> Bool -> Bool
                 -> [(Text,Perm)]
@@ -91,7 +91,7 @@ makeDirectoryInfo :: DirectoryId -> UserAccountId ->  Text
                 -> DirectoryInfo
 makeDirectoryInfo = DirectoryInfo
 
-makeFileInfo :: FileId -> UserAccountId -> DirectoryId -> Text
+makeFileInfo :: FileId -> Maybe UserAccount -> DirectoryId -> Text
                 -> UTCTime -> UTCTime -> UTCTime
                 -> Bool -> Bool -> Bool
                 -> [(Text,Perm)]

@@ -18,9 +18,9 @@ function setupAjax() {
 //	window.alert("request ajax" + event);
 
         event.preventDefault();
-	var requestData = { name        : $('.botName textarea').val(),
+	var requestData = { name        : $('#botNameEditor').val(),
 			    code        : editor.getValue(),
-			    explanation : $('.botExplanation textarea').val()
+			    explanation : $('#botExplanationEditor').val()
 			  };
 
 //	window.alert("request ajax:" + requestData.code);
