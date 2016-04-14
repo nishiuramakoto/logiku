@@ -48,8 +48,6 @@ p {
 
 
 
-
-
 .articleDetail {
     width: 54em;
 }
@@ -61,31 +59,37 @@ p {
 .botEditorHeader {
     float: left;
     width: 40em ;
-    height: 2em;
-    margin-bottom: 1em;
+//    height: 4em;
+}
+
+.botEditorHeader .botInfo {
+//    height: 3em;
+}
+
+.botEditorHeader .ls td {
+    padding: 0 0.5em;
 }
 
 .botEditorHeader .botName {
-    float: left;
-    height: 10em;
+//    float: left;
+    height: 1em;
 }
 
-.botEditorHeader .botName .txtstuff {
-    //height: 10em;
+.botEditorHeader .header .botNameEditor textarea {
     width: 10em;
-    //background-color: #CCCCCC;
+//    height: 10em;
 }
 
-.botEditorHeader .botExplanation {
-    float: right;
-    width: 25em;
-    height: 1.5em;
+.botEditorHeader .header .botExplanationEditor textarea{
+    width: 18em;
+//    height: 1em;
 }
 
-.botEditorHeader .botExplanation .txtstuff {
-    //height: 1em;
-    width: 15em;
+.botEditorHeader .header textarea {
+    border: 2px solid #EDEDED;
+    border-radius: 10px;
 }
+
 
 .botEditorHeader:after {
     content: "";

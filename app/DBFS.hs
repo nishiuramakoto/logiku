@@ -335,7 +335,6 @@ _replaceDbfs err v = do mukey <- checkUnique v
                          Nothing  -> Left  <$> return err
 
 
-
 getUserDisplayName :: MonadIO m => UserAccountId -> SqlPersistT m (Result (Maybe Text))
 getUserDisplayName uid =
   do mu <- get uid
@@ -1194,11 +1193,13 @@ llDirectory uid dir = do
          ,Value aw'
          ,Value ax'
          ) -> do
+          duser <- get uid'
           gs <- getGroupPerms directory
-          return $ makeDirectoryInfo directory uid' name created modified accessed or' ow' ox' gs ar' aw' ax'
+          return $ makeDirectoryInfo directory duser name created modified accessed or' ow' ox' gs ar' aw' ax'
   case is of
     [info] -> return $ Right info
-    _      -> return $ Left  $ DirectoryDoesNotExist $ T.pack $ show dir
+    []     -> return $ Left  $ DirectoryDoesNotExist $ T.pack $ show dir
+    is     -> return $ Left  $ SchemaError $ T.pack $ show (uid,dir,is)
 
   where
     getGroupPerms :: MonadIO m => DirectoryId -> SqlPersistT m [(Text,Perm)]
@@ -1303,7 +1304,8 @@ findDirectory uid offs lim = do
          ,Value ax'
          ) -> do
           gs <- getGroupPerms directory
-          return $ makeDirectoryInfo directory uid' name created modified accessed or' ow' ox' gs ar' aw' ax'
+          duser <- get uid'
+          return $ makeDirectoryInfo directory duser name created modified accessed or' ow' ox' gs ar' aw' ax'
   return $ Right is
 
   where
@@ -1409,7 +1411,8 @@ findFile uid offs lim = do
      ,Value ax'
      ) -> do
       gs <- getGroupPerms file
-      return $ makeFileInfo file uid' dir name created modified accessed or' ow' ox' gs ar' aw' ax'
+      fuser <- get uid'
+      return $ makeFileInfo file fuser dir name created modified accessed or' ow' ox' gs ar' aw' ax'
   return $ Right is
 
   where

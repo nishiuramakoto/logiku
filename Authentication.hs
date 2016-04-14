@@ -3,7 +3,6 @@
 module Authentication(
   clientId,
   clientSecret,
-  maybeDisplayName,
   maybeUserIdent,
   clearAuthSession,
   myIsAuthorized,
@@ -52,8 +51,8 @@ clearAuthSession = do
   deleteSession "_GOOGLE_CSRF_TOKEN"
   -- clearCreds False
 
-maybeDisplayName :: YesodAuth master => HandlerT master IO (Maybe Text)
-maybeDisplayName = cacheSession displayNameString maybeDisplayNameGoogle
+-- maybeDisplayName :: YesodAuth master => HandlerT master IO (Maybe Text)
+-- maybeDisplayName = cacheSession displayNameString maybeDisplayNameGoogle
 
 maybeDisplayNameGoogle :: YesodAuth master => HandlerT master IO (Maybe Text)
 maybeDisplayNameGoogle = do

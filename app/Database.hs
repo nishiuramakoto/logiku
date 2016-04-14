@@ -31,9 +31,6 @@ deleteEntity :: forall t (m :: * -> *).
                 Entity t -> ReaderT (PersistEntityBackend t) m ()
 deleteEntity (Entity id' _) = delete id'
 
-eitherToMaybe :: Either a b -> Maybe b
-eitherToMaybe (Left  _) = Nothing
-eitherToMaybe (Right b) = Just b
 
 
 userExists :: UserAccountId -> Handler Bool
