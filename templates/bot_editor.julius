@@ -19,7 +19,8 @@ function setupAjax() {
 
         event.preventDefault();
 	var requestData = { name        : $('#botNameEditor').val(),
-			    code        : editor.getValue(),
+//			    code        : editor.getValue(),
+			    code        : $('#botCodeEditor').val(),
 			    explanation : $('#botExplanationEditor').val()
 			  };
 
@@ -65,7 +66,7 @@ function setupAce(editorDivSelector, editorTASelector) {
 
 $(document).ready(function () {
     // MUST Set the ID attribute for the div!
-    setupAce('#botCodeEditor','.botCodeStorage textarea');
+    // setupAce('#botCodeAceEditor','#botCodeEditor');
     setupAjax();
     autosize($('textarea'));
 });
