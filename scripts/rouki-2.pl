@@ -15,15 +15,24 @@
                             確認要件(Case, 認定職業訓練を受ける労働者に係る労働契約) ,
                             確認要件(Case, 契約期間終了日 =< 終期)
                             ;
-                            確認要件(Case, 専門知識労働者等又は60歳以上労働者の労働契約),
+                            ( 要件(Case, 専門知識労働者等の労働契約(Case)) ;
+                              確認要件(Case, 満60歳以上労働者の労働契約 )),
                             確認要件(Case, 契約期間年数 =< 5).
+
+専門知識労働者等の労働契約(Case) :- 確認要件(Case,労働契約(Case,_Employer,Emploee)),
+                                    専門知識労働者(Case,Emploee).
+
+専門知識労働者(Case,E) :- 確認要件(Case, 博士の学位(E)).
+専門知識労働者(Case,E) :- 確認要件(Case, 公認会計士(E)).
+
 %% Implementation
 
 事件(Case, Desc) :- 該当(Case, 事件(Desc)),
                     assertz(caseDescription(Desc)),
                     write(事件),put_char(':'), write(Desc), nl.
 
-確認要件(Case,Cond) :- 該当(Case,要件(Cond)).
+要件(Case,Cond) :- 該当(Case,要件(Cond)).
+確認要件(Case,Cond) :- 該当(Case,確認要件(Cond)).
 
 不該当要件(Case,Cond) :- 該当(Case,不該当要件(Cond)).
 
@@ -43,14 +52,14 @@ descList(Ds) :- retractall(該当(Case,Desc)),
 
 事件該当(_Case,Desc, Desc).
 
-要件該当(Case,Cond) :-  call(Cond).
+要件該当(_Case,Cond) :-  call(Cond).
 
 確認要件該当(Case,Cond) :- write(Case),
                        write(Cond),
                        read(Answer),
                        Answer = yes.
 
-要件不該当(Case,Cond) :- \+ call(Cond).
+要件不該当(_Case,Cond) :- \+ call(Cond).
 
 確認要件不該当(Case,Cond) :- write(Case),
                              write(Cond),
@@ -66,7 +75,8 @@ inquire :- descList(DescList),
            nth0(N,DescList,MyDesc),
 
            asserta(該当(Case,事件(Desc)) :- 事件該当(Case,Desc,MyDesc) ),
-           asserta(該当(Case,要件(Desc)) :- 確認要件該当(Case,Desc) ),
+           asserta(該当(Case,要件(Desc)) :- 要件該当(Case,Desc) ),
+           asserta(該当(Case,確認要件(Desc)) :- 確認要件該当(Case,Desc) ),
            asserta(該当(Case,不該当要件(Desc)) :- 要件不該当(Case,Desc)),
            不法,
            retractall(該当(Case,Desc)).
