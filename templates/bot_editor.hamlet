@@ -48,9 +48,9 @@
 
         <div class="botCode">
             <div class="botCodeStorage">
-                <textarea class="txtstuff">
+                <textarea id="botCodeEditor">
                     #{code}
-            <div id="botCodeEditor">
+            <div id="botCodeAceEditor">
 
 
         <div class="botControl">
