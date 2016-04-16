@@ -1,3 +1,9 @@
+:- module(労基テスト,[]).
+:- use_module(library(労基共通)).
+
+違法(Case) :- 事件(Case,case1),
+	      要件(Case,cond1).
+
 
 a :- f(_).
 f(0) :- b(0).
