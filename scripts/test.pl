@@ -1,5 +1,6 @@
-:- module(労基テスト,[]).
-:- use_module(library(労基共通)).
+:- module(test,[]).
+:- use_module(rouki_common).
+:- use_module(date_time_test).
 
 違法(Case) :- 事件(Case,case1),
 	      要件(Case,cond1).
