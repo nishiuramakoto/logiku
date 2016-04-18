@@ -3,13 +3,17 @@
 			要件/2,
 			選択要件/4,
                         自然数要件/3,
+                        自然数要件/4,
                         暦日要件/3,
+			期間要件/3,
 			事件リスト/2,
 			事件検索/1,
                         日前/3,
                         月前/3,
                         早い/2,
-                        日数/2
+                        期間日数/2,
+			期間内日/2,
+			期間内週/2
 	 ]).
 :- use_module(date_time).
 
@@ -40,7 +44,7 @@
 
 要件確認(Case, Cond) :- functor(Cond,_Name,0), !,
                         要件確認0(Case, Cond) .
-要件確認(Case, Cond) :- Cond =.. [ \+ , NCond ].
+要件確認(Case, Cond) :- Cond =.. [ \+ , NCond ],
                         functor(NCond, _Name , 0) ,!,
                         要件確認0(Case, Cond) .
 
@@ -92,10 +96,24 @@
                            read(N),
                            integer(N).
 
+自然数要件(Case,Desc, Args, N) :- write(Case),nl,
+				  format(Desc,Args),
+				  write('Input a natural number:'),
+				  read(N),
+				  integer(N).
+
 暦日要件(Case,Desc,date(Y,M,D)) :- write(Case),nl,
                                write(Desc),nl,
                                write('Input a date in the form (Year, Month, Day)'),
                                read((Y,M,D)).
+
+期間要件(Case,Desc,期間(date(Y0,M0,D0),date(Y1,M1,D1))) :-
+    write(Case),nl,
+    write(Desc),nl,
+    write('Input a starting date in the form (Year, Month, Day): '),
+    read((Y0,M0,D0)),
+    write('Input a terminating date in the form (Year, Month, Day): '),
+    read((Y1,M1,D1)).
 
 
 事件リスト(F, Ds) :- setup_call_cleanup(事件リスト準備, 事件リストを計算(F, Ds), 事件リスト後片付け).
@@ -118,15 +136,39 @@
 	       nth0(N, List, Desc),
 	       call(F, Desc).
 
-%% Tests
 
-%% 違法(Case) :- 事件(Case,case1),
-%% 	      要件(Case,cond1).
-
-%% DateTime functions
+%%%%%%%%%%%%%%%%%%%%%%%%% DateTime functions %%%%%%%%%%%%%%%%%%%%%%%%%
 
 日前(D0, N , D ) :- date_add(D0, [ days(- N) ], D).
 月前(D0, N , D ) :- date_add(D0, [ months(- N) ], D).
 早い(D1,D2) :- date_compare(D1, < , D2).
 
-日数(期間(D0,D1),N) :- date_interval(D1,D0, days(N)).
+期間日数(期間(D0,D1),N) :- date_interval(D1,D0, days(N)).
+
+
+期間内日(期間(D0,D1) , D0) :-
+    date_compare(D0, < , D1) .
+
+期間内日(期間(D0,D1) , D) :-
+    date_add(D0, [days(1)] , D2),
+    date_compare(D2, < , D1),
+    期間内日(期間(D2,D1), D).
+
+
+期間内日(期間(D0,D1) , D) :-
+    date_compare(D0, =< , D),
+    date_compare(D , <  , D1).
+
+期間内週(期間(D0,D1) , W ) :-
+    date_add(D0, [ days(7) ], D2) ,
+    週分割(期間(D0,D1) , D2 , W ).
+
+週分割(期間(D0,D1) , D2 , 期間(D0,D1) ) :-
+    date_compare(D1 , =< , D2).
+
+週分割(期間(D0,D1) , D2 , 期間(D0,D2) ) :-
+    date_compare(D1 , > , D2).
+
+週分割(期間(_D0,D1) , D2 ,  W ) :-
+    date_compare(D1 , > , D2),
+    期間内週(期間(D2,D1), W).
