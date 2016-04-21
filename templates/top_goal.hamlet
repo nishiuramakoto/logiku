@@ -1,0 +1,36 @@
+
+<article class="articleDetail">
+    <header class="articleDetailHead">
+        <nav class="globalNavi">
+            <ul>
+                <li class="current">
+                    <a href="@{GoalR}">  コマンド
+                <li>
+                    <a href="@{BotR}"> ボット
+
+    <section class="articleDetailBody">
+        <ul>
+            $forall info <- infos
+                <li>
+                    <div  class="goalItem">
+                      <div class="runner">
+                        <a href="@{GoalRunR (fileInfoFileId info)}">
+                          <div class="text">
+                            <div class="name">
+                              #{fileInfoName info}
+                            <div class="info">
+                              <div class="main">
+                                #{showPermFile info} #{showTime tz $ fileInfoModified info}
+                              $forall g <- fileInfoGroupPerms info
+                                <div class="group">
+                                  #{showGroupPerm g}
+                          <div class="image">
+                            <img src="@{StaticR images_019_play_png}">
+                      <div class="editor">
+                        <a href="@{GoalEditR  (fileInfoFileId info)}">
+                          <img src="@{StaticR images_006_pencil_png}" alt="編集">
+
+<!--
+<footer class="articleDetailFoot">
+  Footer
+-->
