@@ -24,7 +24,7 @@ function setupAddButton() {
 			    code            : $('#goalEditor textarea[name="f3"]').val()
 			  };
         $.ajax({
-            url: '@{GoalR}',
+            url: '@{CreateGoalR}',
             type: 'POST',
             contentType: "application/json",
             data: JSON.stringify(requestData) ,

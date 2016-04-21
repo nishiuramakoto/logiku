@@ -36,7 +36,7 @@ library
                      Prolog
                      Show
                      Handler.Home
-                     Handler.Command
+                     Handler.Goal
                      Handler.Bot
                      Handler.Blog
                      Handler.UserProfile

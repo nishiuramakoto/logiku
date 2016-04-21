@@ -72,15 +72,15 @@ categoryTree =  toWidget $(widgetFile "css-tree")
 
 prologExecuteTestFinishHtml :: [[Term]] -> CC CCP Handler Html
 prologExecuteTestFinishHtml unifiers =
-  lift $ defaultLayout $ [whamlet| #{show unifiers}|]
+  lift $ defaultLayout $ [whamlet| Finished with #{show unifiers}|]
 
 prologExecuteTestSyntaxErrorHtml :: String -> CC CCP Handler Html
 prologExecuteTestSyntaxErrorHtml err =
-  lift $ defaultLayout $ [whamlet| #{show err}|]
+  lift $ defaultLayout $ [whamlet| Syntax error: #{show err}|]
 
 prologExecuteTestRuntimeErrorHtml :: RuntimeError -> CC CCP Handler Html
 prologExecuteTestRuntimeErrorHtml err =
-  lift $ defaultLayout $ [whamlet| #{show err}|]
+  lift $ defaultLayout $ [whamlet| Runtime error: #{show err}|]
 
 prologExecuteCCMain :: CCState -> Text -> Text -> CC CCP Handler CCContentType
 prologExecuteCCMain st progCode goalCode = do

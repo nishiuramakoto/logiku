@@ -2,7 +2,7 @@
 <header id="pageHead">
     <div id="statusBar">
         <div id="siteTitle">
-            Botsnest
+            lognaut
         <div id="userInfo">
             <form id="userInfoForm" class="iconr2" method=get action="@{HomeR}">
                 <ul>
@@ -17,14 +17,9 @@
 
                     $nothing
                         <li>
-                            <div class="welcomeGuest">
-                                  ようこそ! ゲストさん。
-                            <li>
-                              <a id="login" href="@{AuthR LoginR}"> ログインする/アカウントを作る
+                            <a id="login" href="@{AuthR LoginR}"> ログインする/アカウントを作る
                      <li>
-                        <input id="searchBox" placeholder="検索" type=text>
-
-
+                         <input id="searchBox" placeholder="検索" type=text>
 
 
 $maybe msg <- mmsg

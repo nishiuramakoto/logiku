@@ -1,4 +1,5 @@
-%% Implementation
+% -*- mode: prolog; -*-
+
 :- module(rouki_common,[事件/2,
 			要件/2,
 			選択要件/4,
@@ -12,6 +13,7 @@
                         月前/3,
                         早い/2,
                         期間日数/2,
+			日数/3,
 			期間内日/2,
 			期間内週/2
 	 ]).
@@ -92,15 +94,16 @@
 
 自然数要件(Case,Desc,N) :- write(Case),nl,
                            write(Desc),nl,
-                           write('Input a natural number:'),
+                           write('Input a natural number or say dk:'),
                            read(N),
-                           integer(N).
+			   (N = dk -> call(Desc) ; integer(N)).
+
 
 自然数要件(Case,Desc, Args, N) :- write(Case),nl,
 				  format(Desc,Args),
-				  write('Input a natural number:'),
+				  write('Input a natural number or say dk: '),
 				  read(N),
-				  integer(N).
+				  (N = dk -> call(Desc) ; integer(N)).
 
 暦日要件(Case,Desc,date(Y,M,D)) :- write(Case),nl,
                                write(Desc),nl,
@@ -144,6 +147,7 @@
 早い(D1,D2) :- date_compare(D1, < , D2).
 
 期間日数(期間(D0,D1),N) :- date_interval(D1,D0, days(N)).
+日数(D0,D1,N) :- date_interval(D1,D0, days(N)).
 
 
 期間内日(期間(D0,D1) , D0) :-

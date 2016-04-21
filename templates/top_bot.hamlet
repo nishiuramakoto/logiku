@@ -4,7 +4,7 @@
         <nav class="globalNavi">
             <ul>
                 <li>
-                    <a href="@{CommandR}">    最新のコマンド
+                    <a href="@{GoalR}">    最新のコマンド
                 <li class="current">
                     <a href="@{BotR}"> 最新のボット
 

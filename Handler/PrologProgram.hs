@@ -424,8 +424,8 @@ loopGoals' st userIdent pid goals = do
 
 
 
-postGoalR :: Handler Value
-postGoalR = do
+postCreateGoalR :: Handler Value
+postCreateGoalR = do
   mval <- runMaybeT maybeGoal
   case mval of
     Just val -> returnJson val

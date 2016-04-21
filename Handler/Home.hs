@@ -7,18 +7,18 @@ import Prelude ((!!))
 import  DBFS
 import  qualified Data.Text as T
 
-import Handler.Command
+import Handler.Goal
 
 
 
-getCommandEditR :: FileId -> Handler Html
-getCommandEditR file = do
+getGoalEditR :: FileId -> Handler Html
+getGoalEditR file = do
   return $ toHtml $ (show file)
 
--- getCommandRunR :: FileId -> Handler Html
--- getCommandRunR file = do
+-- getGoalRunR :: FileId -> Handler Html
+-- getGoalRunR file = do
 --   return $ toHtml $ (show file)
 
 
 getHomeR :: Handler Html
-getHomeR = redirect CommandR
+getHomeR = redirect GoalR

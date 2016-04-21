@@ -1,3 +1,4 @@
+% -*- mode:prolog; -*-
 :- module(rouki_3,[違法/1 ,
 		   解雇/1 ,
 		   退職/1 ,

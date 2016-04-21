@@ -38,7 +38,7 @@ import Network.Wai.Handler.WarpTLS          (tlsSettings, runTLS)
 -- Don't forget to add new modules to your cabal file!
 import Handler.Common
 import Handler.Home
-import Handler.Command
+import Handler.Goal
 import Handler.Bot
 import Handler.UserProfile
 
