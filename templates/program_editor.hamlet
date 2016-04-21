@@ -1,0 +1,90 @@
+<article class="articleDetail">
+  <header class="articleDetailHead">
+
+    <div class="editorNotification">
+        <div class="codeModification hidden">
+            Program modified but not saved
+        <div class="syntaxError">
+            <div class="saveFailed hidden">
+                Syntax error. Press "Force save" to save the code
+
+
+    <section class="articleDetailBody">
+        <section class="programEditor" >
+          <header class="programEditorHeader">
+              <div class="programInfo">
+                  <table class="ls">
+                      <tr>
+                          $maybe info <- minfo
+                              <td> #{showPermDirectory info}
+                          $nothing
+                              <td>
+                          $maybe dname <- muserDisplayName
+                              <td class="userDisplayName"> #{dname}
+                          $nothing
+                              <td class="userDisplayName"> 名無しさん
+
+                          $maybe info <- minfo
+                              <td> #{showTime tz $ directoryInfoModified info}
+                          $nothing
+                          <td>
+
+                      $maybe info <- minfo
+                         <tr>
+                            $forall g <- directoryInfoGroupPerms info
+                                <td class="group"> #{showGroupPerm g}
+                  <table class="header">
+                      <tr>
+                          <td class="programName">
+                              <label> 名前：
+                          <td class="programNameEditor">
+                              <textarea id="programNameEditor" name="nameEditor">
+                                  #{name}
+
+                          <td class="programEnxplanation">
+                              <label> 説明:
+                          <td class="programExplanationEditor">
+                              <textarea id="programExplanationEditor">
+                                  #{expl}
+
+          <div class="programCode">
+              <div class="programCodeStorage">
+                  <textarea id="programCodeEditor">
+                      #{code}
+              <div id="programCodeAceEditor">
+
+
+          <div class="programControl">
+              <p class="largeButton">
+                  <a href="@{ProgramEditNewR node}"> 新規作成
+              <p class="saveButton smallButton">
+                  <button class="programSave"> セーブ
+              <p class="deleteButton smallButton">
+                  <button class="programDelete"> 削除
+              <p class="checkButton smallButton">
+                  <button class="programCheck"> 文法チェック
+
+        <ul>
+                $forall (finfo, efdata) <- fileData
+                    <li class=goalItem>
+                        $if isLeft efdata
+                            #{either show show efdata}
+                        $else
+                          <form class=goalEditorForm method=POST
+                                action="@{ProgramEditorGoalEditorAjaxR node (fileInfoFileId finfo)}" >
+                              ^{goalEditorWidget}
+                              <textarea name="name"  class=goalNameEditor>
+                                  #{either (T.pack . show)  fileName  efdata}
+                              <textarea name="explanation"  class=goalExplanationEditor>
+                                  #{either (T.pack . show)  fileExplanation  efdata}
+                              <textarea name="code"  class=goalCodeEditor>
+                                  #{either (T.pack . show)  fileExplanation  efdata}
+                              <button    class=goalEditorSave> Save
+                              <button    class=goalEditorDelete> Delete
+
+    <aside class="articleAside">
+
+
+<footer class="articleDetailFoot">
+    <aside class="creditUnit">
+        <a href="@{HomeR}"> トップ

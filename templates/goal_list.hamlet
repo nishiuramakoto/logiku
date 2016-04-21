@@ -6,7 +6,7 @@
                 <li class="current">
                     <a href="@{GoalR}">  コマンド
                 <li>
-                    <a href="@{BotR}"> ボット
+                    <a href="@{ProgramR}"> ボット
 
     <section class="articleDetailBody">
         <ul>

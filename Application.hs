@@ -39,7 +39,7 @@ import Network.Wai.Handler.WarpTLS          (tlsSettings, runTLS)
 import Handler.Common
 import Handler.Home
 import Handler.Goal
-import Handler.Bot
+import Handler.Program
 import Handler.UserProfile
 
 import Handler.PrologTest

@@ -4,17 +4,17 @@
         <nav class="globalNavi">
             <ul>
                 <li>
-                    <a href="@{GoalR}">    最新のコマンド
+                    <a href="@{GoalR}">    最新のゴール
                 <li class="current">
-                    <a href="@{BotR}"> 最新のボット
+                    <a href="@{ProgramR}"> 最新のプログラム
 
     <section class="articleDetailBody">
         <ul>
             $forall info <- infos
                 <li>
-                    <div class="botItem">
+                    <div class="programItem">
                         <div class="editor">
-                            <a href="@{BotEditR (directoryInfoDirectoryId info)}">
+                            <a href="@{ProgramEditR (directoryInfoDirectoryId info)}">
                                 <div class="text">
                                     <div class="name">
                                         #{directoryInfoName info}

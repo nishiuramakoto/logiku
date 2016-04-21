@@ -77,7 +77,7 @@ module DBFS
        , lsDirectory
        , lsFile
        , llDirectory
---       , llFile
+       , llFile
        , findDirectory
        , findFile
        , findExecutableFile
@@ -1253,6 +1253,8 @@ llDirectory uid dir = do
     directoryEveryoneExecutable directory = directory^.DirectoryEveryoneX ==. val True
 
 
+
+
 -------------------------------- Find --------------------------------
 
 findDirectory :: (MonadIO m )
@@ -1377,6 +1379,111 @@ findFile uid offs lim = do
                                ||. fileExecutable  file fileGroup groupMember
                                ||. val prv ==. val True
                              )
+                      offset offs
+                      limit lim
+
+                      return ((file^.FileId)
+                             ,(file^.FileUserId)
+                             ,(file^.FileDirectoryId)
+                             ,(file^.FileName)
+                             ,(file^.FileCreated)
+                             ,(file^.FileModified)
+                             ,(file^.FileAccessed)
+                             ,(file^.FileOwnerR)
+                             ,(file^.FileOwnerW)
+                             ,(file^.FileOwnerX)
+                             ,(file^.FileEveryoneR)
+                             ,(file^.FileEveryoneW)
+                             ,(file^.FileEveryoneX)
+                             )
+
+  is <- forM results $
+    \(Value file
+     ,Value uid'
+     ,Value dir
+     ,Value name
+     ,Value created
+     ,Value modified
+     ,Value accessed
+     ,Value or'
+     ,Value ow'
+     ,Value ox'
+     ,Value ar'
+     ,Value aw'
+     ,Value ax'
+     ) -> do
+      gs <- getGroupPerms file
+      fuser <- get uid'
+      return $ makeFileInfo file fuser dir name created modified accessed or' ow' ox' gs ar' aw' ax'
+  return $ Right is
+
+  where
+    getGroupPerms :: MonadIO m => FileId -> SqlPersistT m [(Text,Perm)]
+    getGroupPerms file = do
+      results <- select $
+                 from $ \ (group' `InnerJoin` fileGroup) -> do
+                   on     (fileGroup^.FileGroupGroupId ==. group'^.GroupId)
+                   where_ (fileGroup^.FileGroupFileId  ==. val file )
+                   limit 100
+                   return (group',fileGroup)
+      return $ map (\(Entity _ group',Entity _ fileGroup) -> ( groupName group'
+                                                             , Perm { permR = fileGroupGroupR fileGroup
+                                                                    , permW = fileGroupGroupW fileGroup
+                                                                    , permX = fileGroupGroupX fileGroup
+                                                                    })) results
+
+    fileReadable file fileGroup groupMember = fileOwnerReadable file
+                                              ||. fileGroupReadable fileGroup groupMember
+                                              ||. fileEveryoneReadable  file
+
+    fileWritable file fileGroup groupMember =  fileOwnerWritable  file
+                                               ||. fileGroupWritable  fileGroup groupMember
+                                               ||. fileEveryoneWritable  file
+
+    fileExecutable file fileGroup groupMember = fileOwnerExecutable  file
+                                                ||. fileGroupExecutable fileGroup groupMember
+                                                ||. fileEveryoneExecutable  file
+
+
+    fileOwnerReadable   file = file^.FileUserId ==. val uid &&. file^.FileOwnerR ==. val True
+    fileOwnerWritable   file = file^.FileUserId ==. val uid &&. file^.FileOwnerW ==. val True
+    fileOwnerExecutable file = file^.FileUserId ==. val uid &&. file^.FileOwnerX ==. val True
+
+    fileGroupReadable   fileGroup groupMember =  not_ (isNothing (groupMember?.GroupMemberMember))
+                                                 &&. not_ (isNothing (fileGroup?.FileGroupGroupR))
+                                                 &&. groupMember?.GroupMemberMember ==. just (val uid)
+                                                 &&. fileGroup?.FileGroupGroupR ==. just (val True)
+    fileGroupWritable   fileGroup groupMember =  not_ (isNothing (groupMember?.GroupMemberMember))
+                                                 &&. not_ (isNothing (fileGroup?.FileGroupGroupW))
+                                                 &&. groupMember?.GroupMemberMember ==. just (val uid)
+                                                 &&. fileGroup?.FileGroupGroupW ==. just (val True)
+    fileGroupExecutable fileGroup groupMember =  not_ (isNothing (groupMember?.GroupMemberMember))
+                                                 &&. not_ (isNothing (fileGroup?.FileGroupGroupX))
+                                                 &&. groupMember?.GroupMemberMember ==. just (val uid)
+                                                 &&. fileGroup?.FileGroupGroupX ==. just (val True)
+
+    fileEveryoneReadable   file = file^.FileEveryoneR ==. val True
+    fileEveryoneWritable   file = file^.FileEveryoneW ==. val True
+    fileEveryoneExecutable file = file^.FileEveryoneX ==. val True
+
+
+llFile :: (MonadIO m )
+      => UserAccountId -> DirectoryId -> Int64 -> Int64 -> SqlPersistT m (Result [FileInfo])
+
+llFile uid dir offs lim = do
+  prv <- isPrivileged uid
+  results <- select $
+             from $ \(file
+                      `LeftOuterJoin`
+                      (fileGroup `InnerJoin` groupMember )) ->
+                    distinctOn [don (file^.FileId) ] $ do
+                      on (groupMember?.GroupMemberGroupId ==. fileGroup?.FileGroupGroupId)
+                      on (fileGroup?.FileGroupFileId ==. just (file^.FileId))
+                      where_ (( fileReadable        file fileGroup groupMember
+                               ||. fileWritable    file fileGroup groupMember
+                               ||. fileExecutable  file fileGroup groupMember
+                               ||. val prv ==. val True
+                             ) &&. file^.FileDirectoryId ==. val dir )
                       offset offs
                       limit lim
 

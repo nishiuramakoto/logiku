@@ -22,8 +22,8 @@ getGoalR = do
   case einfos of
      Right infos ->   defaultLayout $ do
        addStylesheet $ StaticR  css_normalize_css
-       setTitle "コマンドリスト"
-       toWidget $(widgetFile "top_goal")
+       setTitle "ゴールリスト"
+       toWidget $(widgetFile "goal_list")
      Left err -> do
        setMessage $ toHtml $ T.pack $ show err
        return $ toHtml $ ("Error" :: T.Text)
@@ -35,18 +35,18 @@ getGoalRunR file = eitherNotFound $ do
   fileData <- EitherT $ runDB $ uid `readFile` file
   let dir = fileDirectoryId fileData
   dirData  <- EitherT $ runDB $ uid `readDirectory` dir
-  let botCode = directoryCode dirData
+  let progCode = directoryCode dirData
       goalCode = fileCode  fileData
 
   st <- lift startState
-  lift $ runGoal st botCode goalCode
+  lift $ runGoal st progCode goalCode
   -- lift $ defaultLayout $ [whamlet|#{show (progCode,goalCode)}|]
 
 runGoal :: CCState -> Text -> Text -> Handler Html
-runGoal st botCode goalCode =
-  case (programCheck  botCode , goalCheck goalCode) of
-  (Right clauses, Right terms)   -> do CCContentHtml html <- run $ prologExecuteCcMain st  botCode goalCode
+runGoal st progCode goalCode =
+  case (programCheck  progCode , goalCheck goalCode) of
+  (Right clauses, Right terms)   -> do CCContentHtml html <- run $ prologExecuteCcMain st  progCode goalCode
                                        return html
 
-  (Left  err, _ ) ->  defaultLayout $ [whamlet|Parse error in bot code #{show err}|]
+  (Left  err, _ ) ->  defaultLayout $ [whamlet|Parse error in program code #{show err}|]
   (_ , Left  err) ->  defaultLayout $ [whamlet|Parse error in goal code  #{show err}|]

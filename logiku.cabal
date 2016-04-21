@@ -37,7 +37,7 @@ library
                      Show
                      Handler.Home
                      Handler.Goal
-                     Handler.Bot
+                     Handler.Program
                      Handler.Blog
                      Handler.UserProfile
                      Handler.Base

@@ -164,12 +164,15 @@ FileEditRequestJson json
       name            Text
       explanation     Text
       code            Text
+      action          Text
       deriving Show Eq
 
 FileEditResponseJson json
       success         Bool
       error           Text Maybe
       deriving Show Eq
+
+
 
 
 ---------------------------- For testing  ----------------------------

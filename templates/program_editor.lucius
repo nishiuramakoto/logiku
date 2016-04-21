@@ -7,13 +7,13 @@ p {
 }
 
 
-.botCode textarea {
+.programCode textarea {
     color: #444;
     padding: 0.5em;
     height: 30em;
 }
 
-.botCode .txtstuff {
+.programCode .txtstuff {
 //    resize: none; /* remove this if you want the user to be able to resize it in modern browsers */
     overflow: hidden;
 }
@@ -53,57 +53,57 @@ p {
     width: 54em;
 }
 
-.botEditorHeader {
+.programEditorHeader {
     float: left;
     width: 40em ;
 //    height: 4em;
 }
 
-.botEditorHeader .botInfo {
+.programEditorHeader .programInfo {
 //    height: 3em;
 }
 
-.botEditorHeader .ls td {
+.programEditorHeader .ls td {
     padding: 0 0.5em;
 }
 
 
-.botEditorHeader .botName {
+.programEditorHeader .programName {
 //    float: left;
     height: 1em;
 }
 
-.botEditorHeader .header .botNameEditor textarea {
+.programEditorHeader .header .programNameEditor textarea {
     width: 10em;
     height: 1.8em;
 }
 
-.botEditorHeader .header .botExplanationEditor textarea{
+.programEditorHeader .header .programExplanationEditor textarea{
     width: 24em;
     height: 1.8em;
 }
 
-.botEditorHeader .header textarea {
+.programEditorHeader .header textarea {
     border: 2px solid #EDEDED;
     border-radius: 10px;
 }
 
 
-.botEditorHeader:after {
+.programEditorHeader:after {
     content: "";
     clear: both;
     display: block;
 }
 
 
-.botCode {
+.programCode {
     float: left;
     width: 40em;
     float: left;
 }
 
 
-#botCodeEditor {
+#programCodeEditor {
     position: relative;
     width: 40em;
     height: 30em;
@@ -111,19 +111,19 @@ p {
     border-radius: 10px;
  }
 
-#botCodeAceEditor {
+#programCodeAceEditor {
     display: none;
     position: relative;
     width: 40em;
     height: 30em;
  }
 
-.botControl {
+.programControl {
     float: right;
 //    width: 10em;
 }
 
-.botControl .largeButton a {
+.programControl .largeButton a {
     font-size:1.5em;
     font-weight: bold;
     text-decoration: none;
@@ -137,11 +137,11 @@ p {
     //text-shadow: 0px -1px 0 #333333;
 }
 
-.botControl .largeButton a:hover {
+.programControl .largeButton a:hover {
     opacity: 0.7
 }
 
-.botControl .largeButton {
+.programControl .largeButton {
     text-align: right;
 }
 
@@ -152,7 +152,7 @@ p {
     display: block;
 }
 
-.botControl .smallButton button {
+.programControl .smallButton button {
     font-size:1.0em;
     font-weight: bold;
     text-decoration: none;
@@ -167,15 +167,21 @@ p {
 }
 
 
-.botControl .saveButton {
+.programControl .saveButton {
     margin-top:2em;
     margin-bottom: 0.5em;
 }
 
-.botControl .deleteButton {
+.programControl .deleteButton {
     margin-bottom: 0.5em;
 }
 
-.botControl .checkButton {
+.programControl .checkButton {
     margin-bottom: 0.5em;
+}
+
+.programEditor:after {
+    content: "";
+    clear: both;
+    display: block;
 }
