@@ -433,7 +433,8 @@ postCreateGoalR = do
 
 maybeGoal :: MaybeT Handler FileEditResponseJson
 maybeGoal = do
-  FileEditRequestJson goalName explanation code <- lift (requireJsonBody :: Handler FileEditRequestJson)
+  FileEditRequestJson  goalName explanation code _
+                 <- lift (requireJsonBody :: Handler FileEditRequestJson)
 
   user     <- MaybeT $ lookupSession "userIdent"
   progName <- MaybeT $ lookupSession "programName"
@@ -459,7 +460,7 @@ postDeleteGoalR = do
 
 maybeDeleteGoal :: MaybeT Handler FileEditResponseJson
 maybeDeleteGoal = do
-  jsonVal@(FileEditRequestJson goalName _ _) <- lift (requireJsonBody :: Handler FileEditRequestJson)
+  jsonVal@(FileEditRequestJson  goalName _ _ _) <- lift (requireJsonBody :: Handler FileEditRequestJson)
 
   user     <- MaybeT $ lookupSession sessionUserIdent
   progName <- MaybeT $ lookupSession sessionProgramName

@@ -4,17 +4,19 @@
 /favicon.ico FaviconR GET
 /robots.txt  RobotsR GET
 
-/            HomeR    GET
-/goal        GoalR GET
-/bot         BotR     GET
+/            HomeR     GET
+/goal        GoalR     GET
+/program     ProgramR  GET
 
 /goal/edit/#FileId GoalEditR GET
 /goal/run/#FileId  GoalRunR  GET
 
-/bot/edit/#DirectoryId                BotEditR    GET
-/bot/edit/#CCNode/new                 BotEditNewR GET
-/bot/edit/#CCNode/save/#DirectoryId   BotSaveR    POST -- Ajax
-/bot/edit/#CCNode/save-new            BotSaveNewR POST -- Ajax
+/program/edit/#DirectoryId                ProgramEditR    GET
+/program/edit/#CCNode/new                 ProgramEditNewR GET
+/program/edit/#CCNode/save/#DirectoryId   ProgramSaveR    POST -- Ajax
+/program/edit/#CCNode/save-new            ProgramSaveNewR POST -- Ajax
+
+/program/edit/#CCNode/save-goal/#FileId   ProgramEditorGoalEditorAjaxR POST -- Ajax
 
 
 /user                                 UserProfileR GET POST

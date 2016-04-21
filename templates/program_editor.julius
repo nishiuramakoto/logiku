@@ -1,0 +1,118 @@
+var editor;
+// programSaveUrl is defined elsewhere
+
+function setupSaveSuccessMessage(data) {
+//    window.alert("response ajax" + data);
+
+    if (data.success) {
+        $('.editorNotification').text("Saved");
+    } else {
+        $('.editorNotification').text("Error:" + data.error);
+    }
+};
+
+function setupProgramEditorAjax() {
+
+    // AJAX Request
+    $('.programSave').click(function (event) {
+//	window.alert("request ajax" + event);
+
+        event.preventDefault();
+	var requestData = { name        : $('#programNameEditor').val(),
+//			    code        : editor.getValue(),
+			    code        : $('#programCodeEditor').val(),
+			    explanation : $('#programExplanationEditor').val()
+			  };
+
+//	window.alert("request ajax:" + requestData.code);
+        $.ajax({
+            url: programSaveUrl,
+            type: 'POST',
+            contentType: "application/json",
+            data: JSON.stringify(requestData) ,
+            success: setupSaveSuccessMessage ,
+            error: function (data) {
+                console.log("Error saving a program: " + data);
+            },
+        });
+    });
+
+}
+
+function arrayToJSON(array) {
+    var data = {};
+    $(array).each(function(index, obj){
+        data[obj.name] = obj.value;
+    });
+    return data;
+}
+
+function removeJSONnameUnderscores(array) {
+    return $.map(array, function(item,i) {
+        item.name = item.name.replace(/^_/,'');
+        return item;
+    });
+}
+
+function setupGoalSaveSuccessMessage(data) {
+    windows.alert(data);
+}
+
+function setupGoalEditorAjax() {
+
+    // AJAX Request
+    $('.goalEditorSave').click(function (event) {
+        event.preventDefault();
+        var form = $(event.target).parent();
+
+        var requestData = arrayToJSON(form.serializeArray());
+        var goalSaveUrl = form.attr('action');
+        window.alert(requestData);
+
+        $.ajax({
+            url: goalSaveUrl,
+            type: 'POST',
+            contentType: "application/json",
+            data: JSON.stringify(requestData) ,
+            //data: requestData ,
+            success: setupGoalSaveSuccessMessage ,
+            error: function (data) {
+                console.log("Error saving a goal: " + data);
+            },
+        });
+    });
+
+}
+
+
+
+function setupAce(editorDivSelector, editorTASelector) {
+    var div         = $(editorDivSelector);
+    var ta          = $(editorTASelector);
+
+    ta.addClass('hidden');
+    div.append(ta.val());
+
+    // Set up the Ace editor
+    // var editor = ace.edit("programCodeEditor");
+    editor = ace.edit(div.attr('id')); // Must be ID not class!
+    editor.setTheme("ace/theme/textmate");
+    editor.getSession().setMode("ace/mode/prolog");
+
+    // Check code modification
+    editor.on('change',function(e) {
+        if (ta.val() != editor.getValue()) {
+            $('.codeModification').removeClass('hidden');
+        } else {
+            $('.codeModification').addClass('hidden');
+        }
+    });
+}
+
+$(document).ready(function () {
+    // MUST Set the ID attribute for the div!
+    // setupAce('#programCodeAceEditor','#programCodeEditor');
+    setupProgramEditorAjax();
+    setupGoalEditorAjax();
+    autosize($('#programCodeEditor'));
+});

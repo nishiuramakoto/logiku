@@ -6,7 +6,7 @@
                 <li class="current">
                     <a href="@{CommandR}">    最新のコマンド
                 <li>
-                    <a href="@{BotR}"> 最新のプログラム
+                    <a href="@{ProgramR}"> 最新のプログラム
 
     <section class="articleDetailBody">
         <ul>
