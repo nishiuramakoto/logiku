@@ -6,9 +6,6 @@ p {
     margin-bottom: 14px;
 }
 
-.botName textarea {
-    height: 2em;
-}
 
 .botCode textarea {
     color: #444;
@@ -70,6 +67,7 @@ p {
     padding: 0 0.5em;
 }
 
+
 .botEditorHeader .botName {
 //    float: left;
     height: 1em;
@@ -77,12 +75,12 @@ p {
 
 .botEditorHeader .header .botNameEditor textarea {
     width: 10em;
-//    height: 10em;
+    height: 1.8em;
 }
 
 .botEditorHeader .header .botExplanationEditor textarea{
-    width: 18em;
-//    height: 1em;
+    width: 24em;
+    height: 1.8em;
 }
 
 .botEditorHeader .header textarea {
@@ -103,8 +101,6 @@ p {
     width: 40em;
     float: left;
 }
-
-
 
 
 #botCodeEditor {

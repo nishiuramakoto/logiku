@@ -66,7 +66,7 @@
 
 平均賃金の原則額(Case, W) :- 平均賃金の算定期間(Case, Period),
                              賃金総額(Case, Period, Total),
-                             日数(Period, DN),
+                             期間日数(Period, DN),
                              平均賃金控除日数(Case, Period, DS),
                              平均賃金控除額(Case, Period, TS),
                              ( DN > DS

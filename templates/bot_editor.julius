@@ -68,5 +68,5 @@ $(document).ready(function () {
     // MUST Set the ID attribute for the div!
     // setupAce('#botCodeAceEditor','#botCodeEditor');
     setupAjax();
-    autosize($('textarea'));
+    autosize($('#botCodeEditor'));
 });

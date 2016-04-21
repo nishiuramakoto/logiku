@@ -5,11 +5,11 @@
 /robots.txt  RobotsR GET
 
 /            HomeR    GET
-/command     CommandR GET
+/goal        GoalR GET
 /bot         BotR     GET
 
-/command/edit/#FileId CommandEditR GET
-/command/run/#FileId  CommandRunR  GET
+/goal/edit/#FileId GoalEditR GET
+/goal/run/#FileId  GoalRunR  GET
 
 /bot/edit/#DirectoryId                BotEditR    GET
 /bot/edit/#CCNode/new                 BotEditNewR GET
@@ -30,7 +30,7 @@
 /prolog/edit/goal/runner      PrologGoalRunnerR         GET
 
 --  Ajax resources
-/prolog/goals                   GoalR        POST
+/prolog/create-goals            CreateGoalR  POST
 /prolog/delete-goals            DeleteGoalR  POST
 /prolog/syntax-check            SyntaxCheckR POST
 /prolog/ajax-test               AjaxTestR    POST
