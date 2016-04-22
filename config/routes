@@ -16,7 +16,8 @@
 /program/edit/#CCNode/save/#DirectoryId   ProgramSaveR    POST -- Ajax
 /program/edit/#CCNode/save-new            ProgramSaveNewR POST -- Ajax
 
-/program/edit/#CCNode/save-goal/#FileId   ProgramEditorGoalEditorAjaxR POST -- Ajax
+/program/edit/#CCNode/save-goal/#DirectoryId/#FileId    ProgramEditorGoalEditorAjaxR POST
+/program/edit/#CCNode/save-goal-new/#DirectoryId        ProgramEditorGoalEditorNewGoalAjaxR POST
 
 
 /user                                 UserProfileR GET POST
