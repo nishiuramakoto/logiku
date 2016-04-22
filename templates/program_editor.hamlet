@@ -61,13 +61,14 @@
             <ul>
                 <li>
                     <form class=goalEditorForm method=POST
-                          action="@{ProgramEditorGoalEditorNewGoalAjaxR node dir}" >
+                          action="@{ProgramEditorGoalEditorNewGoalR node dir}" >
                         ^{goalEditorWidget}
                         <p> 新しいゴール  <label> 名前  <label> 説明   <label> コード
                         <textarea name="name"  class=goalNameEditor>
                         <textarea name="explanation"  class=goalExplanationEditor>
                         <textarea name="code"  class=goalCodeEditor>
-                        <button   name="action" value=saveNew   class=goalEditorButton> Save
+                        <button  name="action" value="run"  class="goalEditorButton run"> Run
+                        <button   name="action" value=saveNew   class="goalEditorButton ajax save"> Save
 
                 $forall (finfo, efdata) <- fileData
                     <li class=goalItem>
@@ -77,7 +78,7 @@
                             $of Right fdata
                                 $with fid <- (fileInfoFileId finfo)
                                   <form class=goalEditorForm method=POST
-                                        action="@{ProgramEditorGoalEditorAjaxR node dir fid }" >
+                                        action="@{ProgramEditorGoalEditorR node dir fid }" >
                                     ^{goalEditorWidget}
                                     <p> #{showPermFile finfo} #
                                       \ #{fileUserDisplayName finfo} #
@@ -88,12 +89,14 @@
                                         #{fileExplanation  fdata}
                                     <textarea name="code"  class=goalCodeEditor>
                                         #{fileCode  fdata}
+                                    <button  name="action" value="run"
+                                             class="goalEditorButton run"> Run
                                     <button  name="action" value="save"
-                                             class="goalEditorButton save"> Save
+                                             class="goalEditorButton ajax save"> Save
                                     <button  name="action" value="reload"
-                                             class="goalEditorButton reload"> Reload
+                                             class="goalEditorButton ajax reload"> Reload
                                     <button  name="action" value="delete"
-                                             class="goalEditorButton delete"> Delete
+                                             class="goalEditorButton ajax delete"> Delete
 
     <aside class="articleAside">
 

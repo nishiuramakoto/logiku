@@ -98,7 +98,7 @@ function setupGoalEditSuccess(data, form, requestData) {
 function setupGoalEditorAjax() {
 
     // AJAX Request
-    $('.goalEditorButton').click(function (event) {
+    $('.goalEditorForm button.ajax').click(function (event) {
         event.preventDefault();
 
         var action = $(this).val();
