@@ -59,21 +59,21 @@
 
         $maybe dir <- mdir
             <ul>
-                <form class=goalEditorForm method=POST
-                    action="@{ProgramEditorGoalEditorNewGoalAjaxR node dir}" >
-                    ^{goalEditorWidget}
-                    <p> 新しいゴール  <label> 名前  <label> 説明   <label> コード
-                    <textarea name="name"  class=goalNameEditor>
-                    <textarea name="explanation"  class=goalExplanationEditor>
-                    <textarea name="code"  class=goalCodeEditor>
-                    <button    class=goalEditorSave> Save
-                    <button    class=goalEditorDelete> Delete
+                <li>
+                    <form class=goalEditorForm method=POST
+                          action="@{ProgramEditorGoalEditorNewGoalAjaxR node dir}" >
+                        ^{goalEditorWidget}
+                        <p> 新しいゴール  <label> 名前  <label> 説明   <label> コード
+                        <textarea name="name"  class=goalNameEditor>
+                        <textarea name="explanation"  class=goalExplanationEditor>
+                        <textarea name="code"  class=goalCodeEditor>
+                        <button   name="action" value=saveNew   class=goalEditorButton> Save
 
                 $forall (finfo, efdata) <- fileData
                     <li class=goalItem>
                         $case efdata
                             $of Left err
-                                <p> #{either show show efdata}
+                                <p> #{show err}
                             $of Right fdata
                                 $with fid <- (fileInfoFileId finfo)
                                   <form class=goalEditorForm method=POST
@@ -88,8 +88,12 @@
                                         #{fileExplanation  fdata}
                                     <textarea name="code"  class=goalCodeEditor>
                                         #{fileCode  fdata}
-                                    <button    class=goalEditorSave> Save
-                                    <button    class=goalEditorDelete> Delete
+                                    <button  name="action" value="save"
+                                             class="goalEditorButton save"> Save
+                                    <button  name="action" value="reload"
+                                             class="goalEditorButton reload"> Reload
+                                    <button  name="action" value="delete"
+                                             class="goalEditorButton delete"> Delete
 
     <aside class="articleAside">
 

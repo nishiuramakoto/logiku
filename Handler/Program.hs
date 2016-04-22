@@ -17,7 +17,6 @@ import             Control.Monad.Trans.Either
 import             Control.Monad.CC.CCCxe
 import             Data.Time.LocalTime
 import             Data.Typeable
-import             Data.Aeson.Types
 import             Data.Either
 import             DBFS
 import             Prolog
@@ -29,43 +28,8 @@ import qualified   Data.Text as T
 
 data Action = EditNew
             | Save DirectoryEditResponseJson
-            | SaveGoal FileEditResponse
+            | SaveGoal FileEditResponseJson
               deriving (Show,Eq,Typeable)
-
-data FileEditRequest = FileEditRequest
-                        { token :: Text
-                        , name  :: Text
-                        , explanation :: Text
-                        , code  :: Text
-                        } deriving (Show,Eq)
-
-instance FromJSON FileEditRequest where
-  parseJSON (Object v) = FileEditRequest <$>
-                         v .: defaultCsrfParamName <*>
-                         v .: "name" <*>
-                         v .: "explanation" <*>
-                         v .: "code"
-
-  parseJSON invalid    = error $  "type error mismatch:FileEditRequest" ++ show invalid
-
---  parseJSON invalid    = error "type error mismatch:FileEditRequest"
-  -- parseJSON invalid    = typeMismatch "FileEditRequest" invalid
-
-instance ToJSON FileEditRequest where
-  toJSON FileEditRequest {..} = object
-                                [ defaultCsrfParamName .= token
-                                , "name"   .= name
-                                , "explanation" .= explanation
-                                , "code"   .= code
-                                ]
-
-data FileEditResponse = FileEditResponse
-                        { fileEditSuccess :: Bool
-                        , fileEditError   :: Maybe Text
-                        } deriving (Eq, Generic, Show)
-
-instance FromJSON FileEditResponse
-instance ToJSON   FileEditResponse
 
 
 
@@ -160,7 +124,7 @@ inquireSave st res = do
   json <- returnJson res
   inquire st (const $ return $ CCContentJson json)
 
-inquireSaveGoal :: CCState -> FileEditResponse -> CC CCP Handler CCState
+inquireSaveGoal :: CCState -> FileEditResponseJson -> CC CCP Handler CCState
 inquireSaveGoal st res = do
   lift $ $logInfo $ T.pack $ show "save goal:" ++ show res
   json <- returnJson res
@@ -328,44 +292,64 @@ getProgramEditNewR node = do
 
 postProgramEditorGoalEditorAjaxR :: CCNode -> DirectoryId -> FileId -> Handler Value
 postProgramEditorGoalEditorAjaxR node dir file = do
-  eval <- runEitherT $ trySaveGoal dir (Just file)
-  goalSave node eval
+  eval <- runEitherT $ tryEditGoal dir (Just file)
+  goalResponse node eval
 
 postProgramEditorGoalEditorNewGoalAjaxR :: CCNode -> DirectoryId -> Handler Value
 postProgramEditorGoalEditorNewGoalAjaxR node dir = do
-  eval <- runEitherT $ trySaveGoal dir Nothing
-  goalSave node eval
+  eval <- runEitherT $ tryEditGoal dir Nothing
+  goalResponse node eval
 
 
-goalSave :: CCNode -> Either DbfsError FileEditResponse -> Handler Value
-goalSave node eres = do
-  $logInfo $ T.pack $ show "goalSave"
+goalResponse :: CCNode -> Either DbfsError FileEditResponseJson -> Handler Value
+goalResponse node eres = do
+  $logInfo $ T.pack $ show "goalResponse"
 
   content <- case eres of
     Right res ->  do resume (CCState node (Just $ CCFormResult (FormSuccess (SaveGoal res))))
 
-    Left  err ->  do let res = FileEditResponse False (Just $ T.pack $ show err)
+    Left  err ->  do let res = FileEditResponseJson False (Just $ T.pack $ show err) "" "" ""
                      resume (CCState node (Just $ CCFormResult (FormSuccess (SaveGoal res))))
 
   case content of
-    CCContentHtml _ -> do let res = FileEditResponse False (Just $ T.pack $ show "Html was returned")
+    CCContentHtml _ -> do let res = FileEditResponseJson False (Just $ T.pack $ show "Html was returned")
+                                    "" "" ""
                           returnJson res
     CCContentJson val -> do   $logInfo $ T.pack $ show "goalSave"
                               return val
 
-trySaveGoal :: DirectoryId -> Maybe FileId -> EitherT DbfsError Handler FileEditResponse
-trySaveGoal dir mkey = do
+tryEditGoal :: DirectoryId -> Maybe FileId -> EitherT DbfsError Handler FileEditResponseJson
+tryEditGoal dir mkey = do
   lift $ $logInfo $ T.pack $ show "trySaveGoal"
   uid <- lift getUserAccountId
-  jsonVal@(FileEditRequest _ name expl code ) <- lift $ (requireJsonBody :: Handler FileEditRequest)
-  key' <- case mkey of
-    Just key -> return key
-    Nothing  -> EitherT $ runDB $ uid `touchAt` dir $ name
+  jsonVal@(FileEditRequestJson _ name expl code action  )
+                 <- lift $ (requireJsonBody :: Handler FileEditRequestJson)
+  case (action, mkey) of
+    ("save", Just key) -> do file <- EitherT $ runDB $ uid `readFile` key
+                             let file' = file { fileName        = name
+                                              , fileExplanation = expl
+                                              , fileCode        = code }
+                             EitherT $ runDB $ uid `writeFile` Entity key file'
 
-  file <- EitherT $ runDB $ uid `readFile` key'
-  let file' = file { fileName        = name
-                   , fileExplanation = expl
-                   , fileCode        = code }
-  EitherT $ runDB $ uid `writeFile` Entity key' file'
+                             return $ FileEditResponseJson True Nothing name expl code
 
-  return $ FileEditResponse True Nothing
+    ("saveNew", Nothing) -> do  key <- EitherT $ runDB $ uid `touchAt` dir $ name
+
+                                file <- EitherT $ runDB $ uid `readFile` key
+                                let file' = file { fileName        = name
+                                                 , fileExplanation = expl
+                                                 , fileCode        = code }
+                                EitherT $ runDB $ uid `writeFile` Entity key file'
+
+                                return $ FileEditResponseJson True Nothing name expl code
+
+    ("reload" , Just key) -> do  file <- EitherT $ runDB $ uid `readFile` key
+                                 return $ FileEditResponseJson True Nothing
+                                   (fileName file) (fileExplanation file) (fileCode file)
+
+    ("delete" , Just key) -> do EitherT $ runDB $ uid `rm` key
+                                return $ FileEditResponseJson True Nothing "" "" ""
+
+
+    (action , _) -> return $ FileEditResponseJson False
+                    (Just $ T.concat [ "unknown action:" , action ] ) "" "" ""
