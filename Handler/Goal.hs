@@ -1,6 +1,7 @@
 module Handler.Goal (
   getGoalR,
-  getGoalRunR
+  getGoalRunR,
+  runGoal
   ) where
 
 import             Import hiding (parseQuery,readFile, FileInfo)

@@ -6,8 +6,8 @@ module Handler.Program (
   getProgramEditNewR,
   postProgramSaveR,
   postProgramSaveNewR,
-  postProgramEditorGoalEditorAjaxR,
-  postProgramEditorGoalEditorNewGoalAjaxR
+  postProgramEditorGoalEditorR,
+  postProgramEditorGoalEditorNewGoalR
   ) where
 
 
@@ -25,6 +25,8 @@ import             Constructors
 import             Form
 import             Show
 import qualified   Data.Text as T
+import             Handler.Goal
+
 
 data Action = EditNew
             | Save DirectoryEditResponseJson
@@ -242,11 +244,10 @@ programSave node eres = do
 
 
 
-postProgramSaveNewR :: CCNode ->  Handler Value
-postProgramSaveNewR node = do
-  eres  <- runEitherT $ trySaveProgram Nothing
-  programSave node eres
-
+postProgramSaveNewR :: CCNode ->  Handler TypedContent
+postProgramSaveNewR node = selectRep $ do
+  provideRep $ do  eres  <- runEitherT $ trySaveProgram Nothing
+                   programSave node eres
 
 -- postProgramSaveR' :: CCNode -> DirectoryId -> Handler Value
 -- postProgramSaveR'  node key = do
@@ -290,15 +291,45 @@ getProgramEditNewR node = do
     CCContentHtml html -> return html
     _ -> error "Content type mismatch"
 
-postProgramEditorGoalEditorAjaxR :: CCNode -> DirectoryId -> FileId -> Handler Value
-postProgramEditorGoalEditorAjaxR node dir file = do
-  eval <- runEitherT $ tryEditGoal dir (Just file)
-  goalResponse node eval
+---------------------------- Goal Editor  ----------------------------
 
-postProgramEditorGoalEditorNewGoalAjaxR :: CCNode -> DirectoryId -> Handler Value
-postProgramEditorGoalEditorNewGoalAjaxR node dir = do
-  eval <- runEitherT $ tryEditGoal dir Nothing
-  goalResponse node eval
+postProgramEditorGoalEditorR :: CCNode -> DirectoryId -> FileId -> Handler TypedContent
+postProgramEditorGoalEditorR node dir file = selectRep $ do
+  provideRep $ do eval <- runEitherT $ tryEditGoal dir (Just file)
+                  goalResponse node eval
+
+  provideRep $ goalEditorRunGoal node dir
+
+postProgramEditorGoalEditorNewGoalR :: CCNode -> DirectoryId -> Handler TypedContent
+postProgramEditorGoalEditorNewGoalR node dir = selectRep $ do
+  provideRep $ do  eval <- runEitherT $ tryEditGoal dir Nothing
+                   goalResponse node eval
+
+  provideRep $ do goalEditorRunGoal node dir
+
+data GoalEditor = GoalEditor { geName :: Maybe Textarea
+                             , geExpl :: Maybe Textarea
+                             , geCode :: Textarea
+                             , geAction :: Text }
+
+goalEditorForm = GoalEditor
+                  <$> iopt textareaField "name"
+                  <*> iopt textareaField "explanation"
+                  <*> ireq textareaField "code"
+                  <*> ireq textField "action"
+
+goalEditorRunGoal :: CCNode -> DirectoryId -> Handler Html
+goalEditorRunGoal node dir = do
+  uid <- getUserAccountId
+  ge <- runInputPost goalEditorForm
+  edir <- runDB $ uid `readDirectory` dir
+  case edir of
+       Left  err ->  permissionDenied $ T.pack $ show err
+       Right dirContent -> do
+         let progCode = directoryCode dirContent
+             goalCode = unTextarea $ geCode ge
+             st = CCState node Nothing
+         runGoal st progCode goalCode
 
 
 goalResponse :: CCNode -> Either DbfsError FileEditResponseJson -> Handler Value
