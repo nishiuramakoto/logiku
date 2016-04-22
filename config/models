@@ -160,20 +160,27 @@ DirectoryEditResponseJson json
       error           Text Maybe
       deriving Show Eq
 
-FileEditRequestJson json
+FileEditResponseJson json
+      success         Bool
+      error           Text Maybe
+      name            Text
+      explanation     Text
+      code            Text
+      deriving Show Eq
+
+
+FileEditRequestJsonOld json
       name            Text
       explanation     Text
       code            Text
       action          Text
       deriving Show Eq
 
-FileEditResponseJson json
+
+FileEditResponseJsonOld json
       success         Bool
       error           Text Maybe
       deriving Show Eq
-
-
-
 
 ---------------------------- For testing  ----------------------------
 

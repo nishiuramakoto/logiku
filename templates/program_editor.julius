@@ -54,20 +54,65 @@ function removeJSONnameUnderscores(array) {
     });
 }
 
-function setupGoalSaveSuccessMessage(data) {
-    windows.alert(data);
+function setupGoalEditSuccess(data, form, requestData) {
+    switch (requestData.action) {
+    case 'save':
+        if (data.success) {
+            $('.editorNotification').text("Saved");
+        } else {
+            $('.editorNotification').text("Save Error:" + data.error);
+        }
+        break;
+
+    case 'saveNew':
+        if (data.success) {
+            $('.editorNotification').text("Saved");
+            location.reload();
+        } else {
+            $('.editorNotification').text("Save Error:" + data.error);
+        }
+        break;
+
+    case 'reload':
+        if (data.success) {
+            $('.editorNotification').text("Reload");
+            $(form).find('.goalNameEditor').val(data.name);
+            $(form).find('.goalExplanationEditor').val(data.explanation);
+            $(form).find('.goalCodeEditor').val(data.code);
+
+        } else {
+            $('.editorNotification').text("Reload Error:" + data.error);
+        }
+        break;
+
+    case 'delete':
+        if (data.success) {
+            $('.editorNotification').text("Delete");
+            $(form).parents('.goalItem').remove();
+        } else {
+            $('.editorNotification').text("Delete Error:" + data.error);
+        }
+    }
 }
 
 function setupGoalEditorAjax() {
 
     // AJAX Request
-    $('.goalEditorSave').click(function (event) {
+    $('.goalEditorButton').click(function (event) {
         event.preventDefault();
-        var form = $(event.target).parent();
 
-        var requestData = arrayToJSON(form.serializeArray());
+        var action = $(this).val();
+        var form = $(event.target).parent();
         var goalSaveUrl = form.attr('action');
-        window.alert(requestData);
+        var requestData = arrayToJSON(form.serializeArray());
+        requestData.action = action;
+
+        if (action == 'delete') {
+            var r = confirm('really delete?');
+            if ( r != true ) {
+                return;
+            }
+        }
 
         $.ajax({
             url: goalSaveUrl,
@@ -75,7 +120,7 @@ function setupGoalEditorAjax() {
             contentType: "application/json",
             data: JSON.stringify(requestData) ,
             //data: requestData ,
-            success: setupGoalSaveSuccessMessage ,
+            success: function(data) { setupGoalEditSuccess(data, form , requestData) ; } ,
             error: function (data) {
                 console.log("Error saving a goal: " + data);
             },

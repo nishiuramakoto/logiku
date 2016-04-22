@@ -431,10 +431,10 @@ postCreateGoalR = do
     Just val -> returnJson val
     Nothing  -> notFound
 
-maybeGoal :: MaybeT Handler FileEditResponseJson
+maybeGoal :: MaybeT Handler FileEditResponseJsonOld
 maybeGoal = do
-  FileEditRequestJson  goalName explanation code _
-                 <- lift (requireJsonBody :: Handler FileEditRequestJson)
+  FileEditRequestJsonOld  token goalName explanation code
+                 <- lift (requireJsonBody :: Handler FileEditRequestJsonOld)
 
   user     <- MaybeT $ lookupSession "userIdent"
   progName <- MaybeT $ lookupSession "programName"
@@ -448,19 +448,19 @@ maybeGoal = do
 
   gid <- MaybeT $ createGoal uid pid goalName explanation code
 
-  return (FileEditResponseJson True  Nothing)
+  return (FileEditResponseJsonOld True  Nothing)
 
 postDeleteGoalR :: Handler Value
 postDeleteGoalR = do
   mval <- runMaybeT maybeDeleteGoal
   case mval of
     Just val -> returnJson val
-    Nothing  -> returnJson (FileEditResponseJson False (Just "delete error"))
+    Nothing  -> returnJson (FileEditResponseJsonOld False (Just "delete error"))
 
 
-maybeDeleteGoal :: MaybeT Handler FileEditResponseJson
+maybeDeleteGoal :: MaybeT Handler FileEditResponseJsonOld
 maybeDeleteGoal = do
-  jsonVal@(FileEditRequestJson  goalName _ _ _) <- lift (requireJsonBody :: Handler FileEditRequestJson)
+  jsonVal@(FileEditRequestJsonOld  goalName _ _ _) <- lift (requireJsonBody :: Handler FileEditRequestJsonOld)
 
   user     <- MaybeT $ lookupSession sessionUserIdent
   progName <- MaybeT $ lookupSession sessionProgramName
@@ -475,7 +475,7 @@ maybeDeleteGoal = do
   gid <- MaybeT $ getGoalId uid pid goalName
 
   lift $ deleteGoal gid
-  return $ FileEditResponseJson True Nothing
+  return $ FileEditResponseJsonOld True Nothing
 
 
 getPrologGoalRunnerR :: Handler Html
