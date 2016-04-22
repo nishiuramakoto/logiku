@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
 
 module Handler.Program (
   getProgramR,
@@ -6,11 +6,13 @@ module Handler.Program (
   getProgramEditNewR,
   postProgramSaveR,
   postProgramSaveNewR,
-  postProgramEditorGoalEditorAjaxR
+  postProgramEditorGoalEditorAjaxR,
+  postProgramEditorGoalEditorNewGoalAjaxR
   ) where
 
 
-import             Import hiding (parseQuery,readFile, FileInfo)
+import             Import hiding (parseQuery,readFile, writeFile, FileInfo)
+import             GHC.Generics
 import             Control.Monad.Trans.Either
 import             Control.Monad.CC.CCCxe
 import             Data.Time.LocalTime
@@ -27,7 +29,7 @@ import qualified   Data.Text as T
 
 data Action = EditNew
             | Save DirectoryEditResponseJson
-            | SaveGoal FileEditResponseJson
+            | SaveGoal FileEditResponse
               deriving (Show,Eq,Typeable)
 
 data FileEditRequest = FileEditRequest
@@ -39,7 +41,7 @@ data FileEditRequest = FileEditRequest
 
 instance FromJSON FileEditRequest where
   parseJSON (Object v) = FileEditRequest <$>
-                         v .: "_token" <*>
+                         v .: defaultCsrfParamName <*>
                          v .: "name" <*>
                          v .: "explanation" <*>
                          v .: "code"
@@ -56,6 +58,15 @@ instance ToJSON FileEditRequest where
                                 , "explanation" .= explanation
                                 , "code"   .= code
                                 ]
+
+data FileEditResponse = FileEditResponse
+                        { fileEditSuccess :: Bool
+                        , fileEditError   :: Maybe Text
+                        } deriving (Eq, Generic, Show)
+
+instance FromJSON FileEditResponse
+instance ToJSON   FileEditResponse
+
 
 
 setErrorMessage :: Either DbfsError a  -> Handler ()
@@ -149,7 +160,7 @@ inquireSave st res = do
   json <- returnJson res
   inquire st (const $ return $ CCContentJson json)
 
-inquireSaveGoal :: CCState -> FileEditResponseJson -> CC CCP Handler CCState
+inquireSaveGoal :: CCState -> FileEditResponse -> CC CCP Handler CCState
 inquireSaveGoal st res = do
   lift $ $logInfo $ T.pack $ show "save goal:" ++ show res
   json <- returnJson res
@@ -157,12 +168,12 @@ inquireSaveGoal st res = do
 
 
 
-directoryUserDisplayName (Entity key dirData) = do
-  let diruid = directoryUserId dirData
-  mdiru <- get diruid
-  case mdiru of
-    Just diru -> return $ userAccountDisplayName diru
-    Nothing   -> return Nothing
+-- directoryUserDisplayName (Entity key dirData) = do
+--   let diruid = directoryUserId dirData
+--   mdiru <- get diruid
+--   case mdiru of
+--     Just diru -> return $ userAccountDisplayName diru
+--     Nothing   -> return Nothing
 
 
 emptyForm :: Html -> MForm Handler (FormResult () , Widget)
@@ -175,8 +186,8 @@ editWidget st uid (Just dir@(Entity key val)) node = do
   addScript $ StaticR css_ace_src_noconflict_ace_js
   -- addStylesheet $ StaticR css_bootstrap_css
 
-  minfo <- eitherToMaybe <$> (handlerToWidget $ runDB $ llDirectory uid key)
-  muserDisplayName <-  handlerToWidget $ runDB $ directoryUserDisplayName dir
+  einfo <- Just <$> (handlerToWidget $ runDB $ llDirectory uid key)
+  -- muserDisplayName <-  handlerToWidget $ runDB $ directoryUserDisplayName dir
 
   Just u     <- handlerToWidget $ runDB $ get uid
   tz         <- liftIO $ getCurrentTimeZone
@@ -196,6 +207,7 @@ editWidget st uid (Just dir@(Entity key val)) node = do
   let name = directoryName val
       expl = directoryExplanation val
       code = directoryCode val
+      mdir = Just key
   toWidget [julius|programSaveUrl='@{ProgramSaveR node key}'|]
   $(widgetFile "program_editor")
 
@@ -205,7 +217,7 @@ editWidget st uid Nothing node = do
   addScript $ StaticR js_autosize_js
   addScript $ StaticR css_ace_src_noconflict_ace_js
   -- addStylesheet $ StaticR css_bootstrap_css
-  let minfo = Nothing
+  let einfo = Nothing :: Maybe (Either DbfsError DirectoryInfo)
       muserDisplayName = Nothing :: Maybe Text
       fileData = [] ::  [(FileInfo, Either DbfsError File)]
 
@@ -217,6 +229,7 @@ editWidget st uid Nothing node = do
   let name = "" :: Text
       expl = "" :: Text
       code = "" :: Text
+      mdir = Nothing
   toWidget [julius|programSaveUrl='@{ProgramSaveNewR node}'|]
   $(widgetFile "program_editor")
 
@@ -313,26 +326,46 @@ getProgramEditNewR node = do
     CCContentHtml html -> return html
     _ -> error "Content type mismatch"
 
-postProgramEditorGoalEditorAjaxR :: CCNode -> FileId -> Handler Value
-postProgramEditorGoalEditorAjaxR node file = do
-  $logInfo $ T.pack $ "postProgramEditorGoalEditorAjaxR"
-  jsonVal@(FileEditRequest  token name explanation code )
-                <-  requireJsonBody :: Handler FileEditRequest
-  $logInfo $ T.pack $ "postProgramEditorGoalEditorAjaxR" ++ show jsonVal
-  goalSave node $ Right (FileEditResponseJson False (Just "not implemented"))
+postProgramEditorGoalEditorAjaxR :: CCNode -> DirectoryId -> FileId -> Handler Value
+postProgramEditorGoalEditorAjaxR node dir file = do
+  eval <- runEitherT $ trySaveGoal dir (Just file)
+  goalSave node eval
 
-goalSave :: CCNode -> Either DbfsError FileEditResponseJson -> Handler Value
+postProgramEditorGoalEditorNewGoalAjaxR :: CCNode -> DirectoryId -> Handler Value
+postProgramEditorGoalEditorNewGoalAjaxR node dir = do
+  eval <- runEitherT $ trySaveGoal dir Nothing
+  goalSave node eval
+
+
+goalSave :: CCNode -> Either DbfsError FileEditResponse -> Handler Value
 goalSave node eres = do
   $logInfo $ T.pack $ show "goalSave"
 
   content <- case eres of
     Right res ->  do resume (CCState node (Just $ CCFormResult (FormSuccess (SaveGoal res))))
 
-    Left  err ->  do let res = FileEditResponseJson False (Just $ T.pack $ show err)
+    Left  err ->  do let res = FileEditResponse False (Just $ T.pack $ show err)
                      resume (CCState node (Just $ CCFormResult (FormSuccess (SaveGoal res))))
 
   case content of
-    CCContentHtml _ -> do let res = FileEditResponseJson False (Just $ T.pack $ show "Html was returned")
+    CCContentHtml _ -> do let res = FileEditResponse False (Just $ T.pack $ show "Html was returned")
                           returnJson res
     CCContentJson val -> do   $logInfo $ T.pack $ show "goalSave"
                               return val
+
+trySaveGoal :: DirectoryId -> Maybe FileId -> EitherT DbfsError Handler FileEditResponse
+trySaveGoal dir mkey = do
+  lift $ $logInfo $ T.pack $ show "trySaveGoal"
+  uid <- lift getUserAccountId
+  jsonVal@(FileEditRequest _ name expl code ) <- lift $ (requireJsonBody :: Handler FileEditRequest)
+  key' <- case mkey of
+    Just key -> return key
+    Nothing  -> EitherT $ runDB $ uid `touchAt` dir $ name
+
+  file <- EitherT $ runDB $ uid `readFile` key'
+  let file' = file { fileName        = name
+                   , fileExplanation = expl
+                   , fileCode        = code }
+  EitherT $ runDB $ uid `writeFile` Entity key' file'
+
+  return $ FileEditResponse True Nothing

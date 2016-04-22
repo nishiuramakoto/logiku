@@ -20,7 +20,9 @@
                               #{fileInfoName info}
                             <div class="info">
                               <div class="main">
-                                #{showPermFile info} #{showTime tz $ fileInfoModified info}
+                                #{showPermFile info}
+                                #{fileUserDisplayName info}
+                                #{showTime tz $ fileInfoModified info}
                               $forall g <- fileInfoGroupPerms info
                                 <div class="group">
                                   #{showGroupPerm g}

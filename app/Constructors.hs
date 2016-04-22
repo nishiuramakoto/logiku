@@ -68,7 +68,7 @@ data DirectoryInfo   = DirectoryInfo
 data FileInfo        = FileInfo
                        { fileInfoFileId        :: FileId
                        , fileInfoUser          :: Maybe UserAccount
-                       , fildInfoDirectoryId   :: DirectoryId
+                       , fileInfoDirectoryId   :: DirectoryId
                        , fileInfoName          :: Text
                        , fileInfoCreated       :: UTCTime
                        , fileInfoModified      :: UTCTime
@@ -331,3 +331,18 @@ makeDirectoryTag = DirectoryTag
 
 makeFileTag :: FileId -> TagId ->  FileTag
 makeFileTag = FileTag
+
+
+directoryUserDisplayName :: DirectoryInfo -> Text
+directoryUserDisplayName dinfo = case directoryInfoUser dinfo of
+  Just user -> case userAccountDisplayName user of
+    Just dname -> dname
+    Nothing    -> "名無しさん"
+  Nothing   -> "退会されたユーザー"
+
+fileUserDisplayName :: FileInfo -> Text
+fileUserDisplayName finfo = case fileInfoUser finfo of
+  Just user -> case userAccountDisplayName user of
+    Just dname -> dname
+    Nothing    -> "名無しさん"
+  Nothing   -> "退会されたユーザー"

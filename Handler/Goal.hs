@@ -3,7 +3,7 @@ module Handler.Goal (
   getGoalRunR
   ) where
 
-import             Import hiding (parseQuery,readFile)
+import             Import hiding (parseQuery,readFile, FileInfo)
 import             CCGraph
 import             Control.Monad.Trans.Either
 import             DBFS
@@ -27,6 +27,7 @@ getGoalR = do
      Left err -> do
        setMessage $ toHtml $ T.pack $ show err
        return $ toHtml $ ("Error" :: T.Text)
+
 
 
 getGoalRunR :: FileId -> Handler Html

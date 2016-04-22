@@ -23,14 +23,7 @@
                                             <table class="lsTable">
                                                 <tr>
                                                     <td> #{showPermDirectory info}
-                                                    $maybe user <- directoryInfoUser info
-                                                       $maybe dname <- userAccountDisplayName user
-                                                          <td class="userName"> #{dname}
-                                                       $nothing
-                                                          <td class="userName"> 名無しさん
-                                                    $nothing
-                                                       <td class="userName"> 退会されたユーザー
-
+                                                    <td class="userName"> #{directoryUserDisplayName info}
                                                     <td> #{showTime tz $ directoryInfoModified info}
                                                 $forall g <- directoryInfoGroupPerms info
                                                    <tr class="group">

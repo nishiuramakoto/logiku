@@ -15,24 +15,17 @@
               <div class="programInfo">
                   <table class="ls">
                       <tr>
-                          $maybe info <- minfo
-                              <td> #{showPermDirectory info}
-                          $nothing
-                              <td>
-                          $maybe dname <- muserDisplayName
-                              <td class="userDisplayName"> #{dname}
-                          $nothing
-                              <td class="userDisplayName"> 名無しさん
-
-                          $maybe info <- minfo
-                              <td> #{showTime tz $ directoryInfoModified info}
-                          $nothing
-                          <td>
-
-                      $maybe info <- minfo
-                         <tr>
-                            $forall g <- directoryInfoGroupPerms info
-                                <td class="group"> #{showGroupPerm g}
+                          $case einfo
+                            $of Nothing
+                            $of Just (Left err)
+                                  <td> #{show err}
+                            $of Just (Right info)
+                                  <td> #{showPermDirectory info}
+                                  <td> #{directoryUserDisplayName info}
+                                  <td> #{showTime tz $ directoryInfoModified info}
+                                <tr>
+                                    $forall g <- directoryInfoGroupPerms info
+                                        <td class="group"> #{showGroupPerm g}
                   <table class="header">
                       <tr>
                           <td class="programName">
@@ -64,23 +57,39 @@
               <p class="checkButton smallButton">
                   <button class="programCheck"> 文法チェック
 
-        <ul>
+        $maybe dir <- mdir
+            <ul>
+                <form class=goalEditorForm method=POST
+                    action="@{ProgramEditorGoalEditorNewGoalAjaxR node dir}" >
+                    ^{goalEditorWidget}
+                    <p> 新しいゴール  <label> 名前  <label> 説明   <label> コード
+                    <textarea name="name"  class=goalNameEditor>
+                    <textarea name="explanation"  class=goalExplanationEditor>
+                    <textarea name="code"  class=goalCodeEditor>
+                    <button    class=goalEditorSave> Save
+                    <button    class=goalEditorDelete> Delete
+
                 $forall (finfo, efdata) <- fileData
                     <li class=goalItem>
-                        $if isLeft efdata
-                            #{either show show efdata}
-                        $else
-                          <form class=goalEditorForm method=POST
-                                action="@{ProgramEditorGoalEditorAjaxR node (fileInfoFileId finfo)}" >
-                              ^{goalEditorWidget}
-                              <textarea name="name"  class=goalNameEditor>
-                                  #{either (T.pack . show)  fileName  efdata}
-                              <textarea name="explanation"  class=goalExplanationEditor>
-                                  #{either (T.pack . show)  fileExplanation  efdata}
-                              <textarea name="code"  class=goalCodeEditor>
-                                  #{either (T.pack . show)  fileExplanation  efdata}
-                              <button    class=goalEditorSave> Save
-                              <button    class=goalEditorDelete> Delete
+                        $case efdata
+                            $of Left err
+                                <p> #{either show show efdata}
+                            $of Right fdata
+                                $with fid <- (fileInfoFileId finfo)
+                                  <form class=goalEditorForm method=POST
+                                        action="@{ProgramEditorGoalEditorAjaxR node dir fid }" >
+                                    ^{goalEditorWidget}
+                                    <p> #{showPermFile finfo} #
+                                      \ #{fileUserDisplayName finfo} #
+                                      \ #{showTime tz $ fileInfoModified finfo}
+                                    <textarea name="name"  class=goalNameEditor>
+                                        #{fileName  fdata}
+                                    <textarea name="explanation"  class=goalExplanationEditor>
+                                        #{fileExplanation  fdata}
+                                    <textarea name="code"  class=goalCodeEditor>
+                                        #{fileCode  fdata}
+                                    <button    class=goalEditorSave> Save
+                                    <button    class=goalEditorDelete> Delete
 
     <aside class="articleAside">
 
