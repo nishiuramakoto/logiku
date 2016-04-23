@@ -9,7 +9,7 @@ import             CCGraph
 import             Constructors
 import             Form
 import             Authentication
-
+import             Breadcrumb
 
 -- getHomeR :: Handler Html
 -- getHomeR = redirect BlogR
@@ -37,24 +37,6 @@ type Username = Text
 data BlogAction = Cancel | Submit | Preview | Logout | New
                 deriving (Eq,Show)
 
-
-------------------------------------------------------------------------------
-
-breadcrumbWidget' :: CCState -> Widget
-breadcrumbWidget' st@(CCState node _) = do
-  [whamlet|breadcrumb|]
-
-breadcrumbWidget :: CCState -> Widget
-breadcrumbWidget st@(CCState node _) = do
-  path' <- handlerToWidget $ spine node
-  uid   <- handlerToWidget $ getUserAccountId
-  let root = getRoot path'
-  $(widgetFile "breadcrumb")
-
-  where
-    getRoot :: [CCLEdge] -> CCNode
-    --getRoot ((root,_,_):_) = 0
-    getRoot _ = 0
 
 -----------------------------------------------------------------------------
 data UserForm = UserForm
