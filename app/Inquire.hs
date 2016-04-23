@@ -11,8 +11,26 @@ import Control.Monad.CC.CCCxe
 import Language.Prolog2.Syntax
 import Authentication
 
-
 import qualified Data.Text as T
+
+
+breadcrumbWidget :: CCState -> Widget
+breadcrumbWidget st@(CCState node _) = do
+  path' <- handlerToWidget $ spine node
+  uid   <- handlerToWidget $ getUserAccountId
+
+  case path' of
+    [] -> [whamlet||]
+    (root,_,_):_ ->
+      [whamlet| <nav class="breadcrumb">
+                   <a href="@{PrologExecuteTestContR root}">
+                      #{root}
+                   $forall (node',node,la) <- path'
+                       &gt;
+                       <a href="@{PrologExecuteTestContR node}">
+                           #{node}
+  |]
+
 
 
 data PrologInquireBoolForm = PrologInquireBoolForm Bool
@@ -27,7 +45,9 @@ prologInquireBoolForm t = renderDivs $ PrologInquireBoolForm
 prologInquireBoolWidget ::  CCState -> CCNode -> Widget -> Enctype -> Widget
 prologInquireBoolWidget st node formWidget _enctype = do
   uid <- handlerToWidget $ getUserAccountId
-  [whamlet| <form action=@{PrologExecuteTestContR node} method="GET">
+
+  [whamlet| ^{breadcrumbWidget st}
+            <form action=@{PrologExecuteTestContR node} method="GET">
               ^{formWidget}
               <button type="submit" value="Submit">Submit</button>
   |]

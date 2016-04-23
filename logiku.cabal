@@ -35,6 +35,7 @@ library
                      User
                      Prolog
                      Show
+                     Breadcrumb
                      Handler.Home
                      Handler.Goal
                      Handler.Program
