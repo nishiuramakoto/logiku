@@ -1,6 +1,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving  #-}
 module CCGraph (
+  CC(..),
   CCK,
   CCContentType(..),
   CCContentTypeM,
