@@ -1199,15 +1199,15 @@ llDirectory uid dir = do
   case is of
     [info] -> return $ Right info
     []     -> return $ Left  $ DirectoryDoesNotExist $ T.pack $ show dir
-    is     -> return $ Left  $ SchemaError $ T.pack $ show (uid,dir,is)
+    is'    -> return $ Left  $ SchemaError $ T.pack $ show (uid,dir,is')
 
   where
     getGroupPerms :: MonadIO m => DirectoryId -> SqlPersistT m [(Text,Perm)]
-    getGroupPerms dir = do
+    getGroupPerms dir' = do
       results <- select $
                  from $ \ (group' `InnerJoin` dirGroup) -> do
                    on     (dirGroup^.DirectoryGroupGroupId ==. group'^.GroupId)
-                   where_ (dirGroup^.DirectoryGroupDirectoryId  ==. val dir )
+                   where_ (dirGroup^.DirectoryGroupDirectoryId  ==. val dir' )
                    limit 100
                    return (group',dirGroup)
       return $ map (\(Entity _ group',Entity _ dirGroup) ->

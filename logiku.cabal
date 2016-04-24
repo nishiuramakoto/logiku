@@ -50,9 +50,11 @@ library
                      --
                      Inquire
                      Language.Prolog2
+                     Language.Prolog2.IO
                      Language.Prolog2.Database
                      Language.Prolog2.Parser
                      Language.Prolog2.Interpreter
+                     Language.Prolog2.InterpreterIO
                      Language.Prolog2.Syntax
 
                      Control.Monad.CC.CCCxe

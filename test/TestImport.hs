@@ -204,8 +204,9 @@ shouldReturnRightMatchingList m bs = do
 
 
 shouldBe :: (?loc :: CallStack , Eq a, Show a, MonadIO m)
-            => a -> a -> m()
+             => a -> a -> m ()
 shouldBe a b = liftIO $ a `H.shouldBe` b
+
 
 expectTrue :: (?loc :: CallStack) =>  String -> Bool -> Expectation
 expectTrue msg b = unless b (expectationFailure msg)
