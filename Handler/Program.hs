@@ -69,10 +69,10 @@ getProgramEditR :: DirectoryId -> Handler Html
 getProgramEditR dir = do
   st <- startState
   uid <- getUserAccountId
-  CCContentHtml html <- run $ editMain st uid (Just dir)
+  (Right (CCContentHtml html) , _) <- runWithBuiltins $ editMain st uid (Just dir)
   return html
 
-editMain :: CCState -> UserAccountId -> Maybe DirectoryId -> CC CCP Handler CCContentType
+editMain :: CCState -> UserAccountId -> Maybe DirectoryId -> CCPrologHandler CCContentType
 editMain st uid mdir = do
   result <- runEitherT $ do
     st'@(CCState _ mresult) <- case mdir of
@@ -86,47 +86,47 @@ editMain st uid mdir = do
       Just (CCFormResult result) -> do
         case (cast result) of
           Just (FormSuccess EditNew) -> do
-            lift $ lift $ $logInfo $ "edit new"
+            lift $ $logInfo $ "edit new"
             lift $ editMain st' uid Nothing
 
           Just (FormSuccess (Save editResult)) -> do
-            lift $ lift $ $logInfo $ T.pack $ show "save:" ++ show editResult
+            lift $ $logInfo $ T.pack $ show "save:" ++ show editResult
             st'' <- lift $ inquireSave st' editResult
             lift $ editMain st'' uid mdir
 
           Just (FormSuccess (SaveGoal editResult)) -> do
-            lift $ lift $ $logInfo $ T.pack $ show "save goal:" ++ show editResult
+            lift $ $logInfo $ T.pack $ show "save goal:" ++ show editResult
             st'' <- lift $ inquireSaveGoal st' editResult
             lift $ editMain st'' uid mdir
 
           Just (FormFailure errs) -> do
-            lift $ lift $ $logInfo $ T.pack $ show "form failure:" ++ show errs
+            lift $ $logInfo $ T.pack $ show "form failure:" ++ show errs
             lift $ lift $ setMessage $ toHtml $ T.pack $ show errs
             lift $ (CCContentHtml <$> editFinishHtml) >>= inquireFinish
 
           Nothing -> do
-            lift $ lift $ $logInfo $ T.pack $ show "no known response" ++ show result
+            lift $ $logInfo $ T.pack $ show "no known response" ++ show result
             lift $ (CCContentHtml <$> editFinishHtml) >>= inquireFinish
       Nothing -> do
-        lift $ lift $ $logInfo $ T.pack $ show "no known response:Nothing"
+        lift $ $logInfo $ T.pack $ show "no known response:Nothing"
         lift $ (CCContentHtml <$> editFinishHtml) >>= inquireFinish
 
   case result of
     Right content   -> return content
     Left  err -> do
-      lift $ $logInfo $ T.pack $ show st
+      $logInfo $ T.pack $ show st
       lift $ setMessage $ toHtml $ T.pack $ show err
       (CCContentHtml <$> editFinishHtml) >>= inquireFinish
 
 
 
-inquireSave :: CCState -> DirectoryEditResponseJson -> CC CCP Handler CCState
+inquireSave :: CCState -> DirectoryEditResponseJson -> CCPrologHandler CCState
 inquireSave st res = do
   lift $ $logInfo $ T.pack $ show "save:" ++ show res
   json <- returnJson res
   inquire st (const $ return $ CCContentJson json)
 
-inquireSaveGoal :: CCState -> FileEditResponseJson -> CC CCP Handler CCState
+inquireSaveGoal :: CCState -> FileEditResponseJson -> CCPrologHandler CCState
 inquireSaveGoal st res = do
   lift $ $logInfo $ T.pack $ show "save goal:" ++ show res
   json <- returnJson res
@@ -200,16 +200,16 @@ editWidget st uid Nothing node = do
   $(widgetFile "program_editor")
 
 editHtml :: CCState -> UserAccountId -> Maybe (Entity Directory) -> CCContentTypeM App
-editHtml st uid mdir node = do
-  CCContentHtml <$> (lift $ defaultLayout $ editWidget st uid mdir node)
+editHtml st uid mdir node = lift $ do
+  CCContentHtml <$> (defaultLayout $ editWidget st uid mdir node)
 
-inquireEdit :: CCState -> UserAccountId -> CCContentTypeM App -> CC CCP Handler CCState
+inquireEdit :: CCState -> UserAccountId -> CCContentTypeM App -> CCPrologHandler CCState
 inquireEdit st uid html = do
   st' <- inquire st html
   lift $ $logInfo $ T.pack $ "inquireEdit:" ++ show st'
   return st'
 
-editFinishHtml :: CC CCP Handler Html
+editFinishHtml :: CCPrologHandler Html
 editFinishHtml = lift $ redirect HomeR
 
 
@@ -229,11 +229,11 @@ programSave :: CCNode -> Either DbfsError DirectoryEditResponseJson -> Handler V
 programSave node eres = do
   $logInfo $ T.pack $ show "programSave"
 
-  content <- case eres of
+  (Right content, _) <- case eres of
     Right res ->  do resume (CCState node (Just $ CCFormResult (FormSuccess (Save res))))
 
     Left  err ->  do let res = DirectoryEditResponseJson False (Just $ T.pack $ show err)
-                     resume (CCState node (Just $ CCFormResult (FormSuccess (Save res))))
+                     resume (CCState  node (Just $ CCFormResult (FormSuccess (Save res))))
 
   case content of
     CCContentHtml _ -> do let res = DirectoryEditResponseJson False (Just $ T.pack $ show "Html was returned")
@@ -286,7 +286,7 @@ trySaveProgram mkey = do
 
 getProgramEditNewR :: CCNode -> Handler Html
 getProgramEditNewR node = do
-  content <- resume (CCState node (Just (CCFormResult (FormSuccess EditNew) )))
+  (Right content, _) <- resume (CCState node (Just (CCFormResult (FormSuccess EditNew) )))
   case content of
     CCContentHtml html -> return html
     _ -> error "Content type mismatch"
@@ -328,19 +328,19 @@ goalEditorRunGoal node dir = do
        Right dirContent -> do
          let progCode = directoryCode dirContent
              goalCode = unTextarea $ geCode ge
-             st = CCState node Nothing
-         runGoal st progCode goalCode
+
+         runGoal (CCState node Nothing) progCode goalCode
 
 
 goalResponse :: CCNode -> Either DbfsError FileEditResponseJson -> Handler Value
 goalResponse node eres = do
   $logInfo $ T.pack $ show "goalResponse"
 
-  content <- case eres of
-    Right res ->  do resume (CCState node (Just $ CCFormResult (FormSuccess (SaveGoal res))))
+  (Right content, _) <- case eres of
+    Right res ->  do resume  $ CCState node (Just $ CCFormResult (FormSuccess (SaveGoal res)))
 
     Left  err ->  do let res = FileEditResponseJson False (Just $ T.pack $ show err) "" "" ""
-                     resume (CCState node (Just $ CCFormResult (FormSuccess (SaveGoal res))))
+                     resume  $ CCState node (Just $ CCFormResult (FormSuccess (SaveGoal res)))
 
   case content of
     CCContentHtml _ -> do let res = FileEditResponseJson False (Just $ T.pack $ show "Html was returned")

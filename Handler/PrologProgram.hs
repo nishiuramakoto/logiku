@@ -111,26 +111,26 @@ getPrologProgramImplR ::  Handler Html
 getPrologProgramImplR  = do
   uid <-  getUserAccountId
   st  <- startState
-  CCContentHtml html <- run $ ccMain st uid
+  (Right (CCContentHtml html) , _)  <- runWithBuiltins $ ccMain st uid
   return html
 
 postPrologProgramContR  :: Int -> Handler Html
 postPrologProgramContR node = do
-  CCContentHtml html <- resume (CCState node Nothing)
+  (Right (CCContentHtml html), _)  <- resume (CCState node Nothing)
   return html
 
 postPrologProgramContSilentR :: Handler Html
 postPrologProgramContSilentR = do
   mklabel <- lookupPostParam "_klabel"
   case join $ fmap readInt mklabel of
-    Just node ->  do CCContentHtml html <- resume (CCState node Nothing)
+    Just node ->  do (Right (CCContentHtml html), _) <- resume (CCState node Nothing)
                      return html
     _         ->  invalidArgs ["_klabel is not specified"]
 
 
 getPrologProgramContR :: Int -> Handler Html
 getPrologProgramContR node = do
-  CCContentHtml html <- resume (CCState node Nothing)
+  (Right (CCContentHtml html), _) <- resume (CCState node Nothing)
   return html
 
 
@@ -203,7 +203,7 @@ directoryHtml st name expl code forceSave node = do
   CCContentHtml <$> (lift $ defaultLayout $ directoryWidget st node formWidget enctype forceSave)
 
 inquireDirectory ::  CCState -> ProgramName -> ProgramExplanation ->  ProgramCode -> Bool
-                        -> CC CCP Handler (CCState, Maybe DirectoryAction)
+                        -> CCPrologHandler (CCState, Maybe DirectoryAction)
 inquireDirectory st name expl code  forceSave = do
 
   inquirePostUntilButton st
@@ -246,7 +246,7 @@ fileEditorHtml  st userIdent name explanation code goals node = do
                   fileEditorWidget st node userIdent name explanation code goals  formWidget  enctype)
 
 inquireFileEditor :: CCState -> UserIdent -> ProgramName -> ProgramExplanation -> ProgramCode -> [File]
-                        -> CC CCP Handler (CCState, Maybe DirectoryAction)
+                        -> CCPrologHandler (CCState, Maybe DirectoryAction)
 inquireFileEditor st userIdent name explanation code goals  = do
   inquirePostButton st  (fileEditorHtml st userIdent name explanation code goals) (fileEditorForm)
     [ ("submit", Save), ("back", EditProgram) ]
@@ -261,12 +261,12 @@ dummyHtml :: CCState -> CCContentTypeM App
 dummyHtml st node = do
   (formWidget, enctype) <- lift $ generateCCFormPost $ dummyForm
   CCContentHtml <$> (lift $ defaultLayout $ dummyWidget st node formWidget enctype)
-inquireDummy :: CCState -> CC CCP Handler (CCState, Maybe Bool)
+inquireDummy :: CCState -> CCPrologHandler (CCState, Maybe Bool)
 inquireDummy st = do
   inquirePostButton st (dummyHtml st) dummyForm [ ("ok", True) ]
 
 ---------------- inquire response to the parse error  ----------------
-inquireParseError :: CCState -> ParseError -> ProgramName -> ProgramCode -> CC CCP Handler ()
+inquireParseError :: CCState -> ParseError -> ProgramName -> ProgramCode -> CCPrologHandler ()
 inquireParseError st err name code = do
    lift $ $(logInfo)  $ "parse error:" ++ (T.pack (show err))
 --   klabel <- generateCCLabel
@@ -276,20 +276,20 @@ inquireParseError st err name code = do
 
 -- ---------------- inquire response to the parse error  ----------------
 inquireParseSuccess :: CCState -> ProgramName -> ProgramCode
-                   -> CC CCP Handler ()
+                   -> CCPrologHandler ()
 inquireParseSuccess st name code = do
    lift $ $(logInfo)  "parse success"
    return ()
 
 ------------------------------  finish  ------------------------------
-directoryFinishHtml :: CC CCP Handler Html
+directoryFinishHtml :: CCPrologHandler Html
 directoryFinishHtml = lift $ redirect HomeR
 
 ------------------------  Application logic  ------------------------
 
 -- entityKey (Entity key _) = key
 
-ccMain :: CCState -> UserAccountId -> CC CCP Handler CCContentType
+ccMain :: CCState -> UserAccountId -> CCPrologHandler CCContentType
 ccMain st uid =  do
   -- lift $ do
   --   (widget, enctype) <- generateFormPost prologTestForm
@@ -302,7 +302,7 @@ ccMain st uid =  do
   loopBrowse st uid (fmap entityKey mentity) False
   (CCContentHtml <$> directoryFinishHtml) >>=  inquireFinish
 
-loopBrowse :: CCState -> UserAccountId -> Maybe DirectoryId -> Bool -> CC CCP Handler ()
+loopBrowse :: CCState -> UserAccountId -> Maybe DirectoryId -> Bool -> CCPrologHandler ()
 loopBrowse st uid Nothing forceSave = do
   ((CCState _ form), maybeAction) <- inquireDirectory st  "" (Textarea "") (Textarea "") forceSave
 
@@ -376,7 +376,7 @@ loopBrowse st uid (Just pid) forceSave = do
 
 
 
-loopGoals :: CCState -> UserAccountId ->  DirectoryId ->  CC CCP Handler ()
+loopGoals :: CCState -> UserAccountId ->  DirectoryId ->  CCPrologHandler ()
 loopGoals  st uid pid = do
   lift $ $(logInfo) "loopGoals"
   ment <- lift $ runDB $ get pid
@@ -392,7 +392,7 @@ loopGoals  st uid pid = do
           Nothing        -> do lift $ setMessage "Database is broken. Please report to the maintainer."
                                loopBrowse st  uid (Just pid) False
 
-loopGoals' :: CCState -> UserIdent ->  DirectoryId -> [Entity File] -> CC CCP Handler ()
+loopGoals' :: CCState -> UserIdent ->  DirectoryId -> [Entity File] -> CCPrologHandler ()
 loopGoals' st userIdent pid goals = do
   mprog <- lift $ runDB $ get pid
   case mprog of
@@ -498,7 +498,7 @@ getPrologGoalRunnerR = maybeNotFound $ do
 executeDirectory :: CCState -> Text -> Text -> Handler Html
 executeDirectory st progCode goalCode =
   case (programCheck  progCode , goalCheck goalCode) of
-  (Right clauses, Right terms)   -> do CCContentHtml html <- run $ prologExecuteCCMain st progCode goalCode
+  (Right clauses, Right terms)   -> do (Right (CCContentHtml html), _) <- runWithBuiltins $ prologExecuteCCMain st progCode goalCode
                                        return html
 
   (Left  err, _ ) ->  defaultLayout $ [whamlet|Parse error in the program #{show err}|]

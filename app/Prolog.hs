@@ -42,28 +42,27 @@ eitherNotFound body = do e <- runEitherT body
                                             notFound
 
 
-prologExecuteTestFinishHtml :: [[Term]] -> CC CCP Handler Html
+prologExecuteTestFinishHtml :: [[Term]] -> CCPrologHandler  Html
 prologExecuteTestFinishHtml unifiers =
   lift $ defaultLayout $ [whamlet| #{show unifiers}|]
 
-prologExecuteTestSyntaxErrorHtml :: ParseError -> CC CCP Handler Html
+prologExecuteTestSyntaxErrorHtml :: ParseError -> CCPrologHandler  Html
 prologExecuteTestSyntaxErrorHtml err =
   lift $ defaultLayout $ [whamlet| #{show err}|]
 
-prologExecuteTestRuntimeErrorHtml :: RuntimeError -> CC CCP Handler Html
+prologExecuteTestRuntimeErrorHtml :: RuntimeError -> CCPrologHandler  Html
 prologExecuteTestRuntimeErrorHtml err =
   lift $ defaultLayout $ [whamlet| #{show err}|]
 
 
 
-prologExecuteCcMain :: CCState -> Text -> Text -> CC CCP Handler CCContentType
+prologExecuteCcMain :: CCState -> Text -> Text -> CCPrologHandler  CCContentType
 prologExecuteCcMain st progCode goalCode = do
-   result <- evalPrologT $ runEitherT $ do
-        prog <- EitherT $ consultString (T.unpack progCode)
-        goal <- EitherT $ parseQuery (T.unpack goalCode)
-        lift $ resolveToTerms st prog goal
+  result <- runEitherT $ do
+    prog <- EitherT $ liftProlog $ consultString (T.unpack progCode)
+    goal <- EitherT $ liftProlog $ parseQuery (T.unpack goalCode)
+    lift $ resolveToTerms st prog goal
 
-   case result of
-    Left  err          ->  (CCContentHtml <$> prologExecuteTestRuntimeErrorHtml err) >>= inquireFinish
-    Right (Left err)   ->  (CCContentHtml <$> prologExecuteTestSyntaxErrorHtml err) >>= inquireFinish
-    Right (Right tss)  ->  (CCContentHtml <$> prologExecuteTestFinishHtml tss) >>= inquireFinish
+  case result of
+    (Left err)   ->  (CCContentHtml <$> prologExecuteTestSyntaxErrorHtml err) >>= inquireFinish
+    (Right tss)  ->  (CCContentHtml <$> prologExecuteTestFinishHtml tss) >>= inquireFinish

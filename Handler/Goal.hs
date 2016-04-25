@@ -47,8 +47,9 @@ getGoalRunR file = eitherNotFound $ do
 runGoal :: CCState -> Text -> Text -> Handler Html
 runGoal st progCode goalCode =
   case (programCheck  progCode , goalCheck goalCode) of
-  (Right clauses, Right terms)   -> do CCContentHtml html <- run $ prologExecuteCcMain st  progCode goalCode
-                                       return html
+  (Right clauses, Right terms)   -> do
+    (Right (CCContentHtml html), _) <- runWithBuiltins $ prologExecuteCcMain st  progCode goalCode
+    return html
 
   (Left  err, _ ) ->  defaultLayout $ [whamlet|Parse error in program code #{show err}|]
   (_ , Left  err) ->  defaultLayout $ [whamlet|Parse error in goal code  #{show err}|]
