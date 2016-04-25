@@ -26,6 +26,8 @@ import SideMenu
 import DBFS
 import Constructors
 import User
+import Language.Prolog2.Database
+import Language.Prolog2.Types
 
 --------------------------------------------------------------------------
 
@@ -43,6 +45,7 @@ data App = App
     , appUserStorage :: MVar (UserStorageMap App)
     , appMenuTree    :: MenuTree
     , appGuestId     :: MVar (Maybe UserAccountId)
+    , appBuiltinDatabase :: Database
     }
 
 -- | Check database availability. In heroku, A database may be unavailable for a maximum of 4hr/month.
@@ -277,6 +280,8 @@ instance YesodCC App where
       f' (Just (UserStorage gr root seq)) = do (gr',b) <- f gr
                                                return (Just (UserStorage gr' root seq),b)
 
+  getBuiltinDatabase =  appBuiltinDatabase <$> getYesod
+
 instance YesodUserStorage App where
   getUserStorage = appUserStorage
 
@@ -314,3 +319,15 @@ maybeUserDisplayName :: Handler (Maybe Text)
 maybeUserDisplayName = do
   uid <- getUserAccountId
   join <$> eitherToMaybe <$> (runDB $ getUserDisplayName uid)
+
+
+type CCPrologHandler a      = CCPrologT Handler a
+
+runWithBuiltins ::  Typeable a =>
+                    CCPrologHandler a ->  Handler (Either RuntimeError a , IntBindingState T)
+runWithBuiltins m = run m  =<< (appBuiltinDatabase <$> getYesod)
+
+startState :: Handler CCState
+startState = do db <- appBuiltinDatabase <$> getYesod
+                (root,_ ) <- insertCCRoot db
+                return   (CCState root Nothing)

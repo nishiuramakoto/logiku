@@ -3,15 +3,13 @@ module Breadcrumb (breadcrumbWidget) where
 import Import hiding(breadcrumb, Form)
 import CCGraph
 
-breadcrumbWidget' :: CCState -> Widget
-breadcrumbWidget' st@(CCState node _) = do
-  [whamlet|breadcrumb|]
 
 breadcrumbWidget :: CCState -> Widget
-breadcrumbWidget st@(CCState node _) = do
-  path' <- handlerToWidget $ spine node
+breadcrumbWidget st = do
+  path' <- handlerToWidget $ spine (ccsCurrentNode st)
   uid   <- handlerToWidget $ getUserAccountId
   let root = getRoot path'
+
   $(widgetFile "blog_breadcrumb")
 
   where

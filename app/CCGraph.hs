@@ -1,7 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving  #-}
 module CCGraph (
-  CC(..),
+  CCPrologT(..),
+  CCPrologHandlerT,
   CCK,
   CCContentType(..),
   CCContentTypeM,
@@ -37,10 +38,12 @@ module CCGraph (
   generateCCFormPost,
   rootPath,
   spine,
-  startState
   ) where
 
 import             Import.NoFoundation
+import             Control.Monad.Reader
+import             Control.Monad.State
+import             Data.Monoid
 import             Text.Blaze (Markup)
 import             Control.Monad.CC.CCCxe
 import qualified   Data.Text as T
@@ -50,28 +53,38 @@ import qualified   Data.Graph.Inductive.Graph as Graph
 import             Data.Graph.Inductive.PatriciaTree
 import             Data.Typeable
 import             Form
+import             Language.Prolog2.Types
+import qualified   Language.Prolog2.Database as DB
+import             Language.Prolog2.Database(Database)
 
--- data CCFormResult a  = CCFormResultPost (FormResult a)
---                      | CCFormResultGet  a
---                      deriving (Eq,Show,Typeable)
+type CCP                 = PP
+newtype CCPrologT m a    = CCPrologT { unCCPrologT :: CC CCP (PrologDatabaseT m) a }
+                           deriving ( Functor
+                                    , Applicative
+                                    , Monad
+                                    , MonadReader Database
+                                    , MonadState (IntBindingState T)
+                                    )
+
+type CCPrologHandlerT site a  = CCPrologT (HandlerT site IO) a
 
 data CCFormResult   = forall a. (Show a, Eq a, Typeable a) =>
                       CCFormResult (FormResult a)
 
-type CCP                 = PP
 type CCNode              = Graph.Node
 data CCContentType       = CCContentHtml Html | CCContentJson Value
 
-type CCContentTypeM site = CCNode -> CC CCP (HandlerT site IO) CCContentType
+type CCContentTypeM site = CCNode -> CCPrologHandlerT site CCContentType
 
 data CCState             = CCState { ccsCurrentNode :: CCNode
-                                   , ccsCurrentForm :: Maybe CCFormResult}
-                           deriving (Eq,Show,Typeable)
+                                   , ccsCurrentForm :: Maybe CCFormResult
+                                   }
 
-type CCK site w          = CCState -> CC CCP (HandlerT site IO) w
+type CCK site w          = CCState -> CCPrologHandlerT site w
 data CCNodeLabel site    = CCNodeLabel { ccTimestamp :: LocalTime
                                        , ccK         :: Maybe (CCK site CCContentType)
                                        , ccKArg      :: CCState
+                                       , ccDatabase  :: Database
                                        }
 data CCEdgeLabel         = CCEdgeLabel { ccResponse  :: Maybe CCFormResult }
                            deriving (Eq,Show,Typeable)
@@ -91,9 +104,41 @@ class Typeable site => YesodCC site where
   readCCGraph ::  HandlerT site IO (CCGraph site)
   modifyCCGraph :: (CCGraph site -> IO (CCGraph site, b) ) -> HandlerT site IO b
 
+  getBuiltinDatabase :: HandlerT site IO Database
+
+-- newtype CCPrologT m a    = CCPrologT { unCCPrologT :: CC CCP (PrologDatabaseT m) a }
+-- instance Monad m => Functor (CCPrologT m) where
+--   fmap f (CCPrologT m) = CCPrologT (fmap f m)
+
+-- instance Monad m => Applicative (CCPrologT m) where
+--   pure x = return x
+--   f <*> x = do { f' <- f; x' <- x ; return (f' x') }
+
+-- instance Monad m => Monad (CCPrologT m) where
+--   return x = CCPrologT (return x)
+--   (CCPrologT m) >>=  f =  CCPrologT (m >>= unCCPrologT . f)
+
+instance  MonadTrans CCPrologT where
+  lift = CCPrologT . lift . lift
+
+instance  MonadIO m => MonadIO (CCPrologT m) where
+  liftIO = lift . liftIO
+
+instance  MonadProlog CCPrologT where
+  liftProlog = CCPrologT . lift . liftProlog
+
+-- instance Monad m => MonadReader Database (CCPrologT m) where
+--   ask = CCPrologT ask
+--   local f m = CCPrologT (local f (unCCPrologT m))
+
+
+
 instance Show (CCNodeLabel site) where
-  show (CCNodeLabel time (Just _) res)  = show (time, "Just <cont>",res)
-  show (CCNodeLabel time (Nothing) res) = show (time, "Nothing", res)
+  show (CCNodeLabel time (Just _) res db)  = show (time, "Just <cont>",res, "<db>")
+  show (CCNodeLabel time (Nothing) res db) = show (time, "Nothing", res , "<db>")
+
+instance Show CCState where
+  show (CCState node form)  = "CCState " ++ show (node,form)
 
 
 deriving instance Typeable CCEdgeLabel
@@ -105,22 +150,30 @@ instance Eq CCFormResult where
 deriving instance Show     CCFormResult
 deriving instance Typeable CCFormResult
 
+instance MonadLogger m => MonadLogger (CC p m)
+instance MonadLogger m => MonadLogger (PrologDatabaseT m)
+instance MonadLogger m => MonadLogger (CCPrologT m)
 
 
 ---------------------- - Running continuations  ----------------------
 
-run ::  Typeable a => CC CCP (HandlerT site IO) a ->  HandlerT site IO a
-run f = do
+run ::  Typeable a =>
+        CCPrologHandlerT site a -> Database  ->  HandlerT site IO (Either RuntimeError a , IntBindingState T)
+run (CCPrologT m) db = do
   $(logInfo) $ T.pack $ "Running a new continuation"
 
-  runCC $ pushPrompt pp f
+  runPrologDatabaseT (runCC $ pushPrompt pp m) db
 
-resume ::  (YesodCC site) =>  CCState -> HandlerT site IO CCContentType
-resume st = do
-  $(logInfo) $ T.pack $ "resuming:" ++ show st
-  mk <- lookupCCK (ccsCurrentNode st)
-  case mk of
-    Just k  -> runCC $ k st
+resume ::  YesodCC site
+           =>  CCState
+           -> HandlerT site IO (Either RuntimeError CCContentType, IntBindingState T)
+resume st@(CCState node form) = do
+  $(logInfo) $ T.pack $ "resuming:" ++ show node
+  mlabel <- lookupCCNodeLabel node
+  case mlabel of
+    Just (CCNodeLabel _ (Just k) st' db) -> do
+      let st'' = st' { ccsCurrentForm = getLast $ Last (ccsCurrentForm st') `mappend` Last form }
+      runPrologDatabaseT (runCC $ unCCPrologT $ k st'') db
     Nothing -> do
       $(logInfo) "Continuation not found"
       setMessage $ toHtml $ T.pack  $ "Continuation has expired"
@@ -130,8 +183,9 @@ resume st = do
 -------------- Access to the global continuation store  --------------
 
 
-insertCCNode :: forall site. (YesodCC site) => CCK site CCContentType -> HandlerT site IO (CCLNode site)
-insertCCNode k = do
+insertCCNode :: forall site. (YesodCC site)
+                => CCK site CCContentType -> Database -> HandlerT site IO (CCLNode site)
+insertCCNode k db = do
   ZonedTime time _tz <- lift $ getZonedTime
   lnode <- modifyCCGraph $ f time
   $(logInfo) $ T.pack $ "insertCCNode: " ++ show lnode
@@ -139,20 +193,22 @@ insertCCNode k = do
     where
       f :: LocalTime -> CCGraph site -> IO (CCGraph site, CCLNode site)
       f time gr = do let [newNode] = newNodes 1 gr
-                         newLNode  = (newNode, CCNodeLabel time (Just k) (CCState newNode  Nothing))
+                         newLNode  = (newNode, CCNodeLabel time (Just k) (CCState newNode  Nothing) db)
                      return (insNode newLNode gr, newLNode)
 
-insertCCRoot :: forall site . YesodCC site  => HandlerT site IO (CCLNode site)
-insertCCRoot = do
+insertCCRoot :: forall site . YesodCC site  => Database -> HandlerT site IO (CCLNode site)
+insertCCRoot db = do
   ZonedTime time _tz <- lift $ getZonedTime
   lnode <- modifyCCGraph $ f time :: HandlerT site IO (CCLNode site)
   $(logInfo) $ T.pack $ "insertCCRoot: " ++ show lnode
+  db <- getBuiltinDatabase
   return lnode
     where
       f :: LocalTime -> CCGraph site -> IO (CCGraph site, CCLNode site)
       f time gr = do let [newNode] = newNodes 1 gr
                          newLNode  = (newNode, CCNodeLabel time (Nothing :: Maybe (CCK site CCContentType))
-                                               (CCState newNode Nothing))
+                                               (CCState newNode Nothing)
+                                               db)
                      return (insNode newLNode gr, newLNode)
 
 
@@ -189,8 +245,13 @@ lookupCCK :: (YesodCC site, Typeable site) => CCNode -> HandlerT site IO (Maybe 
 lookupCCK node = do
   gr <- readCCGraph
   case Graph.lab gr node of
-    Just (CCNodeLabel _ (Just cck) _) -> return (Just cck)
-    _                                 -> return Nothing
+    Just (CCNodeLabel _ (Just cck) _ _) -> return (Just cck)
+    _                                   -> return Nothing
+
+lookupCCNodeLabel :: (YesodCC site, Typeable site) => CCNode -> HandlerT site IO (Maybe (CCNodeLabel site))
+lookupCCNodeLabel node = do
+  gr <- readCCGraph
+  return $ Graph.lab gr node
 
 updateCCKArg :: (YesodCC site, Typeable site) => CCState -> HandlerT site IO (Maybe (CCNodeLabel site))
 updateCCKArg (CCState node marg) =
@@ -210,39 +271,40 @@ updateCCKArg (CCState node marg) =
 ---------------------- Continuation primitives  ----------------------
 sendk ::  (YesodCC site)
           => CCState -> CCContentTypeM site -> CCK site CCContentType
-          -> CC CCP (HandlerT site IO) CCContentType
+          -> CCPrologHandlerT site  CCContentType
 sendk (CCState node response) content k = do
-  lift $ $(logInfo) $ T.pack $ "sendk"
+  $(logInfo) $ T.pack $ "sendk"
 
-  (new, _) <- lift $ insertCCNode k
+  db <- ask
+  (new, _) <- lift $ insertCCNode k db
   lift $ insertCCLEdge (node, new, CCEdgeLabel response)
 
-  lift $ $(logInfo) $ T.pack $ "sendk:" ++ show node
+  $(logInfo) $ T.pack $ "sendk:" ++ show node
 
   x <- content new
   case cast x of
     Just x' -> return x'
     Nothing -> lift $ notFound
 
-inquire :: YesodCC site => CCState -> CCContentTypeM site -> CC CCP (HandlerT site IO) CCState
+inquire :: YesodCC site => CCState -> CCContentTypeM site -> CCPrologHandlerT site  CCState
 inquire st content = do
-  st' <- shiftP pp $ sendk st content
+  st' <- CCPrologT $ shiftP pp $ \k -> (unCCPrologT $ sendk st content (CCPrologT . k))
 
-  lift $ $(logInfo) $ T.pack $ "inquire:" ++ show st'
+  $(logInfo) $ T.pack $ "inquire:" ++ show st'
 
   lift $ updateCCKArg st'
   return st'
 
-inquireFinish ::  YesodCC site => CCContentType -> CC CCP (HandlerT site IO) CCContentType
+inquireFinish ::  YesodCC site => CCContentType -> CCPrologHandlerT site CCContentType
 inquireFinish  content = do
-  lift $ $logInfo $ T.pack $ "inquireFinish:"
-  abortP pp $ return content
+  $logInfo $ T.pack $ "inquireFinish:"
+  CCPrologT $ abortP pp $ return content
 
 inquireGet :: (YesodCC site , Eq a, Show a, Typeable a)
               => CCState
               -> CCContentTypeM site
               -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
-              -> CC CCP (HandlerT site IO) CCState
+              -> CCPrologHandlerT site CCState
 inquireGet st html form = do
   (CCState newNode _result)   <- inquire st html
   ((result, _widget), _enctype) <- lift $ runFormGet form
@@ -252,9 +314,9 @@ inquireGetUntil :: (YesodCC site, Eq a,Show a,Typeable a)
                    => CCState
                    -> CCContentTypeM site
                    -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
-                   -> CC CCP (HandlerT site IO) CCState
+                   -> CCPrologHandlerT site  CCState
 inquireGetUntil st html form = do
-  (CCState newNode _result) <- inquire st html
+  (CCState newNode _result ) <- inquire st html
   ((result, _widget), _enctype) <- lift $ runFormGet form
 
   case result of
@@ -267,7 +329,7 @@ inquirePost :: (YesodCC site,  RenderMessage site FormMessage
                => CCState
                -> CCContentTypeM site
                -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
-               -> CC CCP (HandlerT site IO) CCState
+               -> CCPrologHandlerT site CCState
 inquirePost st html form = do
   (CCState newNode _result) <- inquire st html
   ((result, _widget), _enctype) <- lift $ runFormPost form
@@ -278,15 +340,15 @@ inquirePostUntil :: (YesodCC site, RenderMessage site FormMessage
                     => CCState
                     -> CCContentTypeM site
                     -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
-                    -> CC CCP (HandlerT site IO) CCState
+                    -> CCPrologHandlerT site  CCState
 inquirePostUntil st html form = do
   (CCState newNode _result) <- inquire st  html
-  lift $ $(logInfo) $ T.pack $ "inquirePostUntil -> " ++ show newNode
+  $(logInfo) $ T.pack $ "inquirePostUntil -> " ++ show newNode
   ((result, _widget), _enctype) <- lift $ runFormPost form
 
   case result of
     FormSuccess _ -> return (CCState newNode (Just $ CCFormResult result))
-    _             -> inquirePostUntil (CCState newNode (Just $ CCFormResult result)) html form
+    _             -> inquirePostUntil (CCState newNode (Just $ CCFormResult result) ) html form
 
 
 runFormPostButtons :: (Show b) => [(Text,b)] -> (HandlerT site IO) (Maybe b)
@@ -304,7 +366,7 @@ inquirePostButton :: (YesodCC site, RenderMessage site FormMessage
                      -> CCContentTypeM site
                      -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
                      -> [(Text,b)]
-                     -> CC CCP (HandlerT site IO) (CCState, Maybe b)
+                     -> CCPrologHandlerT site (CCState, Maybe b)
 inquirePostButton st html form buttons = do
   st'  <- inquirePost st html form
   r    <- lift $ runFormPostButtons buttons
@@ -317,7 +379,7 @@ inquirePostUntilButton :: (YesodCC site,  RenderMessage site FormMessage
                           -> CCContentTypeM site
                           -> (Html -> MForm (HandlerT site IO) (FormResult a, t))
                           -> [(Text,b)]
-                          -> CC CCP (HandlerT site IO) (CCState, Maybe b)
+                          -> CCPrologHandlerT site  (CCState, Maybe b)
 inquirePostUntilButton st html form buttons = do
   st'  <- inquirePostUntil st html form
   r    <- lift $ runFormPostButtons buttons
@@ -392,7 +454,3 @@ spine node = do
   where
     tail (x:xs) = xs
     tail [] = []
-
-startState :: YesodCC site => HandlerT site IO CCState
-startState = do   (root,_) <- insertCCRoot
-                  return   (CCState root Nothing)

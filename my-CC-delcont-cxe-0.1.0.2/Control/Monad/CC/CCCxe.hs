@@ -1,5 +1,6 @@
 {-# LANGUAGE PatternGuards, KindSignatures #-}
 {-# LANGUAGE ExistentialQuantification, RankNTypes, ImpredicativeTypes #-}
+{-# LANGUAGE MultiParamTypeClasses, UndecidableInstances, FunctionalDependencies #-}
 
 -- | This file is the CPS version of <http://hackage.haskell.org/package/CC-delcont-exc>'s Control.Monad.CC.CCExc, implementing the identical
 -- interface
@@ -65,9 +66,9 @@ module Control.Monad.CC.CCCxe (
               as_prompt_type
               ) where
 import Prelude
--- import Control.Applicative
--- import Control.Monad
 import Control.Monad.Trans
+import Control.Monad.Reader
+import Control.Monad.State
 import Data.Typeable                    -- for prompts of the flavor PP, PD
 
 -- | Delimited-continuation monad transformer
@@ -94,14 +95,23 @@ type Prompt p m w =
 -- --------------------------------------------------------------------
 -- | CC monad: general monadic operations
 
-------------  Fixes for Functor-Applicative-Monad Proposal --------------
+------------  My additional instances ---------------------------------
 instance Monad m => Functor (CC p m) where
   fmap f x = do { v <- x ; return (f v) }
 
 instance Monad m => Applicative (CC p m) where
   pure x  = return x
   f <*> x = do { f' <- f; x' <- x ; return (f' x') }
------------------------------- End fix  ------------------------------
+
+instance (MonadReader r m) => MonadReader r (CC p m) where
+  ask = lift ask
+  local f m = CC $ \k err -> local f (unCC m k err)
+
+instance (MonadState s m) => MonadState s (CC p m) where
+  get = lift get
+  put = lift . put
+
+------------------------------ End my additions  ------------------------------
 
 instance Monad m => Monad (CC p m) where
     return x = CC $ \ki _kd -> ki x

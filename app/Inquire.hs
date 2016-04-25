@@ -15,8 +15,8 @@ import qualified Data.Text as T
 
 
 breadcrumbWidget :: CCState -> Widget
-breadcrumbWidget st@(CCState node _) = do
-  path' <- handlerToWidget $ spine node
+breadcrumbWidget st = do
+  path' <- handlerToWidget $ spine (ccsCurrentNode st)
   uid   <- handlerToWidget $ getUserAccountId
 
   case path' of
@@ -58,7 +58,7 @@ prologInquireBoolHtml st t node = do
   (formWidget, enctype) <- lift $ generateCCFormGet (prologInquireBoolForm t)
   CCContentHtml <$> (lift $ defaultLayout $ prologInquireBoolWidget st node formWidget enctype)
 
-inquirePrologBool :: CCState -> Term -> CC CCP Handler CCState
+inquirePrologBool :: CCState -> Term -> CCPrologHandler CCState
 inquirePrologBool  st t = do
   inquireGet st (prologInquireBoolHtml st t) (prologInquireBoolForm t)
 

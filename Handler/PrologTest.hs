@@ -10,9 +10,11 @@ module Handler.PrologTest (
   ) where
 
 import Import hiding(parseQuery,catch,Form)
-import Language.Prolog2(resolveToTerms,consultString,parseQuery,evalPrologT,RuntimeError)
+import Language.Prolog2(resolveToTerms,consultString,parseQuery,evalPrologT,RuntimeError, ParseError)
 import Language.Prolog2.Syntax
+import Language.Prolog2.Types
 
+import Control.Monad.Trans.Either
 import qualified Data.Text as T
 import CCGraph
 import Form
@@ -39,7 +41,7 @@ getPrologTestR = do
 
 executePrologProgram :: CCState -> Text -> Text -> Handler Html
 executePrologProgram st progCode goalCode = do
-  CCContentHtml html <- run $ prologExecuteCCMain st progCode goalCode
+  (Right (CCContentHtml html) , _) <- runWithBuiltins $ prologExecuteCCMain st progCode goalCode
   return html
 
   -- case (consultString (T.unpack progCode), parseQuery (T.unpack goalCode)) of
@@ -62,7 +64,7 @@ postPrologExecuteTestR = do
 
 getPrologExecuteTestContR :: CCNode -> Handler Html
 getPrologExecuteTestContR node = do
-  CCContentHtml html <- resume (CCState node Nothing)
+  (Right (CCContentHtml html), _) <- resume (CCState node Nothing)
   return html
 
 
@@ -70,30 +72,25 @@ categoryTree :: Widget
 categoryTree =  toWidget $(widgetFile "css-tree")
 
 
-prologExecuteTestFinishHtml :: [[Term]] -> CC CCP Handler Html
+prologExecuteTestFinishHtml :: [[Term]] -> CCPrologHandler Html
 prologExecuteTestFinishHtml unifiers =
   lift $ defaultLayout $ [whamlet| Finished with #{show unifiers}|]
 
-prologExecuteTestSyntaxErrorHtml :: String -> CC CCP Handler Html
+prologExecuteTestSyntaxErrorHtml :: ParseError -> CCPrologHandler Html
 prologExecuteTestSyntaxErrorHtml err =
   lift $ defaultLayout $ [whamlet| Syntax error: #{show err}|]
 
-prologExecuteTestRuntimeErrorHtml :: RuntimeError -> CC CCP Handler Html
+prologExecuteTestRuntimeErrorHtml :: RuntimeError -> CCPrologHandler Html
 prologExecuteTestRuntimeErrorHtml err =
   lift $ defaultLayout $ [whamlet| Runtime error: #{show err}|]
 
-prologExecuteCCMain :: CCState -> Text -> Text -> CC CCP Handler CCContentType
+prologExecuteCCMain :: CCState -> Text -> Text -> CCPrologHandler CCContentType
 prologExecuteCCMain st progCode goalCode = do
-   result <- evalPrologT $ do
-        eprog <- consultString (T.unpack progCode)
-        case eprog of
-          Left  err  -> return $ Left $ "syntax error in program:" ++ show err
-          Right prog -> do egoal <- parseQuery (T.unpack goalCode)
-                           case egoal of
-                             Left  err -> return $ Left $ "syntax error in query:" ++ show err
-                             Right goal -> do Right <$>  resolveToTerms st prog goal
+   result <- runEitherT $ do
+     prog <- EitherT $ liftProlog $ consultString (T.unpack progCode)
+     goal <- EitherT $ liftProlog $ parseQuery (T.unpack goalCode)
+     lift $ resolveToTerms st prog goal
 
    case result of
-    Left  err         ->  (CCContentHtml <$> prologExecuteTestRuntimeErrorHtml err) >>= inquireFinish
-    Right (Left err)  ->  (CCContentHtml <$> prologExecuteTestSyntaxErrorHtml err) >>= inquireFinish
-    Right (Right tss) ->  (CCContentHtml <$> prologExecuteTestFinishHtml tss) >>= inquireFinish
+     Left  err ->  (CCContentHtml <$> prologExecuteTestSyntaxErrorHtml err) >>= inquireFinish
+     Right tss ->  (CCContentHtml <$> prologExecuteTestFinishHtml tss) >>= inquireFinish
