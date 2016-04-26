@@ -52,6 +52,7 @@ library
                      Language.Prolog2
                      Language.Prolog2.IO
                      Language.Prolog2.Database
+                     Language.Prolog2.Builtins
                      Language.Prolog2.Types
                      Language.Prolog2.Parser
                      Language.Prolog2.InterpreterCommon

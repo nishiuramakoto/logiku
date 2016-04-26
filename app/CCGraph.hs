@@ -106,18 +106,6 @@ class Typeable site => YesodCC site where
 
   getBuiltinDatabase :: HandlerT site IO Database
 
--- newtype CCPrologT m a    = CCPrologT { unCCPrologT :: CC CCP (PrologDatabaseT m) a }
--- instance Monad m => Functor (CCPrologT m) where
---   fmap f (CCPrologT m) = CCPrologT (fmap f m)
-
--- instance Monad m => Applicative (CCPrologT m) where
---   pure x = return x
---   f <*> x = do { f' <- f; x' <- x ; return (f' x') }
-
--- instance Monad m => Monad (CCPrologT m) where
---   return x = CCPrologT (return x)
---   (CCPrologT m) >>=  f =  CCPrologT (m >>= unCCPrologT . f)
-
 instance  MonadTrans CCPrologT where
   lift = CCPrologT . lift . lift
 
@@ -126,12 +114,6 @@ instance  MonadIO m => MonadIO (CCPrologT m) where
 
 instance  MonadProlog CCPrologT where
   liftProlog = CCPrologT . lift . liftProlog
-
--- instance Monad m => MonadReader Database (CCPrologT m) where
---   ask = CCPrologT ask
---   local f m = CCPrologT (local f (unCCPrologT m))
-
-
 
 instance Show (CCNodeLabel site) where
   show (CCNodeLabel time (Just _) res db)  = show (time, "Just <cont>",res, "<db>")
@@ -174,8 +156,12 @@ resume st@(CCState node form) = do
     Just (CCNodeLabel _ (Just k) st' db) -> do
       let st'' = st' { ccsCurrentForm = getLast $ Last (ccsCurrentForm st') `mappend` Last form }
       runPrologDatabaseT (runCC $ unCCPrologT $ k st'') db
+    Just (CCNodeLabel _ Nothing st' db) -> do
+      $(logInfo) $ T.pack $ "Continuation not found:" ++ show node
+      setMessage $ toHtml $ T.pack  $ "Continuation has expired"
+      notFound
     Nothing -> do
-      $(logInfo) "Continuation not found"
+      $(logInfo) $ T.pack $ "Undefined node:" ++ show node
       setMessage $ toHtml $ T.pack  $ "Continuation has expired"
       notFound
 
