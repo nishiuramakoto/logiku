@@ -190,7 +190,8 @@ instance Yesod App where
     -- What messages should be logged. The following includes all messages when
     -- in development, and warnings and errors in production.
     shouldLog app _source level =
-        appShouldLogAll (appSettings app)
+      level /= LevelDebug
+--        appShouldLogAll (appSettings app)
             || level == LevelWarn
             || level == LevelError
 
@@ -325,7 +326,9 @@ type CCPrologHandler a      = CCPrologT Handler a
 
 runWithBuiltins ::  Typeable a =>
                     CCPrologHandler a ->  Handler (Either RuntimeError a , IntBindingState T)
-runWithBuiltins m = run m  =<< (appBuiltinDatabase <$> getYesod)
+runWithBuiltins m = do
+  $logInfo "runWithBuiltins"
+  run m  =<< (appBuiltinDatabase <$> getYesod)
 
 startState :: Handler CCState
 startState = do db <- appBuiltinDatabase <$> getYesod

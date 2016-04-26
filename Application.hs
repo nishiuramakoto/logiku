@@ -52,6 +52,7 @@ import CCGraph
 import User
 import SideMenu
 import DBFS
+import Language.Prolog2
 -- This line actually creates our YesodDispatch instance. It is the second half
 -- of the call to mkYesodData which occurs in Foundation.hs. Please see the
 -- comments there for more details.
@@ -63,7 +64,7 @@ mkYesodDispatch "App" resourcesApp
 -- migrations handled by Yesod.
 makeFoundation :: AppSettings -> IO App
 makeFoundation appSettings = do
-
+    putStrLn "makeFoundation"
     -- Some basic initializations: HTTP connection manager, logger, and static
     -- subsite.
     appHttpManager <- newManager
@@ -76,6 +77,8 @@ makeFoundation appSettings = do
     appUserStorage <- newUserStorage
     appGuestId     <- newMVar Nothing
     let appMenuTree = menuTree -- To be done later
+
+    Right appBuiltinDatabase <-  evalPrologT $ createBuiltinDatabase
 
     -- We need a log function to create a connection pool. We need a connection
     -- pool to create our foundation. And we need our foundation to get a
