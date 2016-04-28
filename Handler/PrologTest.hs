@@ -64,7 +64,7 @@ postPrologExecuteTestR = do
 
 getPrologExecuteTestContR :: CCNode -> Handler Html
 getPrologExecuteTestContR node = do
-  (a, binding) <- resume (CCState node Nothing)
+  (a, binding) <- resume =<< getFormMissingState node
   case a of
     Right (CCContentHtml html) -> return html
     Right (CCContentJson value) -> do

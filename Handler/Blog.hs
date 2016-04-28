@@ -24,12 +24,12 @@ getBlogR = do
 
 postBlogContR  :: UserAccountId -> CCNode -> Handler Html
 postBlogContR uid node = do
-  (Right (CCContentHtml html) , _) <- resume (CCState node Nothing)
+  (Right (CCContentHtml html) , _) <- resume =<< getFormMissingState node
   return html
 
 getBlogContR  :: UserAccountId -> CCNode -> Handler Html
 getBlogContR uid node = do
-  (Right (CCContentHtml html) , _) <- resume (CCState node Nothing)
+  (Right (CCContentHtml html) , _) <- resume =<< getFormMissingState node
   return html
 
 ------------------------------  Types --------------------------------
@@ -189,7 +189,7 @@ blog_main state =  do
   state' <- inquireBlogLogin state
 
   case ccsCurrentForm state' of
-    Just (CCFormResult a) ->
+    (CCFormResult a) ->
       case cast a of
       Just (FormSuccess user) -> do
         $(logInfo) "validateUser"
@@ -226,7 +226,7 @@ blog_main state =  do
     edit state' user  = do
       (state'', maybe_action) <- inquireBlogNew state' user
       case ccsCurrentForm state'' of
-        Just (CCFormResult res) ->
+        (CCFormResult res) ->
           case cast res of
           Just (FormSuccess (blog :: BlogForm)) -> do
             case maybe_action of
