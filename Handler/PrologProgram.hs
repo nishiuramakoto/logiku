@@ -116,21 +116,21 @@ getPrologProgramImplR  = do
 
 postPrologProgramContR  :: Int -> Handler Html
 postPrologProgramContR node = do
-  (Right (CCContentHtml html), _)  <- resume (CCState node Nothing)
+  (Right (CCContentHtml html), _)  <- resume =<< getFormMissingState node
   return html
 
 postPrologProgramContSilentR :: Handler Html
 postPrologProgramContSilentR = do
   mklabel <- lookupPostParam "_klabel"
   case join $ fmap readInt mklabel of
-    Just node ->  do (Right (CCContentHtml html), _) <- resume (CCState node Nothing)
+    Just node ->  do (Right (CCContentHtml html), _) <- resume =<< getFormMissingState node
                      return html
     _         ->  invalidArgs ["_klabel is not specified"]
 
 
 getPrologProgramContR :: Int -> Handler Html
 getPrologProgramContR node = do
-  (Right (CCContentHtml html), _) <- resume (CCState node Nothing)
+  (Right (CCContentHtml html), _) <- resume =<< getFormMissingState node
   return html
 
 
@@ -306,9 +306,9 @@ ccMain st uid =  do
 
 loopBrowse :: CCState -> UserAccountId -> Maybe DirectoryId -> Bool -> CCPrologHandler ()
 loopBrowse st uid Nothing forceSave = do
-  ((CCState _ form), maybeAction) <- inquireDirectory st  "" (Textarea "") (Textarea "") forceSave
+  (st', maybeAction) <- inquireDirectory st  "" (Textarea "") (Textarea "") forceSave
 
-  let Just (FormSuccess (DirectoryForm name (Textarea expl) (Textarea code))) = cast form
+  let Just (FormSuccess (DirectoryForm name (Textarea expl) (Textarea code))) = cast (ccsCurrentForm st')
 
   case maybeAction of
     Just Save -> do
@@ -342,9 +342,10 @@ loopBrowse st uid (Just pid) forceSave = do
           code = Import.directoryCode   currentProgram
       lift $ $(logInfo) $ T.pack $ show uid ++ show uid' ++ show name ++ show code ++ show forceSave
 
-      ((CCState _ form), maybeAction) <- inquireDirectory st name (Textarea expl) (Textarea code) forceSave
+      (st', maybeAction) <- inquireDirectory st name (Textarea expl) (Textarea code) forceSave
 
-      let Just (FormSuccess (DirectoryForm newName (Textarea newExplanation) (Textarea newCode))) = cast form
+      let Just (FormSuccess (DirectoryForm newName (Textarea newExplanation) (Textarea newCode))) =
+            cast (ccsCurrentForm st')
 
 
       if (not (elem maybeAction [Just Next, Just Prev, Just AddGoal]) &&  uid /= uid')
@@ -411,8 +412,8 @@ loopGoals' st userIdent pid goals = do
       lift $ setSession "userIdent"   userIdent
       lift $ setSession "programName" name
 
-      ((CCState _ form),_) <- inquireFileEditor st userIdent name  (Textarea expl) (Textarea code) (map entityToVal goals)
-      let Just resultForm = cast form :: Maybe (FormResult FileForm)
+      (st',_) <- inquireFileEditor st userIdent name  (Textarea expl) (Textarea code) (map entityToVal goals)
+      let Just resultForm = cast (ccsCurrentForm st') :: Maybe (FormResult FileForm)
 
 
       lift $ $(logInfo) "loopGoals'"

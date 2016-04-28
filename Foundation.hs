@@ -330,7 +330,13 @@ runWithBuiltins m = do
   $logInfo "runWithBuiltins"
   run m  =<< (appBuiltinDatabase <$> getYesod)
 
+type CCState = CCStateT App
 startState :: Text -> Handler CCState
 startState title = do db <- appBuiltinDatabase <$> getYesod
-                      (root,_ ) <- insertCCRoot title db
-                      return   (CCState root Nothing)
+                      mroute <- getCurrentRoute
+                      case mroute of
+                        Just route -> do
+                          (root, la) <- insertCCRoot title (CCFormResult (FormSuccess ())) route db
+                          return $ ccKArg la
+                        Nothing -> do
+                          notFound

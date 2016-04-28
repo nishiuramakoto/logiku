@@ -1,6 +1,6 @@
 <nav class="breadcrumb">
     <a href="@{BlogR}">
-        #{root}
+        ブログホーム
     $forall (node',node,la) <- path'
         &gt;
         <a href="@{BlogContR uid node}">

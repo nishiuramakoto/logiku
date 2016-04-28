@@ -75,15 +75,15 @@ getProgramEditR dir = do
 editMain :: CCState -> UserAccountId -> Maybe DirectoryId -> CCPrologHandler CCContentType
 editMain st uid mdir = do
   result <- runEitherT $ do
-    st'@(CCState _ mresult) <- case mdir of
+    st' <- case mdir of
       Just dir -> do
         dirData <- EitherT $ lift $ runDB $ readDirectory uid dir
         lift $ inquire st "プログラム編集" (editHtml st uid (Just $ Entity dir dirData))
       Nothing  -> do
         lift $ inquire st "新規プログラム" (editHtml st uid Nothing)
 
-    case mresult of
-      Just (CCFormResult result) -> do
+    case ccsCurrentForm st' of
+      (CCFormResult result) -> do
         case (cast result) of
           Just (FormSuccess EditNew) -> do
             lift $ $logInfo $ "edit new"
@@ -107,9 +107,6 @@ editMain st uid mdir = do
           Nothing -> do
             lift $ $logInfo $ T.pack $ show "no known response" ++ show result
             lift $ (CCContentHtml <$> editFinishHtml) >>= inquireFinish
-      Nothing -> do
-        lift $ $logInfo $ T.pack $ show "no known response:Nothing"
-        lift $ (CCContentHtml <$> editFinishHtml) >>= inquireFinish
 
   case result of
     Right content   -> return content
@@ -230,10 +227,10 @@ programSave node eres = do
   $logInfo $ T.pack $ show "programSave"
 
   (Right content, _) <- case eres of
-    Right res ->  do resume (CCState node (Just $ CCFormResult (FormSuccess (Save res))))
+    Right res ->  do resume =<< getFormSuccessState node (Save res)
 
     Left  err ->  do let res = DirectoryEditResponseJson False (Just $ T.pack $ show err)
-                     resume (CCState  node (Just $ CCFormResult (FormSuccess (Save res))))
+                     resume =<< getFormSuccessState node (Save res)
 
   case content of
     CCContentHtml _ -> do let res = DirectoryEditResponseJson False (Just $ T.pack $ show "Html was returned")
@@ -286,7 +283,7 @@ trySaveProgram mkey = do
 
 getProgramEditNewR :: CCNode -> Handler Html
 getProgramEditNewR node = do
-  (Right content, _) <- resume (CCState node (Just (CCFormResult (FormSuccess EditNew) )))
+  (Right content, _) <- resume =<< getFormSuccessState node EditNew
   case content of
     CCContentHtml html -> return html
     _ -> error "Content type mismatch"
@@ -329,7 +326,8 @@ goalEditorRunGoal node dir = do
          let progCode = directoryCode dirContent
              goalCode = unTextarea $ geCode ge
 
-         runGoal (CCState node Nothing) progCode goalCode
+         st <- getFormMissingState node
+         runGoal st progCode goalCode
 
 
 goalResponse :: CCNode -> Either DbfsError FileEditResponseJson -> Handler Value
@@ -337,10 +335,10 @@ goalResponse node eres = do
   $logInfo $ T.pack $ show "goalResponse"
 
   (Right content, _) <- case eres of
-    Right res ->  do resume  $ CCState node (Just $ CCFormResult (FormSuccess (SaveGoal res)))
+    Right res ->  do resume =<< getFormSuccessState node (SaveGoal res)
 
     Left  err ->  do let res = FileEditResponseJson False (Just $ T.pack $ show err) "" "" ""
-                     resume  $ CCState node (Just $ CCFormResult (FormSuccess (SaveGoal res)))
+                     resume =<< getFormSuccessState node (SaveGoal res)
 
   case content of
     CCContentHtml _ -> do let res = FileEditResponseJson False (Just $ T.pack $ show "Html was returned")

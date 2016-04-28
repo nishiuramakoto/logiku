@@ -1,3 +1,5 @@
+{-# LANGUAGE StandaloneDeriving  #-}
+{-# LANGUAGE UndecidableInstances  #-}
 module User
        ( UserStorage(..)
        , UserStorageMap
@@ -25,7 +27,8 @@ data UserStorage master = UserStorage { usCCGraph ::  CCGraph master
                                       , usCCRoot :: CCNode
                                       , usCCNodeQueue :: Seq.Seq (LocalTime,CCNode)
                                       }
-                          deriving Show
+
+deriving instance (Show (CCGraph master)) => Show (UserStorage master)
 
 type UserStorageMap master = Map (Maybe (AuthId master)) (UserStorage master)
 
