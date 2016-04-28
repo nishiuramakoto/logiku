@@ -35,6 +35,7 @@ library
                      User
                      Prolog
                      Show
+                     ShowText
                      Breadcrumb
                      Handler.Home
                      Handler.Goal

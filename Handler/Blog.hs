@@ -18,7 +18,7 @@ import             Breadcrumb
 
 getBlogR :: Handler Html
 getBlogR = do
-  st <- startState
+  st <- startState "ブログスタート"
   (Right (CCContentHtml html), _) <- runWithBuiltins $ blog_main st
   return html
 
@@ -62,7 +62,7 @@ blogLoginHtml st node = lift $ do
   (CCContentHtml <$> (defaultLayout $ blogLoginWidget st node widget enctype))
 
 inquireBlogLogin :: CCState -> CCPrologHandler CCState
-inquireBlogLogin st = inquirePostUntil st (blogLoginHtml st) blogLoginForm
+inquireBlogLogin st = inquirePostUntil st "ブログログイン" (blogLoginHtml st) blogLoginForm
 
 ---------------------------------------------------------------------------------
 blogLogoutWidget ::  CCState -> CCNode -> Username -> Widget
@@ -101,7 +101,7 @@ blogNewHtml st user node = lift $ do
 
 inquireBlogNew :: CCState -> UserForm -> CCPrologHandler (CCState, Maybe BlogAction)
 inquireBlogNew st user = do
-  inquirePostUntilButton  st (blogNewHtml st user) blogNewForm
+  inquirePostUntilButton  st "新しいブログ" (blogNewHtml st user) blogNewForm
     [ ("cancel", Cancel) , ("submit", Submit) , ("preview", Preview) ]
 
 ------------------------------------------------------------------------------------------
@@ -125,7 +125,7 @@ blogPreviewHtml st user blog_new_post node = lift $ do
 inquireBlogPreview :: CCState -> UserForm -> BlogForm
                       -> CCPrologHandler (CCState,  Maybe BlogAction)
 inquireBlogPreview st user blog_new_post = do
-  inquirePostUntilButton st (blogPreviewHtml st user blog_new_post) emptyForm
+  inquirePostUntilButton st "ブログプレビュー" (blogPreviewHtml st user blog_new_post) emptyForm
     [("cancel", Cancel),("submit", Submit)]
 
 -------------------------------------------------------------------------------------------
@@ -145,7 +145,7 @@ blogViewHtml  st user blog_data node = lift $ do
 inquireBlogView :: CCState -> UserForm -> Widget
                    -> CCPrologHandler (CCState, Maybe BlogAction)
 inquireBlogView st user blog_data = do
-  inquirePostUntilButton  st (blogViewHtml st user blog_data) emptyForm
+  inquirePostUntilButton  st "ブログビュー" (blogViewHtml st user blog_data) emptyForm
     [("logout", Logout), ("new", New) ]
 
 ------------------------  Database handling --------------------------

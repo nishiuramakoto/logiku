@@ -54,7 +54,7 @@ executePrologProgram st progCode goalCode = do
 postPrologExecuteTestR :: Handler Html
 postPrologExecuteTestR = do
   ((result, _widget), _enctype) <- runFormPost prologTestForm
-  st <- startState
+  st <- startState "プロログ実行スタート"
 
   case result of
     FormSuccess (PrologTestForm (Textarea program) (Textarea goal)) ->
@@ -64,9 +64,15 @@ postPrologExecuteTestR = do
 
 getPrologExecuteTestContR :: CCNode -> Handler Html
 getPrologExecuteTestContR node = do
-  (Right (CCContentHtml html), _) <- resume (CCState node Nothing)
-  return html
-
+  (a, binding) <- resume (CCState node Nothing)
+  case a of
+    Right (CCContentHtml html) -> return html
+    Right (CCContentJson value) -> do
+      $logInfo $ T.pack $ show value
+      notFound
+    Left err -> do
+      $logInfo $ T.pack $ show err
+      notFound
 
 categoryTree :: Widget
 categoryTree =  toWidget $(widgetFile "css-tree")

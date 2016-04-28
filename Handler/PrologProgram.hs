@@ -110,7 +110,7 @@ getPrologProgramR  = redirect PrologProgramImplR
 getPrologProgramImplR ::  Handler Html
 getPrologProgramImplR  = do
   uid <-  getUserAccountId
-  st  <- startState
+  st  <- startState "プロログプログラム編集スタート"
   (Right (CCContentHtml html) , _)  <- runWithBuiltins $ ccMain st uid
   return html
 
@@ -206,7 +206,7 @@ inquireDirectory ::  CCState -> ProgramName -> ProgramExplanation ->  ProgramCod
                         -> CCPrologHandler (CCState, Maybe DirectoryAction)
 inquireDirectory st name expl code  forceSave = do
 
-  inquirePostUntilButton st
+  inquirePostUntilButton st "プログラム編集ボタン"
     (directoryHtml st name expl code forceSave)
     (directoryForm name expl code)
     [ ("save", Save)
@@ -248,7 +248,9 @@ fileEditorHtml  st userIdent name explanation code goals node = do
 inquireFileEditor :: CCState -> UserIdent -> ProgramName -> ProgramExplanation -> ProgramCode -> [File]
                         -> CCPrologHandler (CCState, Maybe DirectoryAction)
 inquireFileEditor st userIdent name explanation code goals  = do
-  inquirePostButton st  (fileEditorHtml st userIdent name explanation code goals) (fileEditorForm)
+  inquirePostButton st "ゴール編集"
+    (fileEditorHtml st userIdent name explanation code goals)
+    (fileEditorForm)
     [ ("submit", Save), ("back", EditProgram) ]
 
 ----------------------------  Dummy page  ----------------------------
@@ -263,7 +265,7 @@ dummyHtml st node = do
   CCContentHtml <$> (lift $ defaultLayout $ dummyWidget st node formWidget enctype)
 inquireDummy :: CCState -> CCPrologHandler (CCState, Maybe Bool)
 inquireDummy st = do
-  inquirePostButton st (dummyHtml st) dummyForm [ ("ok", True) ]
+  inquirePostButton st "ダミー" (dummyHtml st) dummyForm [ ("ok", True) ]
 
 ---------------- inquire response to the parse error  ----------------
 inquireParseError :: CCState -> ParseError -> ProgramName -> ProgramCode -> CCPrologHandler ()
@@ -491,7 +493,7 @@ getPrologGoalRunnerR = maybeNotFound $ do
   progCode <- MaybeT $ getProgramCode  pid
   goalCode <- MaybeT $ getGoalCode gid
 
-  st <- lift startState
+  st <- lift $ startState "ゴール実行スタート"
   lift $ executeDirectory st progCode goalCode
   -- lift $ defaultLayout $ [whamlet|#{show (progCode,goalCode)}|]
 
