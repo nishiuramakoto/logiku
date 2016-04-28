@@ -362,6 +362,7 @@ inquireGet :: (YesodCC site, RenderRoute site, Show (Route site) , Eq a, Show a,
 inquireGet st title html form = do
   st'   <- inquire st title html
   ((result, _widget), _enctype) <- lift $ runFormGet form
+  $logInfo $ T.pack $ "inquireGet:" ++ show result
   return $ st' { ccsCurrentForm = CCFormResult result }
 
 inquireGetUntil :: (YesodCC site, RenderRoute site, Show (Route site), Eq a,Show a,Typeable a)
@@ -373,6 +374,7 @@ inquireGetUntil :: (YesodCC site, RenderRoute site, Show (Route site), Eq a,Show
 inquireGetUntil st title html form = do
   st' <- inquire st title html
   ((result, _widget), _enctype) <- lift $ runFormGet form
+  $logInfo $ T.pack $ "inquireGetUntil:" ++ show result
 
   let st'' = st' { ccsCurrentForm = CCFormResult result }
   case result of

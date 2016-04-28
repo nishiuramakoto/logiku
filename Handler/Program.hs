@@ -106,7 +106,8 @@ editMain st uid mdir = do
 
           Nothing -> do
             lift $ $logInfo $ T.pack $ show "no known response" ++ show result
-            lift $ (CCContentHtml <$> editFinishHtml) >>= inquireFinish
+            lift $ editMain st' uid mdir
+            --lift $ (CCContentHtml <$> editFinishHtml) >>= inquireFinish
 
   case result of
     Right content   -> return content
@@ -317,6 +318,7 @@ goalEditorForm = GoalEditor
 
 goalEditorRunGoal :: CCNode -> DirectoryId -> Handler Html
 goalEditorRunGoal node dir = do
+  $logInfo "goalEditorRunGoal"
   uid <- getUserAccountId
   ge <- runInputPost goalEditorForm
   edir <- runDB $ uid `readDirectory` dir
@@ -326,7 +328,8 @@ goalEditorRunGoal node dir = do
          let progCode = directoryCode dirContent
              goalCode = unTextarea $ geCode ge
 
-         st <- getFormMissingState node
+         -- st <- getFormMissingState node
+         st <- startState "ゴールスタート"
          runGoal st progCode goalCode
 
 
