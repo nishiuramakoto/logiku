@@ -67,7 +67,7 @@ getProgramR = do
 
 getProgramEditR :: DirectoryId -> Handler Html
 getProgramEditR dir = do
-  st <- startState
+  st <- startState "プログラム編集スタート"
   uid <- getUserAccountId
   (Right (CCContentHtml html) , _) <- runWithBuiltins $ editMain st uid (Just dir)
   return html
@@ -78,9 +78,9 @@ editMain st uid mdir = do
     st'@(CCState _ mresult) <- case mdir of
       Just dir -> do
         dirData <- EitherT $ lift $ runDB $ readDirectory uid dir
-        lift $ inquire st (editHtml st uid (Just $ Entity dir dirData))
+        lift $ inquire st "プログラム編集" (editHtml st uid (Just $ Entity dir dirData))
       Nothing  -> do
-        lift $ inquire st (editHtml st uid Nothing)
+        lift $ inquire st "新規プログラム" (editHtml st uid Nothing)
 
     case mresult of
       Just (CCFormResult result) -> do
@@ -124,13 +124,13 @@ inquireSave :: CCState -> DirectoryEditResponseJson -> CCPrologHandler CCState
 inquireSave st res = do
   lift $ $logInfo $ T.pack $ show "save:" ++ show res
   json <- returnJson res
-  inquire st (const $ return $ CCContentJson json)
+  inquire st "セーブ" (const $ return $ CCContentJson json)
 
 inquireSaveGoal :: CCState -> FileEditResponseJson -> CCPrologHandler CCState
 inquireSaveGoal st res = do
   lift $ $logInfo $ T.pack $ show "save goal:" ++ show res
   json <- returnJson res
-  inquire st (const $ return $ CCContentJson json)
+  inquire st "セーブゴール" (const $ return $ CCContentJson json)
 
 
 
@@ -205,7 +205,7 @@ editHtml st uid mdir node = lift $ do
 
 inquireEdit :: CCState -> UserAccountId -> CCContentTypeM App -> CCPrologHandler CCState
 inquireEdit st uid html = do
-  st' <- inquire st html
+  st' <- inquire st "編集" html
   lift $ $logInfo $ T.pack $ "inquireEdit:" ++ show st'
   return st'
 

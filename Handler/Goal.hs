@@ -40,7 +40,7 @@ getGoalRunR file = eitherNotFound $ do
   let progCode = directoryCode dirData
       goalCode = fileCode  fileData
 
-  st <- lift startState
+  st <- lift $ startState "ゴールスタート"
   lift $ runGoal st progCode goalCode
   -- lift $ defaultLayout $ [whamlet|#{show (progCode,goalCode)}|]
 

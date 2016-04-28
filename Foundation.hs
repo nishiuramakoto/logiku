@@ -330,7 +330,7 @@ runWithBuiltins m = do
   $logInfo "runWithBuiltins"
   run m  =<< (appBuiltinDatabase <$> getYesod)
 
-startState :: Handler CCState
-startState = do db <- appBuiltinDatabase <$> getYesod
-                (root,_ ) <- insertCCRoot db
-                return   (CCState root Nothing)
+startState :: Text -> Handler CCState
+startState title = do db <- appBuiltinDatabase <$> getYesod
+                      (root,_ ) <- insertCCRoot title db
+                      return   (CCState root Nothing)

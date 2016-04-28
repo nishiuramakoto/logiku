@@ -79,7 +79,7 @@ spec = withApp $ do
     let i = 250
         i' = 2
     putTime
-    forM [1..i] $ \_ -> do
+    forM [1..i'] $ \_ -> do
       login
       logout
       login

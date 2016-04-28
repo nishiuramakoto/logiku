@@ -7,6 +7,7 @@ module Inquire (
 import Import hiding(Form)
 import CCGraph
 import Form
+import ShowText
 import Control.Monad.CC.CCCxe
 import Language.Prolog2.Syntax
 import Authentication
@@ -17,18 +18,22 @@ import qualified Data.Text as T
 breadcrumbWidget :: CCState -> Widget
 breadcrumbWidget st = do
   path' <- handlerToWidget $ spine (ccsCurrentNode st)
-  uid   <- handlerToWidget $ getUserAccountId
+  let nodes = map snd' path'
+      snd' (a,b,c) = b
+  titles <- handlerToWidget $ mapM lookupCCNodeTitle nodes
 
   case path' of
     [] -> [whamlet||]
     (root,_,_):_ ->
       [whamlet| <nav class="breadcrumb">
-                   <a href="@{PrologExecuteTestContR root}">
-                      #{root}
-                   $forall (node',node,la) <- path'
+                   $forall (node,mtitle) <- zip nodes titles
                        &gt;
-                       <a href="@{PrologExecuteTestContR node}">
-                           #{node}
+                       $maybe title <- mtitle
+                          <a href="@{PrologExecuteTestContR node}">
+                             #{show node}:#{title}
+                       $nothing
+                          <a href="@{PrologExecuteTestContR node}">
+                             #{show node}
   |]
 
 
@@ -60,7 +65,8 @@ prologInquireBoolHtml st t node = do
 
 inquirePrologBool :: CCState -> Term -> CCPrologHandler CCState
 inquirePrologBool  st t = do
-  inquireGet st (prologInquireBoolHtml st t) (prologInquireBoolForm t)
+  let title = T.pack $ showU t
+  inquireGetUntil st title (prologInquireBoolHtml st t) (prologInquireBoolForm t)
 
 
 showU :: Term -> String
