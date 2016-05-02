@@ -56,12 +56,12 @@ prologExecuteTestRuntimeErrorHtml err =
 
 
 
-prologExecuteCcMain :: CCState -> Text -> Text -> CCPrologHandler  CCContentType
-prologExecuteCcMain st progCode goalCode = do
+prologExecuteCcMain :: CCState -> ModuleName -> Text -> Text -> CCPrologHandler  CCContentType
+prologExecuteCcMain st mod progCode goalCode = do
   result <- runEitherT $ do
     prog <- EitherT $ liftProlog $ consultString (T.unpack progCode)
     goal <- EitherT $ liftProlog $ parseQuery (T.unpack goalCode)
-    lift $ resolveToTerms st prog goal
+    lift $ resolveToTerms st mod prog goal
 
   case result of
     (Left err)   ->  (CCContentHtml <$> prologExecuteTestSyntaxErrorHtml err) >>= inquireFinish

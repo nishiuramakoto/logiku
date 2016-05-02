@@ -220,6 +220,7 @@ getEditData _ = Nothing
 
 postProgramSaveR :: CCNode -> DirectoryId ->  Handler Value
 postProgramSaveR node dir = do
+  $logInfo "postProgramSaveR"
   eres  <- runEitherT $ trySaveProgram (Just dir)
   programSave node eres
 
@@ -270,7 +271,7 @@ trySaveProgram mkey = do
                  , directoryCode        = code }
   EitherT $ runDB $ uid `writeDirectory` Entity key' dir'
 
-  return $ DirectoryEditResponseJson True Nothing
+  return $  DirectoryEditResponseJson True Nothing
 
 
 -- runEitherTSetMessage :: Show err => EitherT err (CC CCP Handler) Html -> CC CCP Handler ()
@@ -327,10 +328,10 @@ goalEditorRunGoal node dir = do
        Right dirContent -> do
          let progCode = directoryCode dirContent
              goalCode = unTextarea $ geCode ge
-
+             mod      = directoryName dirContent
          -- st <- getFormMissingState node
          st <- startState "ゴールスタート"
-         runGoal st progCode goalCode
+         runGoal st mod progCode goalCode
 
 
 goalResponse :: CCNode -> Either DbfsError FileEditResponseJson -> Handler Value

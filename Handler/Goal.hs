@@ -13,6 +13,7 @@ import             Data.Time.LocalTime
 import             Constructors
 import             Show
 import qualified   Data.Text as T
+import             Language.Prolog2
 
 getGoalR :: Handler Html
 getGoalR = do
@@ -39,16 +40,17 @@ getGoalRunR file = eitherNotFound $ do
   dirData  <- EitherT $ runDB $ uid `readDirectory` dir
   let progCode = directoryCode dirData
       goalCode = fileCode  fileData
+      progName = directoryName dirData
 
   st <- lift $ startState "ゴールスタート"
-  lift $ runGoal st progCode goalCode
+  lift $ runGoal  st progName progCode goalCode
   -- lift $ defaultLayout $ [whamlet|#{show (progCode,goalCode)}|]
 
-runGoal :: CCState -> Text -> Text -> Handler Html
-runGoal st progCode goalCode =
+runGoal :: CCState -> ModuleName -> Text -> Text -> Handler Html
+runGoal st mod progCode goalCode =
   case (programCheck  progCode , goalCheck goalCode) of
   (Right clauses, Right terms)   -> do
-    (Right (CCContentHtml html), _) <- runWithBuiltins $ prologExecuteCcMain st  progCode goalCode
+    (Right (CCContentHtml html), _) <- runWithBuiltins $ prologExecuteCcMain st mod progCode goalCode
     return html
 
   (Left  err, _ ) ->  defaultLayout $ [whamlet|Parse error in program code #{show err}|]

@@ -45,7 +45,7 @@ data App = App
     , appUserStorage :: MVar (UserStorageMap App)
     , appMenuTree    :: MenuTree
     , appGuestId     :: MVar (Maybe UserAccountId)
-    , appBuiltinDatabase :: Database
+    , appBuiltinDatabase :: CCDatabase App
     }
 
 -- | Check database availability. In heroku, A database may be unavailable for a maximum of 4hr/month.
@@ -322,7 +322,7 @@ maybeUserDisplayName = do
   join <$> eitherToMaybe <$> (runDB $ getUserDisplayName uid)
 
 
-type CCPrologHandler a      = CCPrologT Handler a
+type CCPrologHandler a      = CCPrologT App Handler a
 
 runWithBuiltins ::  Typeable a =>
                     CCPrologHandler a ->  Handler (Either RuntimeError a , IntBindingState T)
