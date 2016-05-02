@@ -17,6 +17,7 @@ module CCGraph (
   CCLEdge,
   CCGraph,
   CCStateT, ccsCurrentNode, ccsCurrentForm, ccsCurrentRoute,
+  CCDatabase,
   YesodCC(..),
   Graph.empty,
   run,
@@ -66,15 +67,20 @@ import qualified   Language.Prolog2.Database as DB
 import             Language.Prolog2.Database(Database)
 
 type CCP                 = PP
-newtype CCPrologT m a    = CCPrologT { unCCPrologT :: CC CCP (PrologDatabaseT m) a }
-                           deriving ( Functor
-                                    , Applicative
-                                    , Monad
-                                    , MonadReader Database
-                                    , MonadState (IntBindingState T)
-                                    )
 
-type CCPrologHandlerT site a  = CCPrologT (HandlerT site IO) a
+
+newtype CCPrologT site m a    =
+  CCPrologT { unCCPrologT :: CC CCP (PrologDatabaseT (CCStateT site) (CCPrologT site m) m) a }
+  deriving ( Functor
+           , Applicative
+           , Monad
+           , MonadReader (Database (CCStateT site) (CCPrologT site m))
+           , MonadState (IntBindingState T)
+           )
+
+
+
+type CCPrologHandlerT site a  = CCPrologT site (HandlerT site IO) a
 
 data CCFormResult   = forall a. (Show a, Eq a, Typeable a) =>
                       CCFormResult (FormResult a)
@@ -89,13 +95,15 @@ data CCStateT site        = CCStateT { ccsCurrentNode :: CCNode
                                    , ccsCurrentRoute :: Route site
                                    }
 
+type CCDatabase site     = Database (CCStateT site) (CCPrologT site (HandlerT site IO))
 type CCK site w          = CCStateT site -> CCPrologHandlerT site w
-data CCNodeLabel site    = CCNodeLabel { ccTimestamp :: LocalTime
-                                       , ccK         :: Maybe (CCK site CCContentType)
-                                       , ccKArg      :: CCStateT site
-                                       , ccDatabase  :: Database
-                                       , ccNodeTitle :: Text
-                                       }
+data CCNodeLabel site    =
+  CCNodeLabel { ccTimestamp :: LocalTime
+              , ccK         :: Maybe (CCK site CCContentType)
+              , ccKArg      :: CCStateT site
+              , ccDatabase  :: CCDatabase site
+              , ccNodeTitle :: Text
+              }
 data CCEdgeLabel site    = CCEdgeLabel { ccRoute     :: Route site
                                        , ccResponse  :: CCFormResult }
                            deriving ( Typeable)
@@ -118,16 +126,19 @@ class Typeable site => YesodCC site where
   readCCGraph ::  HandlerT site IO (CCGraph site)
   modifyCCGraph :: (CCGraph site -> IO (CCGraph site, b) ) -> HandlerT site IO b
 
-  getBuiltinDatabase :: HandlerT site IO Database
+  getBuiltinDatabase :: HandlerT site IO (CCDatabase site)
 
-instance  MonadTrans CCPrologT where
+instance  MonadTrans (CCPrologT site) where
   lift = CCPrologT . lift . lift
 
-instance  MonadIO m => MonadIO (CCPrologT m) where
+instance  MonadIO m => MonadIO (CCPrologT site m) where
   liftIO = lift . liftIO
 
-instance  MonadProlog CCPrologT where
+instance  MonadProlog (CCPrologT site) where
   liftProlog = CCPrologT . lift . liftProlog
+
+instance (Monad m)  => MonadPrologDatabase (CCPrologT site) (CCStateT site) (CCPrologT site m) m  where
+  liftPrologDatabase = CCPrologT . lift
 
 instance (RenderRoute site, Show (Route site)) => Show (CCNodeLabel site) where
   show (CCNodeLabel time (Just _) res db title)  = show (title, time, "Just <cont>",res, "<db>")
@@ -159,8 +170,8 @@ deriving instance Show     CCFormResult
 deriving instance Typeable CCFormResult
 
 instance MonadLogger m => MonadLogger (CC p m)
-instance MonadLogger m => MonadLogger (PrologDatabaseT m)
-instance MonadLogger m => MonadLogger (CCPrologT m)
+instance MonadLogger m => MonadLogger (PrologDatabaseT site n m)
+instance MonadLogger m => MonadLogger (CCPrologT site m)
 
 updateState :: CCStateT site -> CCStateT site -> CCStateT site
 updateState (CCStateT node form route) (CCStateT node' form' route')
@@ -174,7 +185,8 @@ updateState (CCStateT node form route) (CCStateT node' form' route')
 ---------------------- - Running continuations  ----------------------
 
 run ::  Typeable a =>
-        CCPrologHandlerT site a -> Database  ->  HandlerT site IO (Either RuntimeError a , IntBindingState T)
+        CCPrologHandlerT site a -> CCDatabase site
+        ->  HandlerT site IO (Either RuntimeError a , IntBindingState T)
 run (CCPrologT m) db = do
   $(logInfo) $ T.pack $ "Running a new continuation"
 
@@ -204,7 +216,7 @@ resume st@(CCStateT node form route) = do
 
 
 insertCCNode :: forall site. (YesodCC site, RenderRoute site, Show (Route site))
-                => CCK site CCContentType -> Text -> CCFormResult -> Route site -> Database
+                => CCK site CCContentType -> Text -> CCFormResult -> Route site -> CCDatabase site
                 -> HandlerT site IO (CCLNode site)
 insertCCNode k title form route db = do
   ZonedTime time _tz <- lift $ getZonedTime
@@ -219,7 +231,7 @@ insertCCNode k title form route db = do
         return (insNode newLNode gr, newLNode)
 
 insertCCRoot :: forall site . (YesodCC site, RenderRoute site, Show (Route site))
-                => Text ->  CCFormResult -> Route site -> Database
+                => Text ->  CCFormResult -> Route site -> CCDatabase site
                 -> HandlerT site IO (CCLNode site)
 insertCCRoot title form route db = do
   ZonedTime time _tz <- lift $ getZonedTime

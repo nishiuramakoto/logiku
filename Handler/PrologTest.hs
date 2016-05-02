@@ -39,9 +39,9 @@ getPrologTestR = do
   (widget, enctype) <- generateFormPost prologTestForm
   defaultLayout $ prologTestWidget widget enctype
 
-executePrologProgram :: CCState -> Text -> Text -> Handler Html
-executePrologProgram st progCode goalCode = do
-  (Right (CCContentHtml html) , _) <- runWithBuiltins $ prologExecuteCCMain st progCode goalCode
+executePrologProgram :: CCState -> ModuleName -> Text -> Text -> Handler Html
+executePrologProgram st mod progCode goalCode = do
+  (Right (CCContentHtml html) , _) <- runWithBuiltins $ prologExecuteCCMain st mod progCode goalCode
   return html
 
   -- case (consultString (T.unpack progCode), parseQuery (T.unpack goalCode)) of
@@ -56,9 +56,10 @@ postPrologExecuteTestR = do
   ((result, _widget), _enctype) <- runFormPost prologTestForm
   st <- startState "プロログ実行スタート"
 
+  let mod = "main"
   case result of
     FormSuccess (PrologTestForm (Textarea program) (Textarea goal)) ->
-      executePrologProgram st program goal
+      executePrologProgram st mod program goal
     FormMissing     -> defaultLayout $ [whamlet| Form Missing|]
     FormFailure err -> defaultLayout $ [whamlet| Form failure   #{show err}|]
 
@@ -90,12 +91,12 @@ prologExecuteTestRuntimeErrorHtml :: RuntimeError -> CCPrologHandler Html
 prologExecuteTestRuntimeErrorHtml err =
   lift $ defaultLayout $ [whamlet| Runtime error: #{show err}|]
 
-prologExecuteCCMain :: CCState -> Text -> Text -> CCPrologHandler CCContentType
-prologExecuteCCMain st progCode goalCode = do
+prologExecuteCCMain :: CCState -> ModuleName -> Text -> Text -> CCPrologHandler CCContentType
+prologExecuteCCMain st mod progCode goalCode = do
    result <- runEitherT $ do
      prog <- EitherT $ liftProlog $ consultString (T.unpack progCode)
      goal <- EitherT $ liftProlog $ parseQuery (T.unpack goalCode)
-     lift $ resolveToTerms st prog goal
+     lift $ resolveToTerms st mod prog goal
 
    case result of
      Left  err ->  (CCContentHtml <$> prologExecuteTestSyntaxErrorHtml err) >>= inquireFinish

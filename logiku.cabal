@@ -60,6 +60,8 @@ library
                      Language.Prolog2.Interpreter
                      Language.Prolog2.InterpreterIO
                      Language.Prolog2.Syntax
+                     Language.Prolog2.NamedGraph
+                     Text.Parsec.PrologExpr
 
                      Control.Monad.CC.CCCxe
                      Control.Monad.State.UnificationExtras

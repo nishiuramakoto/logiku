@@ -1,3 +1,4 @@
+%% -*- mode: prolog; -*-
 :- use_module(rouki_common).
 :- use_module(rouki_4).
 

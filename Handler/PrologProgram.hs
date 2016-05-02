@@ -495,14 +495,15 @@ getPrologGoalRunnerR = maybeNotFound $ do
   goalCode <- MaybeT $ getGoalCode gid
 
   st <- lift $ startState "ゴール実行スタート"
-  lift $ executeDirectory st progCode goalCode
+  lift $ executeDirectory st progName progCode goalCode
   -- lift $ defaultLayout $ [whamlet|#{show (progCode,goalCode)}|]
 
-executeDirectory :: CCState -> Text -> Text -> Handler Html
-executeDirectory st progCode goalCode =
+executeDirectory :: CCState -> ModuleName -> Text -> Text -> Handler Html
+executeDirectory st mod progCode goalCode =
   case (programCheck  progCode , goalCheck goalCode) of
-  (Right clauses, Right terms)   -> do (Right (CCContentHtml html), _) <- runWithBuiltins $ prologExecuteCCMain st progCode goalCode
-                                       return html
+  (Right clauses, Right terms)   -> do
+    (Right (CCContentHtml html), _) <- runWithBuiltins $ prologExecuteCCMain st mod progCode goalCode
+    return html
 
   (Left  err, _ ) ->  defaultLayout $ [whamlet|Parse error in the program #{show err}|]
   (_ , Left  err) ->  defaultLayout $ [whamlet|Parse error in the goals   #{show err}|]
