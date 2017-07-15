@@ -10,7 +10,9 @@ module Handler.PrologTest (
   ) where
 
 import Import hiding(parseQuery,catch,Form)
-import Language.Prolog2(resolveToTerms,consultString,parseQuery,evalPrologT,RuntimeError, ParseError)
+import Language.Prolog2( resolveToTerms, consult, consultTextDbfs, parseQuery,evalPrologT
+                       , RuntimeError, ParseError
+                       , ParserState(..) , createSysDB)
 import Language.Prolog2.Syntax
 import Language.Prolog2.Types
 
@@ -40,8 +42,8 @@ getPrologTestR = do
   defaultLayout $ prologTestWidget widget enctype
 
 executePrologProgram :: CCState -> ModuleName -> Text -> Text -> Handler Html
-executePrologProgram st mod progCode goalCode = do
-  (Right (CCContentHtml html) , _) <- runWithBuiltins $ prologExecuteCCMain st mod progCode goalCode
+executePrologProgram st mod  progCode goalCode = do
+  (Right (CCContentHtml html) , _) <- runWithBuiltins $ prologExecuteCCMain st mod progCode  goalCode
   return html
 
   -- case (consultString (T.unpack progCode), parseQuery (T.unpack goalCode)) of
@@ -93,11 +95,14 @@ prologExecuteTestRuntimeErrorHtml err =
 
 prologExecuteCCMain :: CCState -> ModuleName -> Text -> Text -> CCPrologHandler CCContentType
 prologExecuteCCMain st mod progCode goalCode = do
-   result <- runEitherT $ do
-     prog <- EitherT $ liftProlog $ consultString (T.unpack progCode)
-     goal <- EitherT $ liftProlog $ parseQuery (T.unpack goalCode)
-     lift $ resolveToTerms st mod prog goal
+  uid   <- liftProlog $ lift $ getUserAccountId
 
-   case result of
+  result <- runEitherT $ do
+     parserState    <- EitherT  $ liftProlog $ consultTextDbfs  uid mod progCode
+     goal           <- EitherT  $ liftProlog $ parseQuery       goalCode
+     sysdb          <- lift     $ createSysDB
+     lift $ (resolveToTerms st mod goal (database parserState) sysdb :: CCPrologHandler [[Term]])
+
+  case result of
      Left  err ->  (CCContentHtml <$> prologExecuteTestSyntaxErrorHtml err) >>= inquireFinish
      Right tss ->  (CCContentHtml <$> prologExecuteTestFinishHtml tss) >>= inquireFinish

@@ -53,13 +53,18 @@ library
                      Language.Prolog2
                      Language.Prolog2.IO
                      Language.Prolog2.Database
+                     Language.Prolog2.SystemDatabase
                      Language.Prolog2.Builtins
                      Language.Prolog2.Types
+                     Language.Prolog2.Syntax
+                     Language.Prolog2.Token
                      Language.Prolog2.Parser
+                     Language.Prolog2.ParserIO
+
                      Language.Prolog2.InterpreterCommon
                      Language.Prolog2.Interpreter
                      Language.Prolog2.InterpreterIO
-                     Language.Prolog2.Syntax
+
                      Language.Prolog2.NamedGraph
                      Text.Parsec.PrologExpr
 

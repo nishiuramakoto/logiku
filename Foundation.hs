@@ -45,7 +45,7 @@ data App = App
     , appUserStorage :: MVar (UserStorageMap App)
     , appMenuTree    :: MenuTree
     , appGuestId     :: MVar (Maybe UserAccountId)
-    , appBuiltinDatabase :: CCDatabase App
+    , appBuiltinDatabase :: Database
     }
 
 -- | Check database availability. In heroku, A database may be unavailable for a maximum of 4hr/month.
