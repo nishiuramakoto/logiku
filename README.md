@@ -65,3 +65,7 @@ versions of Linux kernels circa. 2.6.32 or so, which
 unfortunately leads to a quadratic behavior for a fork-based
 continuation systems, I am still optimistic that this is
 still a doable project withing a reasonable amount of time.
+
+## License
+
+GPL3
