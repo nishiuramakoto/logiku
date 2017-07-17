@@ -133,7 +133,7 @@ instance  MonadIO m => MonadIO (CCPrologT site m) where
 instance  Monad m => MonadProlog (CCPrologT site m) where
   liftProlog = CCPrologT . lift . liftProlog
 
-instance  Monad m => MonadPrologDatabase (CCPrologT site m) where
+instance (Monad m)  => MonadPrologDatabase (CCPrologT site) m  where
   liftPrologDatabase = CCPrologT . lift
 
 instance (RenderRoute site, Show (Route site)) => Show (CCNodeLabel site) where

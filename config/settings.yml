@@ -32,8 +32,6 @@ database:
 #  database: "_env:PGDATABASE:logiku_test"
   poolsize: "_env:PGPOOLSIZE:10"
 
-
-# This is not nesessary under Japanese law
 copyright: ""
 
 #analytics: UA-YOURCODE

@@ -100,7 +100,7 @@ prologExecuteCCMain st mod progCode goalCode = do
   result <- runEitherT $ do
      parserState    <- EitherT  $ liftProlog $ consultTextDbfs  uid mod progCode
      goal           <- EitherT  $ liftProlog $ parseQuery       goalCode
-     sysdb          <- lift     $ createSysDB
+     sysdb          <- lift     $ liftProlog $ createSysDB
      lift $ (resolveToTerms st mod goal (database parserState) sysdb :: CCPrologHandler [[Term]])
 
   case result of

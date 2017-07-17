@@ -15,9 +15,9 @@ password_test_gpg= test/password-test.gpg
 encrypted_bundles= $(bundle).gpg $(subbundle).gpg
 
 #apg -a 1 -M sncl -m 14 -x 14
+password=$(shell cat ~/private/aws-gpg-password.txt)
 
-#password="nK\"]q4wA!lx;y:"
-password="2OXOZp&<ld?~-G"
+all : run
 
 backup : challenge-password  cp-to-s3
 
