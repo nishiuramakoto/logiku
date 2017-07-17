@@ -1,7 +1,16 @@
 name:              logiku
 version:           0.0.0
-cabal-version:     >= 1.8
+synopsis:          Prolog interpreter on a continuation monad with web interface
+homepage:          http://github.com/nishiuramakoto/logiku
+license:           GPL-3
+license-file:      LICENSE
+author:            Makoto Nishiura
+maintainer:        nishiuramakoto@gmail.com
+copyright:         Makoto Nishiura
+
+category:          Web
 build-type:        Simple
+cabal-version:     >= 1.8
 
 Flag dev
     Description:   Turn on development settings, like auto-reload templates.
