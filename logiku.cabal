@@ -20,8 +20,8 @@ Flag library-only
 library
     hs-source-dirs: .
                   , app
-                  , prolog-fd/src
-                  , prolog-fd/unification-fd-0.10.0.1/src
+                  , prolog-cc/src
+                  , prolog-cc/unification-fd-0.10.0.1/src
                   , mylogict
                   , my-CC-delcont-cxe-0.1.0.2
 

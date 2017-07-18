@@ -28,3 +28,4 @@ ec2/
 com.domain.txt
 test/top.log
 .emacs.desktop
+*password*

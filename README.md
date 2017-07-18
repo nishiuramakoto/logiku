@@ -8,8 +8,8 @@ interaction on a continuation monad while storing its
 
 ## How to experiment
 
-    # sudo apt-get install stack (on Ubuntu)
-    # git clone http://github.com/nishiuramakoto/logiku
+    # sudo apt-get install stack (if you are on Ubuntu)
+    # git clone --recursive http://github.com/nishiuramakoto/logiku
 	# cd logiku
 	# stack setup
 	# stack build

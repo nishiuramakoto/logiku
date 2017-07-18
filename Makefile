@@ -16,8 +16,10 @@ encrypted_bundles= $(bundle).gpg $(subbundle).gpg
 
 #apg -a 1 -M sncl -m 14 -x 14
 
-#password="nK\"]q4wA!lx;y:"
-password="2OXOZp&<ld?~-G"
+password=$(shell cat gpg-password)
+
+bootstrap:
+	stack setup && stack build && stack exec logiku
 
 backup : challenge-password  cp-to-s3
 
