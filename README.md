@@ -8,13 +8,27 @@ interaction on a continuation monad while storing its
 
 ## How to experiment
 
-    # sudo apt-get install stack (if you are on Ubuntu)
-    # git clone --recursive http://github.com/nishiuramakoto/logiku
-	# cd logiku
-	# stack setup
-	# stack build
-	# stack exec logiku
-	# firefox http://localhost:3000
+    $ sudo apt-get install stack (if you are on Ubuntu)
+    $ # This clones my prolog-cc module too
+    $ git clone --recursive http://github.com/nishiuramakoto/logiku
+    $ cd logiku
+    $ make
+    $ firefox http://localhost:3000
+
+where make is synonymous for the following commands:
+
+    $ stack setup
+	$ stack build
+	$ stack exec logiku
+
+## TODO
+
+* Add PostgreSQL bootstrap code to see Prolog code in action locally
+* Set up a Heruoku dyno for experimentation
+* Replace Japanese with English used in a few html files
+* Design and implement our Prolog module system. (But what would be the 'correct' system for us?? No major implementations seem to follow the standard strictly.)
+* Less importantly, make our Prolog more standard compliant
+
 
 ## Motivation
 
