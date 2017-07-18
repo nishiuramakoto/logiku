@@ -16,7 +16,6 @@ interaction on a continuation monad while storing its
 	# stack exec logiku
 	# firefox http://localhost:3000
 
-
 ## Motivation
 
 This is part of my effort which aims for implementing a
@@ -32,6 +31,7 @@ continuation is not just a vendor-specific tag that can only
 be recognized by a particular program running on a
 particular OS, but an independent working computation state
 which could be rerun for the variety of purposes.
+
 
 Another motivation is to achieve complete seperation of IO
 and pure mathematical code in any language and on any kind
@@ -70,7 +70,6 @@ device is strictly forced to act as a server. If we give an
 URL to each continuation, this scheme may be thought of as
 dynamically and automatically giving a REST-ful interface to
 the important states of an arbitrary Turing machine.
-
 
 Although the project is currently hindered by a performance
 limitation of fork system call as implemented in recent
