@@ -1,7 +1,13 @@
-name:              logiku
-version:           0.0.0
-cabal-version:     >= 1.8
-build-type:        Simple
+Name:         logiku
+Version:      0.0.1
+Synopsis:     Prolog interpreter on a cont monad with web interface
+Description:  Prolog interpreter on a cont monad with web interface
+Category:     Language, Math, Web
+Author:       Makoto Nishiura
+Maintainer:   Makoto Nishiura <nishiuramakoto@gmail.com>
+License:      GPL-3
+cabal-version: >= 1.8
+build-type:    Simple
 
 Flag dev
     Description:   Turn on development settings, like auto-reload templates.
@@ -12,7 +18,12 @@ Flag library-only
     Default:       False
 
 library
-    hs-source-dirs: ., app, prolog-fd/src, prolog-fd/unification-fd-0.10.0.1/src , mylogict, my-CC-delcont-cxe-0.1.0.2
+    hs-source-dirs: .
+                  , app
+                  , prolog-fd/src
+                  , prolog-fd/unification-fd-0.10.0.1/src
+                  , mylogict
+                  , my-CC-delcont-cxe-0.1.0.2
 
     exposed-modules: Application
                      Foundation

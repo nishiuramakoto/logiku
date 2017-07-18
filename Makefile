@@ -59,8 +59,7 @@ change-ip:
 
 run:
 	echo running logiku ...
-	.stack-work/install/x86_64-linux/lts-5.4/7.10.3/bin/logiku
-
+	stack exec logiku
 
 test-all :
 	(cd prolog-fd && cabal test) ; \
