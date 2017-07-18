@@ -1,21 +1,29 @@
 ## Synopsis
 
-This is a demonstration Yesod-based server that provides
-web access to delimited continuations. The server runs a
-(interpreted, mostly pure) Prolog code with browser
-interaction on a continuation monad while storing its
-(tree of) intermediate states in its internal database.
+This is a demonstration Yesod-powered server that provides web access
+to its internal (delimited) continuations. The server runs a
+(interpreted, mostly pure) Prolog code with web interface on a
+continuation monad while storing its (tree of) intermediate states in
+its internal database. A user can browse, navigate, store and pass
+URIs that express (or reify) the logical states of a Prolog program,
+including its backtracking state.
+
+Note that there exists a few Prolog implementations, notably
+SWI-Prolog, that provide 'shift/reduce' or equivalent
+API. Unfortunately the effect of those APIs is restricted to each
+logical thread of execution, completely unaware of the backtracking
+state.
 
 ## How to experiment
 
     $ sudo apt-get install stack (if you are on Ubuntu)
-    $ # This clones my prolog-cc module too
+    $ # Recursively clones my prolog-cc module too
     $ git clone --recursive http://github.com/nishiuramakoto/logiku
     $ cd logiku
     $ make
     $ firefox http://localhost:3000
 
-where make is synonymous for the following commands:
+where 'make' is synonymous for the following commands:
 
     $ stack setup
 	$ stack build
@@ -24,16 +32,15 @@ where make is synonymous for the following commands:
 ## TODO
 
 * Add PostgreSQL bootstrap code to see Prolog code in action locally
-* Set up a Heruoku dyno for experimentation
+* Set up a Heruoku dyno for experiment
 * Replace Japanese with English used in a few html files
-* Design and implement our Prolog module system. (But what would be the 'correct' system for us?? No major implementations seem to follow the standard strictly.)
-* Less importantly, make our Prolog more standard compliant
-
+* Design a suitable Prolog module system in this context
+* More standard conformant Prolog
 
 ## Motivation
 
 This is part of my effort which aims for implementing a
-language-agnostic "continuation server".  Imagine some
+language-independent "continuation server".  Imagine some
 clever AI algorithm with its "useful" continuations already
 cached in our imaginary server. Then we would be able to
 play back/forth its computation states even on a device with
@@ -56,7 +63,7 @@ all. With just the permissions for networking and access to
 your photos, there seems to be already no easy way to tell
 whether the app is doing the right thing withing its ethical
 limits, not just its technical limits. By introducing
-language-agnostic continuations the situation could change as
+language-independent continuations the situation could change as
 follows:
 
     Pure Cont Server               IO device
