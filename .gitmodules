@@ -1,0 +1,3 @@
+[submodule "prolog-cc"]
+	path = prolog-cc
+	url = git@github.com:nishiuramakoto/prolog-cc.git
