@@ -1,6 +1,7 @@
 {-# LANGUAGE PatternGuards, KindSignatures #-}
 {-# LANGUAGE ExistentialQuantification, RankNTypes, ImpredicativeTypes #-}
 {-# LANGUAGE MultiParamTypeClasses, UndecidableInstances, FunctionalDependencies #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 -- | This file is the CPS version of <http://hackage.haskell.org/package/CC-delcont-exc>'s Control.Monad.CC.CCExc, implementing the identical
 -- interface
